@@ -1,0 +1,20 @@
+;; whatever
+()
+
+
+(let start (Div (Var "x") (Num 2)))
+(rewrite (Div x y)
+         (Mul x (Div (Num 1) y)))
+(run 4)
+
+
+(rewrite (Mul (Num x) (Num y))
+         (Num [* x y]))
+(rewrite (Add (Num x) (Num y))
+         (Num [+ x y]))
+
+
+(rule (
+  (f ?a ?b)
+  (g ?a ?b)
+) (... )

@@ -1,0 +1,117 @@
+(datatype Math
+  (Num Rational)
+  (Var String)
+  (Add Math Math)
+  (Div Math Math))
+
+(let zero (Num (rational 0 1)))
+(let one (Num (rational 1 1)))
+(let two (Num (rational 2 1)))
+(let expr (Add one two))
+
+(rewrite (Add ?a ?b) (Add ?b ?a))
+
+;; run all of our rules, once
+(run 1)
+
+(rewrite (Add (Num ?r1) (Num ?r2))
+         ;; primitive plus!
+         (Num [+ ?r1 ?r2]))
+
+(run 1)
+
+;; run a query that 1+2=3
+(check (= (Add one two)
+          (Num (rational 3 1))))
+;; run a query that 2+1=1+2
+(check (= (Add two one)
+          (Add one two)))
+
+
+(rewrite (Add ?a zero) ?a)
+
+;; `rewrite` is sugar for:
+(rule (
+  (Add ?a zero)
+)(
+  (union (Add ?a zero) ?a)
+))
+
+
+(push)
+
+
+;; a more complex action:
+(rule (
+  (Num ?r)
+)(
+  (union one
+        (Div (Num ?r) (Num ?r)))
+))
+
+
+(run 1)
+
+;; uh oh, division by zero!
+(pop)
+
+
+;; one lower-bound per e-class
+(function lower-bound (Math) Rational
+                      :merge (max old new))
+;; one upper-bound per e-class
+(function upper-bound (Math) Rational
+                      :merge (min old new))
+
+;; Set the bounds for constants
+(rule ((Num ?r))
+      ((set (lower-bound (Num ?r)) ?r)
+       (set (upper-bound (Num ?r)) ?r)))
+
+;; Propagate lower-bound for addition
+(rule ((Add ?a ?b))
+      ((set (lower-bound (Add ?a ?b))
+            (+ (lower-bound ?a)
+               (lower-bound ?b)))))
+
+;; Propagate upper-bound for addition
+(rule ((Add a b))
+      ((set (upper-bound (Add a b))
+            (+ (upper-bound a) (upper-bound b)))))
+
+
+(rule (
+  (Num ?a)
+  ;; filter using primitive >
+  [> (lower-bound (Num ?a))
+     (rational 0 1)]
+)(
+  (union one
+         (Div (Num ?a)
+              (Num ?a)))
+))
+
+;; same rule as above, but for addition
+(rule (
+  (Add ?a ?b)
+  ;; filter using primitive >
+  [> (lower-bound (Num ?a ?b))
+     (rational 0 1)]
+)(
+  (union one
+         (Div (Add ?a ?b)
+              (Add ?a ?b)))
+))
+
+
+(let x (Var "x"))
+(let x1 (Add x one))
+
+(set (lower-bound x) (rational 0 1))
+(set (upper-bound x) (rational 1 1))
+
+(run 3)
+
+(extract (lower-bound x1))
+(extract (upper-bound x1))
+(check (= one (Div x1 x1)))
