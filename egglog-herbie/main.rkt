@@ -20,7 +20,7 @@
   (blank 0 30)
   (t "Special shout-out to Saul Shanabrook for the visualiziations shown today")
   (blank 0 30)
-  (t "And thanks to Anjali for the slide feedback"))
+  (t "And thanks to Anjali Pal for the slide feedback"))
 
 (dynamic-slide
   "Why egglog?"
