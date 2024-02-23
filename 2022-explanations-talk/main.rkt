@@ -1110,7 +1110,6 @@
                          (indent (indent (ht "Leonardo de Moura (Microsoft)")))))))
 ;;, Max Willsey, Zachary Tatlock, Pavel Panchekha
 
-(start-at-recent-slide)
 (make-dynamic-slide
   #:title "What about egglog?" #:iters 11
   (lambda (iter time)
