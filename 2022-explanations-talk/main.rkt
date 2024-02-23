@@ -1,7 +1,7 @@
 #lang slideshow/widescreen
 
 (require "slidehelpers.rkt")
-(require pict pict/conditional slideshow/play slideshow/text)
+(require pict pict/conditional slideshow/play slideshow/text pict/code)
 
 (current-main-font "Verdana")
 
@@ -14,7 +14,7 @@
   (autoarrow-at iter current-iter time node1 node2 contents #:arrow-size arrow-size #:style style #:line-width line-width #:label label))
 
 
-;; Don't use this fuction- instead use make-dynamic-slide from slidehelpers.rkt
+;; Don't use this function- instead use make-dynamic-slide from slidehelpers.rkt
 ;; some of the slides in this file still use this crappy thing
 (define (make-slides-with-items to-add #:layout [layout 'top] #:title [title #f] #:start [start -1] #:end [end #f] #:animation-superimpose [animation-superimpose lt-superimpose])
   (when (equal? start -1)
@@ -475,9 +475,9 @@
    (define input (make-bubble
                   (append-gap-size
                    (t "Input: equalities between terms")
-                   (st "a = b")
-                   (st "f(a) = f(b)")
-                   (st "b = c"))))
+                   (st "    a = b")
+                   (st "    f(a) = f(b)")
+                   (st "    b = c"))))
    (vc-append (* 2 (current-gap-size))
               (ht-append (* 2 (current-gap-size))
                          (fade-iter 1 iter time
@@ -728,7 +728,7 @@
      (list (t "Proof re-use is free")
            (t "Subproofs can be complex")
            (t "Exponential paths in graph")))
-   (define NP (colorize (ht "NP-Hard Problem (Fellner Et al.)") "red"))
+   (define NP (colorize (ht "NP-Complete Problem (Fellner Et al.)") "red"))
    (define content
      (vl-append (current-gap-size)
                 (hc-append 0
@@ -1109,6 +1109,46 @@
                          (indent (indent (ht "George A. Constantinides (Imperial College)")))
                          (indent (indent (ht "Leonardo de Moura (Microsoft)")))))))
 ;;, Max Willsey, Zachary Tatlock, Pavel Panchekha
+
+(start-at-recent-slide)
+(make-dynamic-slide
+  #:title "What about egglog?" #:iters 11
+  (lambda (iter time)
+    (match-define
+      (list probs one onea second seconda third thirda firstsol secondsol thirdsol)
+      (range 1 11))
+    (vl-append
+      (current-gap-size)
+      (fade-iter probs iter time (t "Three new problems:"))
+      (fade-iter one iter time (item-no-bullet "1. Multi-patterns"))
+      (fade-iter onea iter time (subitem-no-bullet
+          (hc-append (current-gap-size)
+            (scale (codeblock-pict
+              "(rule ((= a (Neg a)))
+                   ((union a 0)))") 2)
+            (fade-iter firstsol iter time
+              (make-bubble
+              (t "Multiple Justifications"))))))
+      (fade-iter second iter time (item-no-bullet "2. Provenance"))
+      (fade-iter seconda iter time (subitem-no-bullet
+          (hc-append (current-gap-size)
+            (scale (codeblock-pict
+            "
+(rule ((= lhs (Abs a))
+       (> (lower-bound a) 0))
+      ((union lhs a)))") 2)
+             (fade-iter secondsol iter time
+              (make-bubble (t "Justify Terms"))))))
+      (fade-iter third iter time (item-no-bullet "3. Enginnering challenges"))
+      (fade-iter thirda iter time (subitem-no-bullet
+        (hc-append (current-gap-size)
+         (vl-append
+          (t "Egglog -> Desugaring -> CoreEgglog ->")
+          (t "Query Plan -> Generic Join -> Database"))
+         (fade-iter thirdsol iter time
+           (make-bubble (t "Hard") #:color red)))))
+          )))
+
 
 (make-dynamic-slide
  #:title "Questions?" #:start 4 #:iters 5
