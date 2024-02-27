@@ -254,7 +254,7 @@
 
 
 (slide
- (tt "Small Proofs from Congruence Closure")
+ (tt "Small Proofs from E-Graphs")
  (t "Oliver Flatt, Samuel Coward, Max Willsey,")
  (t " Zachary Tatlock, Pavel Panchekha")
  (blank 0 100)
@@ -406,7 +406,7 @@
  (lambda (iter time)
    (vc-append
     (* 2 (current-gap-size))
-    (tt "Why Congruence Closure?")
+    (tt "Why E-Graphs?")
     (vl-append (* 2 (current-gap-size))
 
                (fade-iter 1 iter time
@@ -738,7 +738,7 @@
                                       (swap-at
                                        5 iter time
                                        (fade-iter 4 iter time (t "Top: ???"))
-                                       (t "Top: size 3")))
+                                       (t "Top: size 4")))
                            (blank (current-gap-size) 0)
                            a
                            (blank gap 0)
@@ -795,7 +795,7 @@
               1 d e
               (parent 0 f c
                       (parent 0 g d
-                              (parent 0 h c
+                              (parent 0 h b
                                       content))))))))))))))))
 
 
@@ -1124,7 +1124,7 @@
           (hc-append (current-gap-size)
             (scale (codeblock-pict
               "(rule ((= a (Neg a)))
-                   ((union a 0)))") 2)
+      ((union a 0)))") 2)
             (fade-iter firstsol iter time
               (make-bubble
               (t "Multiple Justifications"))))))
