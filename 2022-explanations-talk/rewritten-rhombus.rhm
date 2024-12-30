@@ -1,0 +1,48 @@
+#lang rhombus
+
+import:
+  rhombus/meta open
+  pict open
+  pict/text open
+  slideshow open
+  pict/rhombus open
+
+
+// notes
+// sequential duration default should be sustain- if you wanted to not sustain, you can use switch
+    // make switch a function that returns time, just use overlay with switch?
+// want to also track how long the fade-out takes?
+// zero duration makes sense- once you switch between two things, it takes one duration to do so
+   // sustain flags not needed anymore
+
+fun fade_in_out(pict):
+  switch(animate(fun(n): pict.snapshot().alpha(n)), pict, animate(fun (n): pict.snapshot().alpha(1-n))).time_pad(~before: -1, ~after: -1)
+
+def last_slide:
+  def problems:
+    sequential(
+      ~duration: #'sustain,
+      &[t("three new problems"),
+        t("multipatterns"),
+        t("multi-sol"),
+        t("prov"),
+        t("prov-sol"),
+        t("justify terms"),
+        t("terms-sol")].map(fade_in_out))
+  def [title, one, one_sol, two, two_sol, three, three_sol] = problems
+  def [ignore, onep, twop, threep]:
+    sequential(
+      ~duration: #'sustain,
+      &[overlay(&problems),
+        t("multiple justifications"),
+        t("justify terms"),
+        t("complex")].map(fade_in_out))
+  stack(title, one, beside(one_sol, onep), two, beside(two_sol, twop), three, beside(three_sol, threep))
+
+slide(last_slide.time_pad(~before: 1, ~after: 20))
+
+
+explain_anim(
+  switch(t("first"), t("second"), t("third")).time_pad(~after: -1, ~before: -1))
+
+explain_anim(fade_in_out(t("test")))

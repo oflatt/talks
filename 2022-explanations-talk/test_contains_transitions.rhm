@@ -1,0 +1,27 @@
+#lang rhombus
+
+import:
+  rhombus/meta open
+  pict open
+  pict/text open
+  slideshow open
+  pict/rhombus open
+
+
+
+fun my_text(str):
+  t(str).time_pad(~before: 1)
+
+
+fun my_seq(pict, ...):
+  match [pict, ...]:
+  | [pict, pictsecond, ...]:
+      sequential(pict, &[pictsecond, ...].map(fun (pict):
+                                                pict.time_pad(~before: -1)))
+  | ~else: [pict, ...]
+
+
+slide(
+  overlay(&my_seq(my_text("hello"),
+                  my_text("yep"),
+                  my_text("again"))))
