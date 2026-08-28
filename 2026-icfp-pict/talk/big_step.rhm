@@ -1,0 +1,111 @@
+#lang rhombus/static
+import:
+  slideshow open
+  pict/rhombus open
+  "../config.rhm"                     // the deck's fonts, so this matches the talk
+  "../stepper/eval_tree.rhm" open
+  "../stepper/max_bounds.rhm" open
+
+export:
+  big_fish                            // the talk's fish, evaluated big-step
+
+def (fish_code :: Pict, fish_val :: Pict, fish_sched):
+  eval_tree:
+    overlay(ellipse(~width: 100,
+                    ~height: 50,
+                    ~fill: "lightblue"),
+            ~dx: 60, ~dy: 0,
+            triangle(~size: 50,
+                     ~fill: "lightblue")
+              .rotate(1/2 * math.pi))
+
+fun morph(from :: StaticPict, to :: StaticPict):
+  let b = overlay(from, to).refocus(from).ghost().launder()
+  switch(~join: #'splice,
+         cross_fade(overlay(from, b), overlay(to, b)),
+         overlay(to, cross_fade(b, to.ghost().launder())))
+         
+fun slide_out_and_back(
+  all :: Pict,      // enclosing expression
+  gray_sub :: Pict, // gray subexpression that's already in place:      
+  eval_sub :: Pict, // evaluation animation for subexpression:
+  // How far the enclosing expression shrinks while a subexpression is worked on.
+  // It has to give up room, but at 0.5 its code is half the size of everything
+  // else on a slide and stops being readable from the back of a room.
+  ~context_scale: context_scale :: Real = 0.5
+) :: Pict:
+  // start and end of subexpression evaluation:
+  let start_sub = eval_sub.snapshot()
+  let end_val = eval_sub.snapshot(eval_sub.duration-1, 1)
+  // a placeholder for where `env_val` should land, needed
+  // so that `end_val` identity is distinct in key frames
+  let end_blank = end_val.blank()
+  // "before" key frame
+  let in_pre = pin(~on: all,
+                   ~at: Find(gray_sub),
+                   ~pinhole: Find(start_sub),
+                   start_sub)
+  // "push" key frame, before subexpression eval
+  let out = beside(~sep: 50,
+                   all.scale(context_scale),
+                   overlay(start_sub,
+                           max_bounds(start_sub).blank()))
+  // subexpression eval done key frame:
+  let out_done:
+    out.replace(gray_sub, morph(gray_sub, end_blank))
+      .replace(start_sub, end_val)
+  // "pop" key frame
+  let in_post:
+    pin(~on: all.replace(gray_sub, end_blank),
+        ~at: Find.top_left(end_blank),
+        end_val)
+  // build the sequence
+  switch(
+    magic_move(in_pre, out),
+    out.replace(start_sub, eval_sub),
+    magic_move(out_done, in_post),
+    ~join: #'splice
+  )
+
+fun big_steps(prev_p :: Pict, Eval(subs, step, tail), ~as_tail = #false,
+              ~context_scale: context_scale :: Real = 0.5) :: Pict:
+  match step
+  | #false:
+      big_sub_steps(prev_p, subs, ~context_scale: context_scale)
+  | Step(from, to):
+      fun local_steps(prev_p :: Pict) :~ Pict:
+        let new_from = big_sub_steps(prev_p, subs, ~context_scale: context_scale)
+        let next_from = new_from.snapshot(new_from.duration-1, 1)
+        let done_from = switch(new_from, morph(next_from, to), ~join: #'splice)
+        if tail
+        | big_steps(done_from.sustain(), tail, ~as_tail: #true,
+                    ~context_scale: context_scale)
+        | done_from
+      if as_tail
+      | local_steps(prev_p)
+      | let done_from = local_steps(from)
+        let p = prev_p.snapshot(prev_p.duration-1, 1)
+        let gray_from = from.alpha(0.25)
+        let p_no_from = p.replace(from, gray_from)
+        let done_from = done_from.sustain()
+        switch(prev_p,
+               slide_out_and_back(p_no_from, gray_from, done_from,
+                                  ~context_scale: context_scale),
+               ~join: #'splice)
+
+fun big_sub_steps(prev_p :: Pict, evals :: List,
+                  ~context_scale: context_scale :: Real = 0.5) :: Pict:
+  // Fold over big steps
+  for values(prev_p = prev_p) (eval in evals):
+    big_steps(prev_p, eval, ~context_scale: context_scale)
+
+// The same expression the talk reduces with `small_steps`, taken big-step instead:
+// each subexpression slides out, evaluates on its own, and comes back as a value.
+// 0.62 rather than the 0.5 default: readable from the back of a room, and still
+// narrow enough that the context plus the slid-out copy fit the slide -- at 0.8 they
+// run off both edges, which is presumably why 0.5 was picked.
+def big_fish:
+  big_steps(fish_code, fish_sched, ~as_tail: #true, ~context_scale: 0.62)
+
+module main:
+  slide(big_fish)

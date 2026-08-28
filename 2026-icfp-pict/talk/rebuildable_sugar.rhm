@@ -1,0 +1,24 @@
+#lang rhombus/and_meta
+import:
+  pict
+
+// `as_rebuildable` as Rhombus is adding it (racket/rhombus#816):
+//
+//   as_rebuildable (p):
+//     ....
+//
+// is shorthand for the common shape of `rebuildable`, which otherwise names its
+// dependencies twice -- once as the values to track, once as the parameter that
+// receives them back:
+//
+//   rebuildable(~deps: [p], fun (~deps: [p]): ....)
+//
+// This is here only until that ships. The form and its expansion are the same as
+// upstream's, so when `pict` exports it, delete this file and drop the import.
+export:
+  as_rebuildable
+
+expr.macro 'as_rebuildable ($(id :: Identifier), ...): $body':
+  'pict.rebuildable(~deps: [$id :: pict.Pict, ...],
+                    fun (~deps: [$id :~ pict.Pict, ...]):
+                      $body)'

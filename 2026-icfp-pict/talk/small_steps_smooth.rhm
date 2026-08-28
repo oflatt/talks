@@ -1,0 +1,97 @@
+#lang rhombus/static
+import:
+  pict open
+  "eval_tree_ext.rhm" open
+
+export:
+  small_steps
+
+
+fun wiggle(p :: Pict) :: Pict:
+  animate(
+    fun (n):
+      let q = p.rotate(1/10 * math.sin(n * 2 * math.pi))
+      overlay(p.ghost(), q.launder()).refocus(p),
+  )
+
+fun morph(from :: StaticPict, to :: StaticPict):
+  let b = overlay(from, to).refocus(from).ghost().launder()
+  switch(~join: #'splice,
+         cross_fade(overlay(from, b), overlay(to, b)),
+         overlay(to, cross_fade(b, to.ghost().launder())))
+
+fun is_anim(q :: Pict) :: Boolean:
+  q.duration > 1 || q.epoch_extent(q.duration - 1) != 0
+
+// A reduction plays whatever its steps land on. Deciding by inspection which
+// results are "new" enough to be worth playing went wrong repeatedly -- a
+// composed timeline, an evaluated stack, a row that lays itself out again as a
+// fish turns are all animations the slide means to show -- so the only thing
+// held still is what a reduction is *handed*: its starting picture, whose
+// animations were created, and played, before it began. A reduction that should
+// run none of its animations, because the same one is about to be shown again
+// right after, asks for that with `~play: #false`.
+fun still(q :: Pict, ~play: play = #true) :: Pict:
+  if !play && is_anim(q)
+  | q.snapshot(q.duration - 1, 1)
+  | q
+
+fun wiggle_then_morph(~in: p :: Pict,
+                      ~from: from :: Pict,
+                      ~step: step :: Step,
+                      ~play: play = #true) :: Pict:
+  let w_p = p.replace(from, wiggle(from))  
+  let m_p:
+    match step
+    #//
+    | CallStep(orig_from, to, [arg :: Pict, ...]):
+        for (arg in [arg, ...]):
+          let (x, y) = Find(arg).maybe_in(from, ~nth: 0)
+          unless x
+          | println("not found call", arg, from, from.duration)
+          unless from.find_rebuilt(arg)
+          | println("not rebuilt call", arg)
+        for (arg in [arg, ...]):
+          let (x, y) = Find(arg).maybe_in(to, ~nth: 0)
+          unless x
+          | println("not found body", arg)
+          unless to.find_rebuilt(arg)
+          | println("not rebuilt body", arg)
+        p.replace(from, magic_move(from, still(to, ~play: play), ~other: #'fade), ~as_rebuilt: #true)
+    | Step(_, to):
+        p.replace(from, magic_move(from, still(to, ~play: play), ~other: #'fade), ~as_rebuilt: #true)
+  switch(w_p, m_p)
+
+fun small_step(prev_p :: Pict, step, ~play: play = #true) :: Pict:
+  let Step(from, to) = step
+  let p = prev_p.snapshot(prev_p.duration-1, 1)
+  let from = p.find_rebuilt(from)
+  let new_p = wiggle_then_morph(~in: p, ~from: from, ~step: step, ~play: play)
+  switch(prev_p, new_p,
+         // starting point of `new_p` matches end of `prev_p`,
+         // so splice:
+         ~join: #'splice)
+
+
+// `~play: #false` keeps a reduction from running any animation it produces,
+// for when the same animation is about to be shown again right after it.
+fun small_steps(p :: Pict, steps :: SmallSteps, ~play: play = #true) :: Pict:
+  // Fold over small steps
+  // The starting picture is a still too. A reduction can be handed a pict that
+  // already contains an animation -- code with an animated pict escaped into it
+  // -- and that animation was created, and played, before this reduction began;
+  // left alone it replays as soon as the first step is pressed.
+  let p :~ Pict:
+    if p.duration > 1 || p.epoch_extent(0) != 0
+    | p.snapshot(0, 0)
+    | p
+  let out :~ Pict:
+    for values(p = p) (step in steps):
+      small_step(p, step, ~play: play)
+  // `magic_move` ends on a zero-extent epoch holding its result. For every step
+  // but the last that epoch is consumed by the next step's wiggle, which splices
+  // onto it -- so the reduction as a whole ends with one advance that jumps to
+  // the picture already on screen. Drop it, and the last morph is the last press.
+  if out.duration > 1 && out.epoch_extent(out.duration - 1) == 0
+  | out.time_pad(~after: -1)
+  | out

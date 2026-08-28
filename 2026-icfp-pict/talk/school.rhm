@@ -1,0 +1,204 @@
+#lang rhombus
+// A school of tiny fish that can swim into the shape of a word.
+//
+// Nothing here knows about letters: `ink_points` asks a pict where it has ink, on a
+// grid, and the fish stand on those points. The school swims by interpolating
+// between two lists of points rather than by `magic_move` -- with a couple of
+// hundred fish, matching every one of them against the whole picture on every frame
+// costs minutes of rendering, and both endpoints are already known here.
+import:
+  slideshow open
+  draw
+  "mathx.rhm" open   // frac, lerp, smooth, clamp01
+
+export:
+  ink_points
+  launch_points
+  leap
+  place_leap
+  Fan
+  turn_fan
+  mix_color
+  ripple_fan
+  ripple_frames
+
+// The grid points where `p` is drawn on. Sampling on a grid rather than taking
+// every inked pixel is what spaces the fish out evenly; the grid is the shape of
+// a fish, wider than it is tall, so they line up without piling onto each other.
+fun ink_points(p :: Pict, ~step: step :: Int = 5, ~step_y: step_y :: Int = 0) :: List:
+  def stepy = if step_y == 0 | step | step_y
+  def w = math.max(1, math.exact(math.ceiling(p.width)))
+  def h = math.max(1, math.exact(math.ceiling(p.height)))
+  def bm = draw.Bitmap([w, h])
+  p.draw(bm.make_dc())
+  def px = bm.argb_pixels()
+  recur down(y = 0, acc :~ List = []):
+    if y >= h
+    | acc
+    | def row:
+        recur across(x = 0, acc :~ List = []):
+          if x >= w
+          | acc
+          | def i = (y * w + x) * 4
+            across(x + step, if px[i] > 128 | acc ++ [[1.0 * x, 1.0 * y]] | acc)
+      down(y + stepy, acc ++ row)
+
+// A handful of places along the bottom edge, below the picture, that fish come up
+// out of: each fish is assigned one, so the school breaks the surface in a few
+// spots rather than evenly along the whole width.
+fun launch_points(w :: Real, h :: Real, count :: Int,
+                  ~spots: k :: Int = 6,
+                  ~below: below :: Real = 10.0,
+                  ~seed: seed :: Real = 3.0) :: List:
+  for List (i in 0..count):
+    def which = math.floor(frac(math.sin((i + 1.0) * 4.2713 + seed) * 9871.13) * k)
+    def sx = (which + 0.5) / (1.0 * k) * w
+    def jitter = (frac(math.sin((i + 1.0) * 91.7231 + seed) * 3571.71) - 0.5) * (w / k) * 0.7
+    [sx + jitter, h + below + frac(math.sin((i + 1.0) * 13.3117 + seed) * 77.71) * below]
+
+// The school leaping ashore: each fish waits its turn, then arcs out of the water
+// and comes down on its point. Returns where every fish is, which way it is
+// pointing (along its own arc, so it looks like it is flying), and how far along
+// its own leap it is: 0 is still under water and not to be drawn, 1 has landed.
+fun leap(from :: List, to :: List, n :: Real,
+         ~stagger: stagger :: Real = 0.55,
+         ~arc: arc :: Real = 240.0) :: values(List, List, List):
+  def cnt = math.min(from.length(), to.length())
+  def span = math.max(0.05, 1.0 - stagger)
+  def state:
+    for List (i in 0..cnt):
+      def t0 = if cnt <= 1 | 0.0 | stagger * (1.0 * i / (cnt - 1.0))
+      def p = clamp01((n - t0) / span)
+      def a = from[i]
+      def b = to[i]
+      // A real jump: time runs straight, and the only thing bending the path is a
+      // parabola, whose second derivative is constant -- so this *is* motion under
+      // gravity. The fish breaks the surface fast, slows to the top of its arc, and
+      // falls into its place picking up speed. Easing the time instead, as this did
+      // before, takes the pop out of the start and the fall out of the end.
+      def x = lerp(a[0], b[0], p)
+      def y = lerp(a[1], b[1], p) - 4.0 * arc * p * (1.0 - p)
+      // The tangent of that path, so a leaping fish points where it is going: nose
+      // up out of the water, level at the top, nose down into its place.
+      //
+      // `-dx`, because a fish at rotation 0 faces left. Turning by the plain angle
+      // gets vertical right by luck and flies every fish with any sideways travel
+      // tail-first.
+      def dx = b[0] - a[0]
+      def dy = (b[1] - a[1]) - 4.0 * arc * (1.0 - 2.0 * p)
+      def ang = if p <= 0.0 || p >= 1.0 | 0.0 | math.atan(dy, -dx)
+      [[x, y], ang, p]
+  values(for List (st in state): st[0],
+         for List (st in state): st[1],
+         for List (st in state): st[2])
+
+// A fish turned on the spot: drawn over a ghost of the upright one, so turning
+// never moves it or resizes what it sits in.
+fun turned(f :: Pict, a :: Real) :: Pict:
+  if a == 0.0
+  | f
+  | def g = f.ghost()
+    overlay(g, f.rotate(a)).refocus(g)
+
+// A fan of pre-turned fish, spanning a half turn each way. Turning a fish is not
+// free, and a school of several hundred of them turning on every frame is what
+// makes an animation crawl -- so they are turned once, here, and every frame picks
+// the nearest one it wants.
+// The fan of turned fish, as bitmaps rather than picts: a frame of the leap then
+// draws the school with one callback and a few hundred blits, instead of building a
+// few hundred picts and a tree to hold them. That tree was the whole cost -- at the
+// end of the leap, with every fish drawn, it ran about 100ms a frame.
+class Fan(sprites :: List, size :: Real, oversample :: Int)
+
+fun turn_fan(f :: Pict, ~count: count :: Int = 49, ~oversample: os :: Int = 3) :: Fan:
+  def d = math.exact(math.ceiling(math.sqrt(f.width * f.width + f.height * f.height))) + 2
+  def sprites:
+    for List (i in 0..count):
+      def a = lerp(-math.pi, math.pi, 1.0 * i / (count - 1.0))
+      def bm = draw.Bitmap([d * os, d * os])
+      def bdc = bm.make_dc()
+      bdc.smoothing := #'smoothed
+      bdc.scale(1.0 * os)
+      overlay(blank(~width: 1.0 * d, ~height: 1.0 * d), f.rotate(a)).draw(bdc)
+      bm
+  Fan(sprites, 1.0 * d, os)
+
+// The school mid-leap. Fish still under water are left out altogether rather than
+// drawn invisibly -- early in the leap that is most of them.
+fun place_leap(base :: Pict, fan :: Fan, spots :: List,
+               angles :: List, progress :: List) :: Pict:
+  def n = math.min(spots.length(), progress.length())
+  def k = fan.sprites.length()
+  def half = fan.size / 2.0
+  def os = 1.0 * fan.oversample
+  def layer:
+    dc(fun (target :: draw.DC, ox :: Real, oy :: Real):
+         def saved = target.layered_transformation
+         target.translate(ox, oy)
+         // draw in sprite pixels and scale the lot back down, so a sprite drawn
+         // here is as sharp as the slide it lands on
+         target.scale(1.0 / os)
+         for (i in 0..n):
+           when progress[i] > 0.0
+           | def [x, y] = spots[i]
+             def t = clamp01((angles[i] + math.pi) / (2.0 * math.pi))
+             def idx = math.max(0, math.min(k - 1, math.exact(math.round(t * (k - 1.0)))))
+             target.bitmap(fan.sprites[idx], ~dx: (x - half) * os, ~dy: (y - half) * os)
+         target.layered_transformation := saved,
+       ~width: base.width, ~height: base.height)
+  overlay(~horiz: #'left, ~vert: #'top, base, layer).refocus(base)
+
+fun mix_color(a :: draw.Color, b :: draw.Color, t :: Real) :: draw.Color:
+  fun c(x :: Int, y :: Int) :: Int: math.exact(math.round(lerp(1.0 * x, 1.0 * y, t)))
+  draw.Color(c(a.red, b.red), c(a.green, b.green), c(a.blue, b.blue))
+
+// The fish in every state the ripple puts them in, from untouched to full crest.
+// `fish_at(e)` gives the fish to draw where the ripple is at strength `e`, so a
+// caller can light them up as well as turn them -- a turn alone is easy to miss.
+fun ripple_fan(fish_at :: Function.of_arity(1),
+               ~count: count :: Int = 24,
+               ~amp: amp :: Real = 0.62) :: List:
+  for List (i in 0..count):
+    def e = 1.0 * i / (count - 1.0)
+    turned(fish_at(e), amp * e)
+
+// A ripple crossing the words on the diagonal, out of the top left. It is a narrow
+// band: the fish it is passing over turn and light up, and everywhere else they are
+// as they always are, so it reads as water running through the letters rather than
+// as the whole school waving at once.
+//
+// One crossing, built ahead as `count` finished frames, each flattened to a bitmap.
+// The ripple is periodic, so an animation of any length is these frames over and
+// over -- and assembling several hundred fish is far too much to do on every frame.
+fun ripple_frames(base :: Pict, fan :: List, spots :: List,
+                  ~count: count :: Int = 40,
+                  ~band: band :: Real = 0.22,     // how much of a crossing is lit
+                  ~oversample: os :: Int = 2) :: List:
+  // one wavelength spans the words corner to corner, so exactly one band is
+  // crossing at any moment
+  // twice the corner-to-corner distance: for part of every cycle the band is off
+  // the words entirely, so it comes in from the top left rather than being on them
+  // already, and there is a pause between crossings
+  def wl = (base.width + base.height) * 2.0
+  def steps = fan.length()
+  def w = math.max(1, math.exact(math.ceiling(base.width * os)))
+  def h = math.max(1, math.exact(math.ceiling(base.height * os)))
+  for List (i in 0..count):
+    def phase = 1.0 * i / count
+    fun fish_for(x :: Real, y :: Real) :~ Pict:
+      def u = frac((x + y) / wl - phase)
+      def e = if u < band | math.sin(math.pi * u / band) | 0.0
+      fan[math.max(0, math.min(steps - 1, math.exact(math.round(e * (steps - 1.0)))))]
+    def kids:
+      for List (sp in spots):
+        def [x, y] = sp
+        def q :~ Pict = fish_for(x, y)
+        q.pad(~left: x - q.width / 2.0, ~top: y - q.height / 2.0)
+    def frame = overlay(~horiz: #'left, ~vert: #'top, base, & kids).refocus(base)
+    def bm = draw.Bitmap([w, h])
+    def bdc = bm.make_dc()
+    bdc.smoothing := #'smoothed
+    bdc.scale(1.0 * os)
+    frame.draw(bdc)
+    def slot = base.ghost()
+    overlay(~horiz: #'left, ~vert: #'top, slot, bitmap(bm).scale(1.0 / os)).refocus(slot)

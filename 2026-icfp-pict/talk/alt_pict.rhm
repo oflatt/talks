@@ -1,0 +1,61 @@
+#lang rhombus/static/and_meta
+import:
+  pict open
+
+// Macros like `#%alt_call` let us substitute simpler replacements
+// for functions that we show on slides, especially ones that have
+// a different treatment of baselines.
+
+export:
+  #%alt_call
+  #%alt_dot
+  alt_baseline
+  alt_rotate
+
+fun alt_baseline(p :: Pict) :: Pict:
+  let box = blank(~width: p.width, ~height: p.height)
+  overlay(p, box).refocus(box).set_paragraph_end_bounds(0, 0, p.width, p.height, p.height, 0)
+
+// keywords are forwarded, so `~sep`, `~horiz`, etc. work as usual
+fun alt_overlay(& ps, ~& kws) :: Pict:
+  alt_baseline(overlay(& ps, ~& kws))
+
+fun alt_stack(& ps, ~& kws) :: Pict:
+  alt_baseline(stack(& ps, ~& kws))
+
+fun alt_beside(& ps, ~& kws) :: Pict:
+  alt_baseline(beside(& ps, ~& kws))
+
+fun alt_rotate(p, amt):
+  match p
+  | p :: Pict:
+      // The obvious implementation causes a lot of bouncing:
+      //  alt_baseline(p.rotate(amt))
+      // This looks better:
+      let b = p.ghost()
+      overlay(b, p.rotate(amt)).refocus(b)
+  | ~else:
+      // not a pict but something that stands for one, such as a term that
+      // renders to its own picture; let it rotate itself
+      use_dynamic
+      p.rotate(amt)
+
+def alts:
+  { overlay: alt_overlay,
+    stack: alt_stack,
+    beside: alt_beside }
+
+fun swap_in_alt(rator):
+  alts.maybe[rator] || rator
+
+expr.macro '$rator #%alt_call ($rand, ...)':
+  let call = syntax_meta.dynamic_name('#%call')
+  'swap_in_alt($rator) $call ($rand, ...)'
+
+expr.macro '$obj #%alt_dot $name ($rand, ...)':
+  match name
+  | 'rotate':
+      'alt_rotate($obj, $rand, ...)'
+  | ~else:
+      let dot = syntax_meta.dynamic_name('.')
+      '$obj $dot $name ($rand, ...)'

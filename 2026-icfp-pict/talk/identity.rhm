@@ -1,0 +1,116 @@
+#lang rhombus
+import:
+  slideshow:
+    open
+    except explain_anim   // the talk's own timeline widget, below
+  pict/rhombus open
+  "staged.rhm" as help   // staged_slide macro honors --skip
+  "live_timeline.rhm": expose: explain_anim
+
+export:
+  identity_slides
+
+def dt = t
+
+def ellipse_code:
+  rhombusblock(
+    ellipse(~width: 100,
+            ~height: 50,
+            ~fill: "lightblue")
+  )    
+
+def ellipse_pict:
+  ellipse(~width: 100,
+          ~height: 50,
+          ~fill: "lightblue")
+
+def fish_code:
+  rhombusblock(
+    overlay(
+      #,(ellipse_code),
+      ~dx: 60,
+      triangle(~size: 50,
+               ~fill: "lightblue")
+        .rotate(math.pi * 1/2)
+    )
+  )
+
+fun identity_slides():
+  help.staged_slide:
+    ~title: "Identity and Dependencies"
+    slide.align(
+      @para{Pict identity after replacement},
+      slide.center(
+        beside(
+          ~sep: 50,
+          @rhombusblock(
+            let h = beside(a, b)
+            let p = stack(h, c)
+      
+            let p2 = p.replace(a, a2)
+      
+            Find(h).in(p2)
+          ),
+          block:
+            let a = @text("a")
+            let p:
+              stack(beside(rectangle(~around: a.pad(5)),
+                           rectangle(~around: @text("b").pad(5))),
+                    rectangle(~around: @text("c").pad(5))).scale(2)
+            overlay(switch(p, p.replace(a, @text("a2").colorize("firebrick"))),
+                    p.ghost().pad(50))
+        )
+      ),
+      slide.next,
+      blank(),
+      blank(),
+      @para{@dt{Findable children} vs. @dt{replaceable dependencies}}.pad(~right: 300),
+      slide.center(
+        @rhombusblock(
+          rebuildable(~deps: [a, b, d],
+                      fun ([a, b, d]):
+                        let w = math.sqrt(d.width)
+                        stack(beside(~sep: w, a, b),
+                              c))
+        )
+      )
+    )
+
+  help.staged_slide:
+    ~title: "Animated Pictures for Slide Presentations"
+    slide.align(
+      @para{Key ideas:}.pad(~left: -32),
+      blank(),
+      @bold{Time boxes},
+      slide.center(
+        explain_anim(
+          animate(fun (n):
+                    rhombusblock(
+                      ellipse(~width: 100,
+                              ~height: 50,
+                              ~fill: "lightblue")
+                    ).rotate(1/10 * math.sin(n * 2*math.pi) * math.pi)
+                      .scale(0.25))
+            .pad(~horiz: 32)
+        )
+      ),
+      blank(),
+      @bold{Replacement},
+      slide.center(
+        table(
+          ~hsep: slide.gap * 2,
+          ~vsep: slide.gap,
+          [[@rhombusblock(fish_code).scale(0.8), fish_code.scale(0.33)],
+           [@rhombusblock(
+              fish_code.replace(ellipse_code,
+                                ellipse_result)
+            ).scale(0.8),
+            fish_code.replace(ellipse_code,
+                              ellipse_pict).scale(0.33)]]
+        ).pad(~horiz: 32)
+      )
+    )
+
+
+module main:
+  identity_slides()

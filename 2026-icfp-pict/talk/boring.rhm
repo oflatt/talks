@@ -1,0 +1,93 @@
+#lang rhombus/static/and_meta
+import:
+  "../config.rhm"
+  slideshow open
+  pict/rhombus open
+  pict open
+  lib("slideshow/base.rkt").clickback
+  rhombus/rkt_obj
+  lib("racket/gui/base.rkt").#{the-clipboard}
+  "staged.rhm" as help   // staged_slide macro honors --skip
+
+export:
+  boring_slides
+
+fun add_copy(p, str) :~ Pict:
+  stack.right(p,
+              Pict.from_handle(clickback(block:
+                                           let p = @t{copy}
+                                           stack(p, line(~dx: p.width))
+                                             .colorize("blue").scale(0.6)
+                                             .snapshot().handle,
+                                         fun ():
+                                           rkt_obj.send #{the-clipboard}.#{set-clipboard-string}(str, 0))))
+
+expr.macro 'rhombusblock_eval($e, ...)':
+  def str = '$e; ...'.to_source_string().replace("#,(@tt{#lang})", "#lang")
+  'add_copy(
+     stack(
+       rhombusblock($e, ...)
+     ),
+     $str
+   )'
+  
+fun boring_slides():
+  let code_left = 2*slide.gap
+  help.staged_slide:
+    ~title: "Slideshow Components"
+    slide.align(
+      @item{Functions to create @italic{pict}s},
+      @rhombusblock_eval(
+        circle(~size: 30, ~fill: "red")
+        
+        rectangle(~width: 25, ~height: 20, ~line: "blue")
+        
+        text("Hello, World!")
+      ).pad(~left: code_left),
+      slide.next,
+      blank(),
+      @item{A @rhombus(slide) function to show a pict in a window},
+      slide.alts(
+        @rhombusblock_eval(
+          slide(
+            text("Hello, World!")
+          )
+        ).pad(~left: code_left),
+        @rhombusblock_eval(
+          slide(
+            t("Hello, World!")
+          )
+        ).pad(~left: code_left),
+        @rhombusblock_eval(
+          slide(
+            @t{Hello, World!}
+          )
+        ).pad(~left: code_left)
+      ),
+      blank(),
+      slide.next,
+      @item{A content-staging DSL within @rhombus(slide)}
+    )
+  current_identifier_color("navy")
+  help.staged_slide:
+    @rhombusblock_eval(
+      #,(@tt{#lang}) rhombus
+      import:
+        slideshow open
+
+      slide(
+        slide.align(
+          @item{First things first},
+          @item{Second things second},
+          slide.next,
+          slide.alts(
+            @item{One more thing},
+            @item{@italic{Last} thing}
+          )
+        )
+      )
+    )
+
+
+module main:
+  boring_slides()

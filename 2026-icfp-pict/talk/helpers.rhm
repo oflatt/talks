@@ -1,0 +1,125 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  "mathx.rhm" open   // frac
+
+export:
+  snap_last
+  hold_last
+  step
+  add_step
+  fuse
+  x_out
+  bullets
+  scatter
+  scatter_positions
+
+// The final, settled static frame of a (possibly animated) pict.
+fun snap_last(p :: Pict) :: Pict:
+  p.snapshot(math.max(0, p.duration - 1), 1.0)
+
+// Play `p` on advance, then rest on its final frame (instead of auto-advancing).
+fun hold_last(p :: Pict) :: Pict:
+  switch(p, snap_last(p))
+
+// Add one new slide: play `p`, then show `combine` applied to `p`'s final frame
+// (passed as the FIRST argument) plus any extra positional/keyword args.
+// Forwards keywords via `~&`, so e.g.:
+//   step(bullets, overlay, callout, ~vert: #'top)
+//   step(bullets, beside, sidebar, ~sep: 20)
+fun step(combine, p :: Pict,  & args, ~& kws) :: Pict:
+  switch(p, combine(snap_last(p), & args, ~& kws))
+
+// Escape hatch for when the final frame isn't the combiner's first argument:
+//   add_step(bullets, fun (last): beside(sidebar, last))
+fun add_step(p :: Pict, make :: Function.of_arity(1)) :: Pict:
+  switch(p, make(snap_last(p)))
+
+// Play several picts back-to-back in ONE epoch (no rest point between them),
+// compressing each pict's whole timeline into a slice -- unlike `switch`/`~splice`,
+// this flattens multi-epoch picts (e.g. a duration-2 `magic_move`) too. Slices
+// default to each pict's total extent; `~weights`/`~extent` override.
+fun fuse(~extent: ext :: maybe(Real) = #false,
+         ~weights: ws :: maybe(List) = #false,
+         p :: Pict, ...) :: Pict:
+  def ps = [p, ...]
+  def n = ps.length()
+  fun total_extent(q :: Pict) :: Real:
+    for values(s = 0.0) (i in 0..q.duration): s + q.epoch_extent(i)
+  def weights = ws || (for List (q in ps): math.max(0.001, total_extent(q)))
+  def wsum = math.max(0.001, for values(s = 0.0) (w in weights): s + w)
+  def extent = ext || wsum
+  fun at(q :: Pict, s :: Real) :: Pict:
+    def d = q.duration
+    def tm = s * d
+    def e = math.min(d - 1, math.max(0, math.exact(math.floor(tm))))
+    q.snapshot(e, math.min(1.0, math.max(0.0, tm - e)))
+  animate(~extent: extent,
+          fun (t):
+            recur go(i = 0, lo = 0.0):
+              def wi = weights[i] / wsum
+              def hi = lo + wi
+              if t < hi || i == n - 1
+              | at(ps[i], (t - lo) / math.max(0.000001, wi))
+              | go(i + 1, hi))
+
+// Cross out `p` with two bold diagonal lines (default red), as a new slide.
+fun x_out(p :: Pict,
+          ~color: color = "red",
+          ~line_width: lw :: Real = 8) :: Pict:
+  def last = snap_last(p)
+  def w = last.width
+  def h = last.height
+  def d1 = line(~dx: w, ~dy: h, ~line: color, ~line_width: lw)   // top-left -> bottom-right
+  def d2 = line(~dx: w, ~dy: -h, ~line: color, ~line_width: lw)  // bottom-left -> top-right
+  step(overlay, p, overlay(d1, d2))
+
+// A bullet (default `-`) beside each item, one row per item, revealed one at a
+// time (via sequential/switch). A bare Pict item is placed as-is; strings and
+// lists are wrapped with `para` so long text wraps within `~width`.
+fun bullets(~width: width :: Real = current_para_width(),
+            ~bullet: bullet :: Pict = @t{-},
+            ~sep: sep :: Real = 16,
+            ~gap: gap :: Real = slide.gap,
+            content :: TextContent, ...):
+  fun one(c :: TextContent):
+    def body:
+      if c is_a Pict
+      | c
+      | para(c, ~width: width - bullet.width - sep)
+    beside.topline(~sep: sep, bullet, body)
+  def rows = sequential(~duration: #'sustain, & for List (c in [content, ...]): one(c))
+  stack.left(~sep: gap, & rows)
+
+// The canvas-coordinate center where `scatter` places item `i` of `n`.
+fun scatter_positions(n :: Int,
+                      ~canvas: canvas :: Pict = blank(~width: 1000.0, ~height: 600.0),
+                      ~spread_x: sxw :: Real = 180.0,
+                      ~spread_y: syh :: Real = 320.0,
+                      ~rise: rise :: Real = 0.0,
+                      ~seed: seed :: Real = 1.0) :: List:
+  def cw = canvas.width
+  def ch = canvas.height
+  for List (i in 0..n):
+    def fx = (i - (n - 1.0)/2.0) / math.max(1.0, n - 1.0)              // -0.5..0.5, reading order
+    def jit = frac(math.sin((i + 1.0) * 12.9898 + seed) * 43758.5453)  // pseudo-random 0..1
+    [cw / 2.0 + fx * sxw, ch / 2.0 + (jit - 0.5) * 2.0 * syh - rise]
+
+// Place `items` at their `scatter_positions` on a fixed-size `canvas`.
+fun scatter(items :: List,
+            ~canvas: canvas :: Pict = blank(~width: 1000.0, ~height: 600.0),
+            ~spread_x: sxw :: Real = 180.0,
+            ~spread_y: syh :: Real = 320.0,
+            ~rise: rise :: Real = 0.0,
+            ~seed: seed :: Real = 1.0) :: Pict:
+  def n = items.length()
+  def pos = scatter_positions(n, ~canvas: canvas, ~spread_x: sxw, ~spread_y: syh,
+                              ~rise: rise, ~seed: seed)
+  recur go(i = 0, acc = canvas):
+    if i >= n
+    | acc
+    | def it = items[i]
+      def p = pos[i]                                                    // desired center
+      go(i+1, overlay(~horiz: #'left, ~vert: #'top,
+                      ~dx: p[0] - it.width / 2.0, ~dy: p[1] - it.height / 2.0,
+                      acc, it))

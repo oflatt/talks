@@ -1,0 +1,212 @@
+#lang rhombus/and_meta
+import:
+  slideshow open
+  draw
+  rhombus/logo as rhombus_logo   // the Rhombus mark, drawn (no bitmap)
+  rhombus/runtime_path
+  "../config.rhm"    // deck font
+  "write.rhm"
+  "helpers.rhm" open
+  "mathx.rhm" open
+  "staged.rhm" as help   // staged_slide: --skip + slide numbering
+  "slidehelpers.rhm" open   // callout, on_ghost, talk_blue
+
+export:
+  what_to_use_slides
+  what_next_slide
+
+// "What to use?": each option appears big in the center, gets a one-line verdict,
+
+runtime_path.def pp_path: "logos/powerpoint.png"
+runtime_path.def vb_path: "logos/vb.png"
+runtime_path.def latex_path: "logos/latex.png"
+runtime_path.def html_path: "logos/html5.png"
+runtime_path.def js_path: "logos/javascript.png"
+runtime_path.def manim_path: "logos/manim.png"
+
+def reject_red = draw.Color(200, 40, 40)    // too limited
+def neutral_gray = draw.Color(85, 85, 85)   // considered, not chosen
+def win_green = draw.Color(30, 130, 70)     // the winner
+def pict_blue = "lightblue"
+
+// --- geometry ---
+def CW = 980.0
+def CH = 540.0
+def BASE_H = 116.0          // height logos are built at, before scaling
+def CENTER_MULT = 1.6       // spotlight size
+def SHELF_MULT = 0.5        // shelf size
+def CENTER_CY = 300.0
+def SHELF_CY = 62.0
+def SHELF_X0 = 50.0
+def SHELF_GAP = 40.0
+def MAXW = 700.0            // max verdict width
+def VERDICT_SIZE = 30       // verdict font size (shared by faded + written verdicts)
+
+def canvas = blank(~width: CW, ~height: CH)
+
+fun at_height(p :: Pict, h :: Real) :: Pict: p.scale(h / p.height)
+fun place_at(base :: Pict, p :: Pict, cx :: Real, cy :: Real) :: Pict:
+  overlay(~horiz: #'left, ~vert: #'top, ~dx: cx - p.width / 2.0, ~dy: cy - p.height / 2.0,
+          base, p)
+
+// each bitmap is built ONCE so magic_move can match it by identity
+def pp_bmp = bitmap(pp_path)
+def vb_bmp = bitmap(vb_path)
+def latex_bmp = bitmap(latex_path)
+def html_bmp = bitmap(html_path)
+def js_bmp = bitmap(js_path)
+def manim_bmp = bitmap(manim_path)
+
+// pict's "logo": the pict fish, drawn with pict, named on the body in the
+// write tool's own glyph outlines (unfilled, so it reads as drawn on)
+def pict_fish:
+  def body = ellipse(~width: 150.0, ~height: 76.0, ~fill: pict_blue)
+  def tail = triangle(~size: 78.0, ~fill: pict_blue).rotate(math.pi * 0.5)
+  def bt = overlay(~vert: #'center, ~dx: 90.0, body, tail)
+  def eyed = place_at(bt, circle(~size: 12.0, ~fill: "black"), 34.0, bt.height * 0.36)
+  def name:
+    write.write_outline("Pict",
+                        ~font: current_font() with (size = 44),
+                        ~line_width: 1.5)
+  // sits on the body, behind the tail, clear of the eye
+  place_at(eyed, name, 92.0, bt.height * 0.52)
+
+// option groups, at BASE_H
+def g_ppvb = beside(~sep: 40.0, ~vert: #'center, at_height(pp_bmp, BASE_H), at_height(vb_bmp, BASE_H))
+def g_beamer = beside(~sep: 20.0, ~vert: #'center, at_height(latex_bmp, BASE_H * 0.64), at_height(t("+ beamer"), 50.0))
+def g_htmljs = beside(~sep: 40.0, ~vert: #'center, at_height(html_bmp, BASE_H), at_height(js_bmp, BASE_H))
+def g_manim = at_height(manim_bmp, BASE_H * 1.08)
+// the winner: the pict fish, with the Rhombus mark beside it on the right.
+// `pict_fish_big` is named so the "this talk!" callout has something to find.
+def pict_fish_big = at_height(pict_fish, BASE_H)
+def g_pict:
+  beside(~sep: 34.0, ~vert: #'center,
+         pict_fish_big,
+         at_height(rhombus_logo.to_pict(dc), BASE_H))
+
+fun big(u :: Pict) :: Pict: u.scale(CENTER_MULT)
+fun small(u :: Pict) :: Pict: u.scale(SHELF_MULT)
+
+// shelf thumbnails, built once: magic_move then sees an already-shelved option as
+// unmoved (not faded, which would flash) while the next one shrinks in beside it
+def sm_ppvb = small(g_ppvb)
+def sm_beamer = small(g_beamer)
+def sm_htmljs = small(g_htmljs)
+def sm_manim = small(g_manim)
+
+// lay thumbnails left-to-right; earlier ones keep their positions
+fun shelf(thumbs :: List) :: Pict:
+  recur go(acc = canvas, x = SHELF_X0, i = 0):
+    cond
+    | i >= thumbs.length(): acc
+    | ~else:
+        def s = thumbs[i]
+        go(place_at(acc, s, x + s.width / 2.0, SHELF_CY), x + s.width + SHELF_GAP, i + 1)
+
+// big content centered, with an optional one-line verdict below
+fun spotlight(base :: Pict, content :: Pict, vpict :: maybe(Pict)) :: Pict:
+  def p = place_at(base, content, CW / 2.0, CENTER_CY)
+  if vpict | place_at(p, vpict, CW / 2.0, CENTER_CY + content.height / 2.0 + 46.0) | p
+
+fun verdict(str :: String, ~color: color) :: Pict:
+  def p = t(str, ~font: current_font() with (size = VERDICT_SIZE)).colorize(color)
+  if p.width > MAXW | p.scale(MAXW / p.width) | p
+
+// magic_move trimmed to one epoch (drop its trailing rest) so it chains as a
+// single step, without the duplicate "settle" stop
+fun morph_step(pre :: Pict, post :: Pict, ~extent: e :: Real = 1.1) :: Pict:
+  magic_move(pre, post, ~other: #'fade, ~extent: e).time_pad(~after: -1)
+
+fun what_to_use_chain() :: Pict:
+  def wfont = current_font() with (size = VERDICT_SIZE)
+  // "write it out" reveal (the Write animation, which came from Manim): prog -> pict
+  fun make_writer(str :: String, color):
+    def w = write.write_out(str, ~color: color, ~font: wfont)
+    def label = t(str, ~font: wfont).colorize(color)
+    fun (prog :: Real) :: Pict:
+      if prog >= 1.0
+      | label
+      | overlay(~horiz: #'left, ~vert: #'top, label.ghost(), w.snapshot(0, clamp01(prog)))
+  def pict_writer = make_writer("fully composable animations", win_green)
+  def manim_writer = make_writer("Animation abstraction with limited composability", neutral_gray)
+
+  // one continuous timeline: each step is a duration-1 transition, so it plays on
+  // a single advance and rests at its result -- one click per reveal, no dead stops
+  fun appear(base, group): animate(~extent: 0.7, fun (n): spotlight(base, big(group).alpha(smooth(clamp01(n))), #false))
+  fun reveal(base, group, v): animate(~extent: 0.7, fun (n): spotlight(base, big(group), v.alpha(smooth(clamp01(n)))))
+  fun writeout(base, group, wf, ~extent: e :: Real = 2.0):
+    animate(~extent: e, fun (n): spotlight(base, big(group), wf(clamp01(n))))
+  // the group shrinks onto the shelf OVER the static prior thumbnails; keeping them
+  // out of the magic_move is what stops them from fading (flashing)
+  fun shrink(prior, group, v, thumb):
+    def x0 = for values(x = SHELF_X0) (s in prior): x + s.width + SHELF_GAP
+    def morph = morph_step(spotlight(canvas, big(group), v),
+                           place_at(canvas, thumb, x0 + thumb.width / 2.0, SHELF_CY))
+    overlay(~horiz: #'left, ~vert: #'top, shelf(prior), morph)
+
+  // each considered option -- [group, thumbnail, verdict, reveal] -- plays
+  def considered = [
+    [g_ppvb, sm_ppvb, verdict("too limited", ~color: reject_red), reveal],
+    [g_beamer, sm_beamer, verdict("only overlay steps", ~color: reject_red), reveal],
+    [g_htmljs, sm_htmljs, verdict("arbitrary JavaScript", ~color: neutral_gray), reveal],
+    [g_manim, sm_manim, manim_writer(1.0),
+     fun (base, group, v): writeout(base, group, manim_writer, ~extent: 2.6)],
+  ]
+  def option_steps:
+    recur go(i = 0, acc = []):
+      cond
+      | i >= considered.length(): acc
+      | ~else:
+          def [group, thumb, v, rev] = considered[i]
+          def prior = for List (j in 0..i): considered[j][1]
+          def base = shelf(prior)
+          go(i + 1, acc ++ [appear(base, group), rev(base, group, v), shrink(prior, group, v, thumb)])
+
+  // ...and pict wins: the fish appears, writes out its verdict, and holds
+  def full = shelf(for List (o in considered): o[1])
+  def settled = spotlight(full, big(g_pict), pict_writer(1.0))
+  def this_talk:
+    on_ghost(settled,
+             fun (g :~ Pict):
+               callout(~on: g,
+                       ~at: Find.top(pict_fish_big),
+                       ~spike: #'s,
+                       ~color: talk_blue,
+                       t("this talk!")))
+  // no `settled` epoch of its own between these: `writeout` already comes to rest
+  // on it, and the fade below starts from it, so that press would show nothing
+  switch(& (option_steps ++ [appear(full, g_pict), writeout(full, g_pict, pict_writer),
+                             animate(fun (n): overlay(settled, this_talk.alpha(n))),
+                             overlay(settled, this_talk)]))
+
+fun what_to_use_slides():
+  help.staged_slide:
+    ~title: "What to use?"
+    ~reveal: #false        // the chain already fades the first option up
+    what_to_use_chain()
+
+// --- and back here at the end of the talk ------------------------------------
+
+// The same shelf and the same winner as "What to use?", with the one thing Pict
+// still wants named on the tools that already have it. Built from the same picts
+// that slide used, so the two match.
+def all_thumbs = [sm_ppvb, sm_beamer, sm_htmljs, sm_manim]
+def pict_verdict = verdict("fully composable animations", ~color: win_green)
+
+fun what_next_slide():
+  help.staged_slide:
+    ~title: "What Next?"
+    def scene = spotlight(shelf(all_thumbs), big(g_pict), pict_verdict)
+    // below the shelf pointing up: the shelf is along the top of the canvas, and a
+    // bubble above it would leave the slide
+    def note:
+      on_ghost(scene,
+               fun (g :~ Pict):
+                 callout(~on: g,
+                         ~at: Find.bottom(sm_ppvb),
+                         ~spike: #'n,
+                         ~color: talk_blue,
+                         @bold{GUI!}))
+    switch(scene,
+           animate(fun (n): overlay(scene, note.alpha(n))))
+      .sustain()

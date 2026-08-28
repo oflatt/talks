@@ -1,0 +1,27 @@
+#lang rhombus/static
+import:
+  pict/text
+  pict/rhombus
+  draw
+
+def available_fonts = draw.Font.get_names()
+
+fun check_font(name :: String):
+  unless available_fonts.contains(name)
+  | error(~who: #'config,
+          "required font is not installed",
+          error.text(~label: "font", name))
+
+check_font("Linux Libertine")
+// Don't use the variable width Inconsolata! Need the static version for this paper.
+check_font("Inconsolata")
+
+text.current_font(text.current_font() with (name = "Linux Libertine"))
+
+text.current_font_to_tt(fun (font :: draw.Font):
+                          (font :~ draw.Font) with (name = "Inconsolata"))
+
+
+rhombus.current_rhombus_tt(fun (str_s):
+                             // not bold
+                             text.tt(str_s))

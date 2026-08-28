@@ -1,0 +1,400 @@
+#lang rhombus/static
+
+// The library's `explain_anim`, with an animated mode. `explain_anim(p)` is the
+// strip of frozen columns it always was; `explain_anim(p, ~live: #true)` is that
+// same strip -- same axis, same red dots, same `t = ...` labels, same snapshots --
+// with a playhead sweeping across it as `p` plays. Not a second widget that
+// resembles the first: the live mode calls `timeline` and passes it a moving `~at`.
+//
+// Everything above the "live mode" line is a copy of
+// pict/private/{timeline_pict,explain_anim}.rhm, so that it stays diffable
+// against the library. The changes there are the `~live` dispatch in
+// `explain_anim`, the `~at` playhead and the two `show_` flags in `timeline`, the
+// `~font` threaded into `labeled` (the library's labels are too small to read off
+// a projector). All of it is meant to go upstream, and this copy to go away.
+
+import:
+  pict:
+    open
+    except explain_anim
+  draw
+
+export:
+  explain_anim
+  TimelineLabel
+
+
+fun num_str(t):
+  if t == math.floor(t)
+  | math.exact(t)       // also covers `Int`, and drops a float's ".0"
+  | let s = str.f(t, ~precision: 2)
+    if s[s.length()-1] == Char"0"
+    | s.substring(0, s.length()-1)
+    | s
+
+// `~font` is added here: the library sizes the variable with a fresh `draw.Font`
+// and the rest with the ambient one, which is too small to read from the back of
+// a room on a slide where this readout is the thing being watched. `#false`
+// keeps the library's own sizing.
+fun labeled(name :: String, v, ~unit: unit :: String = "",
+            ~font: font :: maybe(draw.Font) = #false) :~ Pict:
+  let var_font :: draw.Font = (font || draw.Font()) with (style = #'italic)
+  let rest = " = " +& num_str(v) +& unit
+  beside(~vert: #'baseline,
+         text(name, ~font: var_font),
+         // the unit is not italic: it is a unit, not a variable
+         if font | text(rest, ~font: font) | text(rest))
+
+fun time_at(t, ~font: font = #false) :~ Pict:
+  labeled("t", t, ~font: font)
+
+// Real time at epoch-time `t`: the extents of the whole epochs before it, plus
+// the fraction into the one it lands in. Every epoch has an extent, zero by
+// default, so this needs no special case -- it simply stops accumulating
+// wherever no time passes.
+fun seconds_at(p :~ Pict, t) :~ Real:
+  let whole = math.exact(math.floor(t))
+  let before:
+    for values(acc = 0.0) (i in 0..math.max(0, whole)):
+      acc + p.epoch_extent(i)
+  before + (t - whole) * p.epoch_extent(whole)
+
+// still `t`, with an `s` on the number to mark the units
+fun secs_at(p :~ Pict, t, ~font: font = #false) :~ Pict:
+  labeled("t", seconds_at(p, t), ~unit: "s", ~font: font)
+
+def epoch_dot_size = 10
+def epoch_dot_color = "red"
+def duration_box_color = "pink"
+def duration_box_pad = 4
+
+// added here: the marker for `~at`, which is what makes the widget live
+def onion_alpha = 0.3      // the stills, once a playhead is sweeping them
+def playhead_color = "blue"
+def playhead_size = epoch_dot_size * 1.6   // reads as "now" beside a sample dot
+
+// Place the playhead for `~at` by interpolating between the sample dots, so it
+// rides the very scale the labels describe -- no second copy of the layout
+// arithmetic to keep in sync. Assumes the times ascend, which is what
+// `gen_times` gives when there are no `steps_before`.
+fun playhead_on(p :~ Pict, dots :~ List.of(Pict), ts :~ List.of(Real),
+                at :: Real) :~ Pict:
+  let n = ts.length()
+  cond
+  | n < 2: p
+  | ~else:
+      let k:
+        for values(k = 0) (i in 0 .. n):
+          if ts[i] <= at | i | k
+      let k = math.min(k, n - 2)
+      let lo = ts[k]
+      let hi = ts[k+1]
+      let frac:
+        if hi == lo
+        | 0
+        | math.min(1, math.max(0, (at - lo) / (hi - lo)))
+      let (x0, y) = Find.left(dots[k]).in(p)
+      let (x1, _) = Find.left(dots[k+1]).in(p)
+      let x = x0 + (x1 - x0) * frac + epoch_dot_size / 2
+      let head = circle(~size: playhead_size, ~fill: playhead_color)
+      overlay(~horiz: #'left, ~vert: #'top,
+              ~dx: x - head.width / 2, ~dy: y - head.height / 2,
+              p, head).refocus(p)
+
+// Where along the strip a moment falls: the fraction between the two sample dots it
+// sits between, which is the one bit of arithmetic the playhead and the travelling
+// pict both need.
+fun at_fraction(dots :~ List.of(Pict), ts :~ List.of(Real), at :: Real):
+  let n = ts.length()
+  let k:
+    for values(k = 0) (i in 0 .. n):
+      if ts[i] <= at | i | k
+  let k = math.min(k, n - 2)
+  let lo = ts[k]
+  let hi = ts[k+1]
+  values(k,
+         if hi == lo | 0 | math.min(1, math.max(0, (at - lo) / (hi - lo))))
+
+// The pict itself, riding along its own strip: at each moment it is drawn over the
+// still for that moment, so the two coincide as it goes past and it reads as the
+// animation walking its own filmstrip. The stills stay where they are -- this is a
+// layer on top of them, placed by the same interpolation as the playhead.
+fun live_pict_on(p :~ Pict, dots :~ List.of(Pict), ts :~ List.of(Real),
+                 at :: Real, imgs :~ Pict, live :~ Pict) :~ Pict:
+  cond
+  | ts.length() < 2: p
+  | ~else:
+      let (k, frac) = at_fraction(dots, ts, at)
+      let (x0, _) = Find.left(dots[k]).in(p)
+      let (x1, _) = Find.left(dots[k+1]).in(p)
+      let x = x0 + (x1 - x0) * frac + epoch_dot_size / 2
+      let (_, iy) = Find.center(imgs).in(p)
+      overlay(~horiz: #'left, ~vert: #'top,
+              ~dx: x - live.width / 2, ~dy: iy - live.height / 2,
+              p, live).refocus(p)
+
+fun tl_arrows(p :~ Pict, dot :~ Pict):
+  let q = p.pad(~horiz: 24)
+  let (_, dy) = Find.left(dot).in(p)
+  let dy = dy - (q.height / 2)
+  let q = connect(~on: q, Find.left(p, ~dy: dy), Find.left(q, ~dy: dy), ~style: #'arrow, ~arrow_size: 8)
+  let q = connect(~on: q, Find.right(p, ~dy: dy), Find.right(q, ~dy: dy), ~style: #'arrow, ~arrow_size: 8)
+  q
+
+fun stackx(a, b :~ Pict) :~ Pict:
+  let p = stack(a, b)
+  p.pad(~horiz: (b.width - p.width) / 2)
+
+fun timeline(p_in :~ Pict, [t, ...],
+             ~pre: pre = 0,
+             ~post: post = 0,
+             ~label: label = #false,
+             ~balance_label = #false,
+             ~label_as: label_as = #'epochs,
+             ~font: font = #false,
+             // added here: `~at` marks a moment with a playhead, and the two
+             // `show_` flags strip the strip back to its axis and labels -- the
+             // pictures, and the dots that stand for waiting on the presenter
+             ~at: at = #false,
+             ~show_snapshots: show_snapshots = #true,
+             ~show_dots: show_dots = #true,
+             ~show_timebox = #false) :~ Pict:
+  fun stamp(t) :~ Pict:
+    if label_as == #'extents
+    | secs_at(p_in, t, ~font: font)
+    | time_at(t, ~font: font)
+  let sep = 20
+  // Unchanged from the library, on purpose: the columns past the end keep drawing.
+  // `animate` sustains by default, so a pict really does go on drawing its last frame
+  // after its own time is up -- `snapshot` clamping the epoch is the right answer for
+  // it, not a papering-over. Drawing nothing there would be the unfaithful choice.
+  fun p_at_time(t, keep) :~ Pict:
+    if keep
+    | p_in.snapshot(math.exact(math.floor(t)),
+                    t - math.floor(t))
+    | nothing
+  let w: for values(w = 0) (t in [t, ...]):
+           math.max(w, p_at_time(t, #true).width)
+  fun center(p :~ Pict):
+    p.pad(~horiz: (w - p.width) / 2)
+  let dot = circle(~size: epoch_dot_size, ~fill: epoch_dot_color)
+  // `~show_dots: #false` keeps the dots as anchors -- the connecting segments,
+  // the end arrows and the playhead are all placed by finding them, and a ghost
+  // is still findable -- while drawing neither them nor the dashes that stand for
+  // the times between them. What is left is the axis and its labels.
+  fun mk_dot(_): if show_dots | dot.launder() | dot.launder().ghost()
+  fun epochly(p :~ Pict, t):
+    if t == math.floor(t) || !show_dots
+    | p
+    | overlay(p.ghost(), line(~dx: p.width))
+  let [t_dot, ...]: [mk_dot(t), ...]
+  let [lt_dot, ...]: [stackx(stamp(t), epochly(t_dot, t)), ...]
+  let p :~ Pict:
+    let sep = sep + w - dot.width
+    fun keep(p, keep): if keep | p | nothing
+    let tb = beside(~sep: sep, keep(lt_dot, t >= 0 && t < p_in.duration), ...)
+    beside(~sep: sep,
+           beside(~sep: sep, keep(lt_dot, t < 0), ...),
+           if tb is_a NothingPict
+           | nothing
+           | overlay(~vert: #'bottom,
+                     rectangle(~width: tb.width + sep, ~height: dot.height + 2*duration_box_pad,
+                               ~line: show_timebox && duration_box_color)
+                       .pad(~bottom: -4, ~left: sep/2 + 4).translate(sep/4-1, 0),
+                     tb)
+               .refocus(tb),
+           beside(~sep: sep, keep(lt_dot, t >= p_in.duration), ...))
+  let p = tl_arrows(p, [t_dot, ...].first)
+  let p:
+    if show_dots
+    | let (p, _):
+        for values(p = p, prev = #false) (t_dot in [t_dot, ...]):
+          values(if prev
+                 | connect(~on: p, Find.right(prev), Find.left(t_dot))
+                 | p,
+                 t_dot)
+      p
+    | // one unbroken line, centre to centre: segments that stop at the dots'
+      // edges would leave a hole wherever an undrawn dot sits
+      connect(~on: p,
+              Find.center([t_dot, ...].first),
+              Find.center([t_dot, ...].last))
+  let imgs:
+    let tb = beside(~sep: sep, center(p_at_time(t, t >= 0 && t < p_in.duration)), ...)
+    beside(~sep: sep,
+           beside(~sep: sep, center(p_at_time(t, t < 0)), ...),
+           tb,
+           beside(~sep: sep, center(p_at_time(t, t >= p_in.duration)), ...))
+  // Onion-skinned once there is a playhead: a row of stills at full strength is a
+  // wall of overlapping fish, and the one that matters is the one riding along it.
+  // Faded, the stills read as where the pict has been and will be, and the live copy
+  // reads as now. Without a playhead this is the library's own strip, left alone.
+  let imgs:
+    cond
+    | !show_snapshots: (imgs :~ Pict).ghost()
+    | at: (imgs :~ Pict).alpha(onion_alpha)
+    | ~else: imgs
+  let p:
+    stack(~sep: 10, p, imgs).pad(~horiz: 10)
+  let p = p.pad(~left: pre * (w + sep), ~right: post * (w + sep))
+  let p:
+    if label
+    | let label = text(label, ~font: draw.Font(~kind: #'modern))
+      beside(~sep: 20, label, p, if balance_label | label.ghost() | nothing)
+    | p
+  if at
+  | // the travelling pict under the playhead dot, so the dot stays readable on top
+    let q:
+      if show_snapshots
+      | live_pict_on(p, [t_dot, ...], [t, ...], at, imgs, p_at_time(at, #true))
+      | p
+    playhead_on(q, [t_dot, ...], [t, ...], at)
+  | p
+
+enum TimelineLabel
+| epochs
+| extents
+
+// `~live: #true` swaps the strip of frozen columns for the same strip with a
+// playhead running along it; every other keyword means the same thing in both.
+fun explain_anim(p :: Pict,
+                 ~start: start :: Int = 0,
+                 ~end: end :: Int = math.max(p.duration, start),
+                 ~live: live = #false,
+                 // live only: one advance for the whole sweep, instead of stopping
+                 // for input at every epoch boundary the way `p`'s own clock does
+                 ~one_epoch: one_epoch = #false,
+                 ~steps: steps :: PosInt = 4,
+                 ~steps_before: steps_before :: Nat = 0,
+                 ~steps_after: steps_after :: Nat = 0,
+                 ~show_timebox: show_timebox = #true,
+                 ~show_snapshots: show_snapshots = #true,
+                 ~show_dots: show_dots = #true,
+                 ~label_as: label_as :: TimelineLabel = #'epochs,
+                 ~font: font :: maybe(draw.Font) = #false,
+                 ~pad: pad_amt :: Real = 10,
+                 ~pad_before: pad_before :: Nat = 0,
+                 ~pad_after: pad_after :: Nat = 0) :~ Pict:
+  ~who: who
+  when end < start
+  | error(~who: who,
+          "end time is less than start time",
+          error.val(~label: "start time", start),
+          error.val(~label: "end time", end))
+  let times = gen_times(start, end, steps, steps_before, steps_after)
+  let tl :~ Pict:
+    if live
+    | live_timeline(p, times,
+                    ~pre: pad_before,
+                    ~post: pad_after,
+                    ~label_as: label_as,
+                    ~font: font,
+                    ~show_snapshots: show_snapshots,
+                    ~show_dots: show_dots,
+                    ~one_epoch: one_epoch,
+                    ~show_timebox: show_timebox)
+    | timeline(p, times,
+               ~pre: pad_before,
+               ~post: pad_after,
+               ~label_as: label_as,
+               ~font: font,
+               ~show_snapshots: show_snapshots,
+               ~show_dots: show_dots,
+               ~show_timebox: show_timebox)
+  tl.pad(pad_amt)
+
+// ---------------------------------------------------------------------------
+// Live mode: new here, and the reason for the copy above.
+
+// The live counterpart of `explain_anim`: the very same strip `timeline` draws --
+// the arrowed axis, the red sample dots, the `t = ...` labels, the duration box,
+// the snapshots -- with a playhead sweeping across it as the pict plays. There is
+// no second layout here, only `~at` fed a moving time.
+//
+// The result copies `p_in`'s clock, an epoch per epoch with the same extent, so a
+// strip stacked under the pict it describes advances with it and neither is
+// driven by an `n` written out at the call site.
+fun live_timeline(p_in :~ Pict, times :~ List.of(Real),
+                  ~pre: pre = 0,
+                  ~post: post = 0,
+                  ~label_as: label_as = #'epochs,
+                  ~font: font :: maybe(draw.Font) = #false,
+                  ~show_snapshots: show_snapshots = #true,
+                  ~show_dots: show_dots = #true,
+                  ~one_epoch: one_epoch = #false,
+                  ~show_timebox: show_timebox = #false) :~ Pict:
+  fun frame(t) :~ Pict:
+    timeline(p_in, times,
+             ~pre: pre,
+             ~post: post,
+             ~label_as: label_as,
+             ~font: font,
+             ~at: t,
+             ~show_snapshots: show_snapshots,
+             ~show_dots: show_dots,
+             ~show_timebox: show_timebox)
+  // By default the sweep copies `p_in`'s clock, an epoch per epoch with the same
+  // extent, so it stops for input exactly where the pict does -- which is the point
+  // on a slide that is *about* epochs waiting for input. `~one_epoch` collapses the
+  // whole run into a single advance instead, for a slide where the stopping is just
+  // an interruption.
+  def d = math.max(1, p_in.duration)
+  def total:
+    for values(s = 0.0) (i in 0 .. d): s + p_in.epoch_extent(i)
+  // n across the whole run, back to a time in epoch units. An epoch with no extent
+  // is crossed in no time: the playhead is past it the instant time starts, rather
+  // than creeping across something that takes none.
+  fun time_at(n :: Real) :: Real:
+    cond
+    | total <= 0: (if n > 0 | d | 0)
+    | ~else:
+        def target = n * total
+        recur go(i = 0, acc = 0.0):
+          cond
+          | i >= d: d
+          | ~else:
+              def e = p_in.epoch_extent(i)
+              cond
+              | e <= 0: go(i + 1, acc)
+              | target <= acc + e: i + (target - acc) / e
+              | ~else: go(i + 1, acc + e)
+  if one_epoch
+  | animate(~extent: (if total > 0 | total | 1.0),
+            fun (n): frame(time_at(n)))
+  | // `animate` bends `n` on the way in, so building the playhead the same way
+    // `p_in`'s own epochs are built is what keeps it from drifting away from the
+    // frame it points at.
+    switch(& (for List (i in 0 .. d):
+                let extent = p_in.epoch_extent(i)
+                animate(~extent: extent,
+                        fun (n):
+                          // An epoch with no extent is crossed in no time, so the
+                          // playhead is at its far end the instant time starts.
+                          frame(if extent > 0
+                                | i + n
+                                | i + (if n > 0 | 1 | 0)))))
+
+fun gen_times(start, end, steps, pre_extra, post_extra):
+  let l:
+    for List:
+      each i in start .. end
+      each step in 0 .. steps
+      if step == 0
+      | i
+      | i + (step * math.inexact(1/steps))
+  fun extras(n, cvt) :~ List:
+    if n == 0
+    | []
+    | for List:
+        each i in 1 ..= n
+        let j = i mod steps
+        let delta:
+          if j == 0
+          | i div steps
+          | (i div steps) + math.inexact(j / steps)
+        cvt(delta)
+  let pre:
+    extras(pre_extra, fun (delta): start - delta)
+  let post:
+    extras(post_extra, fun (delta): end + delta)
+  pre ++ l ++ [end] ++ post

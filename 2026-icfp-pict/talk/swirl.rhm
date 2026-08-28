@@ -1,0 +1,79 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+
+export:
+  swirl_shrink   // swirl_frame is a module-internal helper
+
+// One swirled frame from a pre-rasterized ARGB buffer.
+// `twist` (radians) is applied at the center, eased to 0 at the edge.
+fun swirl_frame(src :: Bytes, w :: Int, h :: Int, twist :: Real) :: Pict:
+  def cx = w / 2.0
+  def cy = h / 2.0
+  def maxr = math.sqrt(cx*cx + cy*cy)
+  def dst = Bytes.make(w*h*4)            // zero-filled => transparent
+  for (y in 0..h):
+    for (x in 0..w):
+      def dx = x - cx
+      def dy = y - cy
+      def r = math.sqrt(dx*dx + dy*dy)
+      def ang = twist * (1.0 - r/maxr)   // more twist near the center
+      def ca = math.cos(ang)
+      def sa = math.sin(ang)
+      // inverse map: sample the source rotated *back* by ang
+      def sx = math.exact(math.floor(cx + dx*ca - dy*sa + 0.5))
+      def sy = math.exact(math.floor(cy + dx*sa + dy*ca + 0.5))
+      when sx >= 0 && sx < w && sy >= 0 && sy < h
+      | def di = (y*w + x)*4
+        def si = (sy*w + sx)*4
+        dst[di] := src[si]               // A, R, G, B (row-major)
+        dst[di+1] := src[si+1]
+        dst[di+2] := src[si+2]
+        dst[di+3] := src[si+3]
+  def out = draw.Bitmap([w, h])
+  out.set_argb_pixels(dst)
+  bitmap(out)
+
+// `p` swirls + shrinks (+ fades) away. If `p` is animated (e.g. staged
+// bullets), `play_first` plays it through, then swirls the final frame away.
+fun swirl_shrink(p :: Pict,
+                 ~revolutions: revs :: Real = 1.0,
+                 ~to_scale: to_scale :: Real = 0.05,
+                 ~fade: fade = #true,
+                 ~play_first: play_first = #true,
+                 ~oversample: os :: Int = 1) :: Pict:
+  // Rasterize the FINAL frame (snapshot(0) of an animated pict can be blank/0x0).
+  // Rasterize `os` times larger so the bitmap stays sharp when the slide is shown
+  // bigger than 1:1 (1x + nearest-neighbor looks soft/heavy); scale frames back down.
+  def last = p.snapshot(math.max(0, p.duration - 1), 1.0)
+  def w0 = last.width
+  def h0 = last.height
+  when w0 <= 0 || h0 <= 0
+  | error(#'swirl_shrink, "pict has no visible content to rasterize")
+  def scaled = if os == 1 | last | last.scale(1.0 * os)
+  // Swirling rotates pixels around the center, so content moves outside the
+  // tight bounding box. Rasterize onto a square whose side = the diagonal (the
+  // content's bounding circle) so rotation never clips against the canvas edge.
+  def diag = math.exact(math.ceiling(math.sqrt(scaled.width*scaled.width + scaled.height*scaled.height)))
+  def big = overlay(blank(1.0 * diag), scaled)
+  def w = math.exact(math.ceiling(big.width))
+  def h = math.exact(math.ceiling(big.height))
+  def bm = draw.Bitmap([w, h])
+  big.draw(bm.make_dc())
+  def src = bm.argb_pixels()             // rasterize ONCE, not per frame
+  def max_twist = revs * 2.0 * math.pi
+  def away = animate(
+    fun (n):
+      def f = swirl_frame(src, w, h, n * max_twist).scale(1.0 / os)  // undo oversample
+      // Shrink the BOUNDING BOX back to the original content size (drawing
+      // overflows) so the slide positions the swirl exactly like `p` — without
+      // this, the bigger square box shifts the content down before the swirl.
+      def fit = f.pad(~horiz: -(f.width - w0) / 2.0, ~vert: -(f.height - h0) / 2.0)
+      def sc = fit.scale(1.0 - n * (1.0 - to_scale))
+      if fade | sc.alpha(1.0 - n) | sc
+  )
+  // ~splice merges the swirl into `p`'s final epoch, so it extends the last
+  // slide's animation instead of becoming its own slide (which would leave a
+  // doubled/bold transition frame between the bullets and the swirl).
+  if play_first | switch(p, away, ~splice: #'after) | away

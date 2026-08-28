@@ -1,0 +1,16 @@
+#lang rhombus
+import:
+  slideshow open
+  pict/rhombus open
+
+circle()
+square()
+
+circle(~fill: "blue")
+square(~line: "red")
+square().line_width(3).colorize("brown")
+
+overlay(circle(), square())
+beside(circle(), square())
+stack(circle(), square())
+

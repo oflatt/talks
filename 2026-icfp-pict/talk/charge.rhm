@@ -1,0 +1,305 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+
+export:
+  charge_up
+  explode
+  glow
+
+// "Charging up": a pict is sampled into a cloud of colored particles, scattered
+// outward (the explosion), and that explosion is played in REVERSE so the
+// particles converge and assemble into the original pict. `explode` is the same
+// machinery run forward. Both pre-compute the particle cloud ONCE, then just
+// interpolate positions per frame (cheap), in the spirit of `swirl`/`write_out`.
+
+fun frac(x :: Real) :: Real: x - math.floor(x)
+// Deterministic per-particle pseudo-randomness (classic hash), so slides render
+// reproducibly instead of jittering between builds.
+fun hsh(i :: Int, seed :: Real) :: Real:
+  frac(math.sin((i + 1.0) * 12.9898 + seed * 78.233) * 43758.5453)
+fun clmp(x, lo, hi): math.max(lo, math.min(hi, x))
+
+// Resolve a particle-color override to [R, G, B] ints, or #false to keep each
+// particle's sampled color. Accepts a color name string, a `draw.Color`, or an
+// explicit [R, G, B] list.
+fun name_rgb(name :: String):
+  def sq = rectangle(~width: 2, ~height: 2, ~fill: name)
+  def bm = draw.Bitmap([2, 2])
+  sq.draw(bm.make_dc())
+  def s = bm.argb_pixels()
+  [s[1], s[2], s[3]]
+fun rgb_of(c):
+  cond
+  | c == #false: #false
+  | c is_a String: name_rgb(c)
+  | c is_a draw.Color: [c.red, c.green, c.blue]
+  | ~else: c   // assume already [R, G, B]
+fun ease_out(n :: Real) :: Real: 1.0 - math.expt(1.0 - n, 3.0)  // snaps into place
+fun ease_in(n :: Real) :: Real: math.expt(n, 3.0)               // eases apart
+
+// A particle's pixel position at "explodedness" `e` (0 = home, 1 = scattered).
+// Horizontal motion is a straight launch (home -> scatter); vertical motion adds
+// a parabolic `grav`*e^2 drop, so particles arc down like a real explosion (and,
+// run in reverse, arc up into place as they charge up).
+fun traj_xy(pt, e :: Real, grav :: Real):
+  values(math.exact(math.floor((1.0 - e)*pt[0] + e*pt[2] + 0.5)),
+         math.exact(math.floor((1.0 - e)*pt[1] + e*pt[3] + grav*e*e + 0.5)))
+
+// Rasterize `p` (optionally `os`x larger for a finer particle sample) to an
+// ARGB buffer; returns the bytes and the buffer's pixel dimensions.
+fun raster(p :: Pict, os :: Int):
+  def q = if os == 1 | p | p.scale(1.0 * os)
+  def w = math.max(1, math.exact(math.ceiling(q.width)))
+  def h = math.max(1, math.exact(math.ceiling(q.height)))
+  def bm = draw.Bitmap([w, h])
+  q.draw(bm.make_dc())
+  values(bm.argb_pixels(), w, h)   // ARGB, row-major: [A, R, G, B] per pixel
+
+// One pass of a separable box blur over a single-channel (one byte/pixel)
+// buffer. `horiz` picks the axis; radius `r`. Used to turn a pict's alpha mask
+// into a soft halo (there is no built-in blur, so we roll our own).
+fun blur_pass(a_in :: Bytes, big_w :: Int, big_h :: Int, r :: Int, horiz) :: Bytes:
+  def out = Bytes.make(big_w * big_h)
+  if horiz
+  | for (y in 0..big_h):
+      def base = y * big_w
+      for (x in 0..big_w):
+        def lo = math.max(0, x - r)
+        def hi = math.min(big_w - 1, x + r)
+        def sum = for values(s = 0) (xx in lo..(hi + 1)): s + a_in[base + xx]
+        out[base + x] := sum div (hi - lo + 1)
+  | for (x in 0..big_w):
+      for (y in 0..big_h):
+        def lo = math.max(0, y - r)
+        def hi = math.min(big_h - 1, y + r)
+        def sum = for values(s = 0) (yy in lo..(hi + 1)): s + a_in[yy * big_w + x]
+        out[y * big_w + x] := sum div (hi - lo + 1)
+  out
+
+// `p` with a soft colored glow/halo behind it. The halo is `p`'s alpha mask,
+// blurred and tinted `color`; `intensity` > 1 makes it brighter/tighter, and
+// `radius` sets how far it spreads (pixels). The crisp `p` sits on top.
+fun glow(p :: Pict,
+         ~color: color = "white",
+         ~radius: radius :: Int = 14,
+         ~intensity: intensity :: Real = 2.2,
+         ~oversample: os :: Int = 1) :: Pict:
+  def [gr, gg, gb] = rgb_of(if color == #false | "white" | color)
+  def pad = radius + 2
+  def q = if os == 1 | p | p.scale(1.0 * os)
+  // pad so the blurred halo doesn't clip against the raster edge
+  def padded = overlay(blank(~width: q.width + 2.0*pad*os,
+                             ~height: q.height + 2.0*pad*os), q)
+  def (src, big_w, big_h) = raster(padded, 1)
+  def n_px = big_w * big_h
+  def a0 = Bytes.make(n_px)
+  for (i in 0..n_px): a0[i] := src[i*4]              // extract alpha channel
+  def blurred = blur_pass(blur_pass(a0, big_w, big_h, radius*os, #true),
+                          big_w, big_h, radius*os, #false)
+  def dst = Bytes.make(n_px * 4)
+  for (i in 0..n_px):
+    def a = math.min(255, math.exact(math.floor(blurred[i] * intensity)))
+    dst[i*4] := a
+    dst[i*4+1] := gr
+    dst[i*4+2] := gg
+    dst[i*4+3] := gb
+  def halo_bm = draw.Bitmap([big_w, big_h])
+  halo_bm.set_argb_pixels(dst)
+  def halo = bitmap(halo_bm).scale(1.0 / os)
+  def out = overlay(halo, p)                          // crisp p centered on halo
+  // shrink bbox back to `p` so it lays out in place (halo overflows)
+  out.pad(~horiz: -(out.width - p.width)/2.0, ~vert: -(out.height - p.height)/2.0)
+
+// Splat one round, flat-colored dot into the destination buffer (no blending;
+// later particles overwrite earlier ones, which is fine for a dense cloud).
+fun splat(dst :: Bytes, big_w :: Int, big_h :: Int,
+          cx :: Int, cy :: Int, r :: Int,
+          a :: Int, red :: Int, green :: Int, blue :: Int):
+  def rr = r * r + r
+  for (yy in math.max(0, cy - r)..math.min(big_h, cy + r + 1)):
+    for (xx in math.max(0, cx - r)..math.min(big_w, cx + r + 1)):
+      def dx = xx - cx
+      def dy = yy - cy
+      when dx*dx + dy*dy <= rr
+      | def di = (yy*big_w + xx)*4
+        dst[di] := a
+        dst[di+1] := red
+        dst[di+2] := green
+        dst[di+3] := blue
+
+// Sample `p` into particles. Each particle records its HOME position (where it
+// sits in the assembled pict) and its SCATTERED position (radially outward, by a
+// pseudo-random distance/angle), both in the padded "big" canvas coordinates.
+// Returns the particle list plus canvas geometry.
+fun make_particles(p :: Pict, gap :: Int, reach :: Real, swirl :: Real,
+                   thr :: Int, os :: Int, grav :: Real):
+  def (src, w, h) = raster(p, os)
+  // Scattered particles fly up to `reach` pixels out and then fall a further
+  // `grav` pixels; pad the canvas so the explosion never clips against the edge.
+  def margin = math.exact(math.ceiling(reach * os + grav + 4.0))
+  def big_w = w + 2*margin
+  def big_h = h + 2*margin
+  def step = math.max(1, gap * os)
+  def parts:
+    for values(acc = []) (y in 0..h):
+      for values(acc2 = acc) (x in 0..w):
+        def si = (y*w + x)*4
+        if (y mod step == 0) && (x mod step == 0) && src[si] > thr
+        | def i = acc2.length()
+          def hx = (x + margin) * 1.0
+          def hy = (y + margin) * 1.0
+          def ang = hsh(i, 0.0) * 2.0 * math.pi + swirl
+          def dist = (0.35 + 0.65 * hsh(i, 1.0)) * reach * os
+          def sx = hx + math.cos(ang) * dist
+          def sy = hy + math.sin(ang) * dist
+          // staggered arrival time (fraction of the epoch) so, in glow mode,
+          // particles land at different moments and the target lights up gradually
+          def arrive = 0.18 + 0.72 * hsh(i, 3.0)
+          // [home_x, home_y, scatter_x, scatter_y, R, G, B, arrive]
+          acc2 ++ [[hx, hy, sx, sy, src[si+1], src[si+2], src[si+3], arrive]]
+        | acc2
+  values(parts, big_w, big_h, w, h, os)
+
+// Render one frame at "explodedness" `e` (0 = assembled, 1 = fully scattered).
+// `recolor` is [R, G, B] to paint every particle that color, or #false to use
+// each particle's sampled color.
+fun render_frame(parts, big_w, big_h, w, h, os, p :: Pict,
+                 dot_pix :: Int, fade, reveal, recolor, grav :: Real, e :: Real) :: Pict:
+  def dst = Bytes.make(big_w*big_h*4)   // zero-filled => transparent
+  for (pt in parts):
+    def (px, py) = traj_xy(pt, e, grav)
+    // fade particles IN as they converge: transparent when scattered (e=1),
+    // fully opaque as they reach home (e=0). Squared so they fade out FAST as
+    // they scatter (mostly gone by mid-flight), which reads as a real burst.
+    def a = if fade | math.exact(math.floor(255 * (1.0 - e)*(1.0 - e))) | 255
+    def [red, green, blue] = if recolor | recolor | [pt[4], pt[5], pt[6]]
+    splat(dst, big_w, big_h, px, py, dot_pix, a, red, green, blue)
+  def out = draw.Bitmap([big_w, big_h])
+  out.set_argb_pixels(dst)
+  // Scale the oversampled buffer back down, then shrink the bounding box to the
+  // original pict's size (drawing overflows) so the slide lays it out exactly
+  // like `p` instead of reserving the big scattered canvas.
+  def cloud = bitmap(out).scale(1.0 / os)
+  def fitted = cloud.pad(~horiz: -(cloud.width - p.width)/2.0,
+                         ~vert: -(cloud.height - p.height)/2.0)
+  if reveal
+  | // near the end, cross-fade in the crisp original so it finishes sharp
+    overlay(fitted, p.alpha(clmp((0.18 - e) / 0.18, 0.0, 1.0)))
+  | fitted
+
+// Glow-mode frame: each particle travels to its home and then DISAPPEARS the
+// instant it lands (staggered by its own arrival time), while the pre-rendered
+// glowing `target` fades in as more of them arrive -- so the pict lights up.
+fun render_glow_frame(parts, big_w, big_h, w, h, os, p :: Pict, target :: Pict,
+                      dot_pix :: Int, recolor, flash, grav :: Real, n :: Real) :: Pict:
+  def dst = Bytes.make(big_w*big_h*4)   // zero-filled => transparent
+  def flash_dur = 0.12                  // how long (in epoch fraction) a spark lasts
+  for (pt in parts):
+    def arrive = pt[7]
+    def [red, green, blue] = if recolor | recolor | [pt[4], pt[5], pt[6]]
+    cond
+    | n < arrive:      // still in flight
+        def local = ease_out(clmp(n / arrive, 0.0, 1.0))  // 0 = scattered, 1 = home
+        def e = 1.0 - local
+        def (px, py) = traj_xy(pt, e, grav)
+        def a = math.exact(math.floor(255 * local * local)) // fade in fast as it arrives
+        splat(dst, big_w, big_h, px, py, dot_pix, a, red, green, blue)
+    | flash && (n < arrive + flash_dur):   // just landed: a brief bright spark
+        def ft = (n - arrive) / flash_dur                 // 0 -> 1 over the spark
+        def hx = math.exact(math.floor(pt[0] + 0.5))
+        def hy = math.exact(math.floor(pt[1] + 0.5))
+        def fa = math.exact(math.floor(255 * (1.0 - ft)))  // fades out
+        def fr = math.max(1, math.exact(math.ceiling(dot_pix * (1.6 + 1.6*ft))))
+        splat(dst, big_w, big_h, hx, hy, fr, fa, 255, 255, 255)
+    | ~else: #void     // landed and its spark has faded -> gone
+  def out = draw.Bitmap([big_w, big_h])
+  out.set_argb_pixels(dst)
+  def cloud = bitmap(out).scale(1.0 / os)
+  def fitted = cloud.pad(~horiz: -(cloud.width - p.width)/2.0,
+                         ~vert: -(cloud.height - p.height)/2.0)
+  // target/glow builds up roughly in step with the arrivals (see `arrive` range)
+  def g_alpha = clmp((n - 0.12) / 0.7, 0.0, 1.0)
+  def combined = overlay(fitted, target.alpha(g_alpha))
+  combined.pad(~horiz: -(combined.width - p.width)/2.0,
+               ~vert: -(combined.height - p.height)/2.0)
+
+// `p` assembles from a scattered particle cloud over one epoch, then holds.
+//   ~gap:    sampling stride in pixels; smaller = denser cloud (and slower)
+//   ~reach:  how far (px) particles start scattered from home
+//   ~dot:    particle radius in pixels
+//   ~swirl:  extra angle (radians) added to every scatter direction, for a twist
+//   ~color:  paint all particles this color (name string / `draw.Color` /
+//            [R,G,B]); #false keeps each particle's sampled color
+//   ~fade:   particles fade IN as they converge (transparent when scattered)
+//   ~reveal: cross-fade the crisp original pict in at the very end
+//   ~glow:   glow-mode: particles disappear the instant they land and the pict
+//            lights up with a halo as they arrive. Pass a color (name / Color /
+//            [R,G,B]) for the halo, or #true to reuse ~color (else white).
+//            Overrides ~fade/~reveal behavior.
+//   ~glow_radius: halo spread in pixels (glow mode only)
+//   ~flash:  glow mode only -- pop a brief bright spark where each particle lands
+//   ~gravity: downward pull as a multiple of ~reach; particles arc down as they
+//            scatter (and, in charge-up, arc up into place). 0 = straight radial.
+//   ~extent: seconds the assembly takes (bigger = slower / more frames)
+//   ~oversample: sample/render at this multiple for a finer cloud
+fun charge_up(p :: Pict,
+              ~gap: gap :: Int = 4,
+              ~reach: reach :: Real = 200.0,
+              ~dot: dot :: Real = 2.0,
+              ~swirl: swirl :: Real = 1.2,
+              ~color: color = #false,
+              ~fade: fade = #true,
+              ~reveal: reveal = #true,
+              ~glow: glow_arg = #false,
+              ~glow_radius: glow_radius :: Int = 16,
+              ~flash: flash = #true,
+              ~gravity: gravity :: Real = 1.0,
+              ~extent: extent :: Real = 1.2,
+              ~oversample: os :: Int = 1) :: Pict:
+  def grav = gravity * reach * os
+  def (parts, big_w, big_h, w, h, _os) = make_particles(p, gap, reach, swirl, 40, os, grav)
+  def dot_pix = math.max(1, math.exact(math.ceiling(dot * os)))
+  def recolor = rgb_of(color)
+  if glow_arg
+  | // glow mode: land-and-vanish particles + a halo that fades in on `p`
+    def gcolor = if glow_arg == #true | (if color == #false | "white" | color) | glow_arg
+    def target = glow(p, ~color: gcolor, ~radius: glow_radius, ~oversample: os)
+    animate(~extent: extent,
+            fun (n):
+              render_glow_frame(parts, big_w, big_h, w, h, os, p, target,
+                                dot_pix, recolor, flash, grav, n))
+  | animate(~extent: extent,
+            fun (n):
+              render_frame(parts, big_w, big_h, w, h, os, p, dot_pix, fade, reveal,
+                           recolor, grav, 1.0 - ease_out(n)))
+
+// `p` blows apart into a scattered, fading particle cloud over one epoch. Same
+// cloud as `charge_up`, run forward.
+fun explode(p :: Pict,
+            ~gap: gap :: Int = 4,
+            ~reach: reach :: Real = 200.0,
+            ~dot: dot :: Real = 2.0,
+            ~swirl: swirl :: Real = 1.2,
+            ~color: color = #false,
+            ~fade: fade = #true,
+            ~gravity: gravity :: Real = 1.0,
+            ~extent: extent :: Real = 1.2,
+            ~oversample: os :: Int = 1) :: Pict:
+  def grav = gravity * reach * os
+  def (parts, big_w, big_h, w, h, _os) = make_particles(p, gap, reach, swirl, 40, os, grav)
+  def dot_pix = math.max(1, math.exact(math.ceiling(dot * os)))
+  def recolor = rgb_of(color)
+  animate(~extent: extent,
+          fun (n):
+            render_frame(parts, big_w, big_h, w, h, os, p, dot_pix, fade, #false,
+                         recolor, grav, ease_in(n)))
+
+// Preview the effect as a static filmstrip (no GUI window). View it with:
+//   slideshow --pdf -c -o charge.pdf charge.rhm
+// To watch it animate live, run your talk and call `charge_up(...)` in a slide.
+module main:
+  import: "live_timeline.rhm": expose: explain_anim
+  explain_anim(charge_up(text("charge up!").scale(3.0).colorize("purple")),
+               ~steps: 8, ~end: 1)

@@ -1,0 +1,61 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+  "mathx.rhm" open   // clamp01, absr, smooth
+
+export:
+  hue_color
+  rainbow_wave
+  spread_row
+
+// A fully-saturated rainbow color for t in 0..1 (HSV hue -> RGB).
+fun hue_color(t :: Real) :: draw.Color:
+  def h = clamp01(t) * 6.0
+  fun byte(x :: Real): math.min(255, math.max(0, math.exact(math.floor(clamp01(x) * 255.0))))
+  draw.Color(byte(absr(h - 3.0) - 1.0), byte(2.0 - absr(h - 2.0)), byte(2.0 - absr(h - 4.0)))
+
+// Lay `picts` in a centered row (cells `cell_h` tall so heights stay put), each
+// vertically offset by the matching `dys` entry -- that per-letter offset is the
+// bob of the wave.
+fun row_frame(picts :: List, sep :: Real, dys :: List, cell_h :: Real) :: Pict:
+  def cells = for List (i in 0..picts.length()):
+                overlay(~vert: #'center, ~dy: dys[i],
+                        blank(~width: math.max(1.0, picts[i].width), ~height: cell_h),
+                        picts[i])
+  beside.top(~sep: sep, & cells)
+
+// A static, evenly-spread row of `picts` centered on `canvas`. Used as the
+// magic-move source so it matches `rainbow_wave`'s final frame exactly.
+fun spread_row(picts :: List,
+               ~canvas: canvas :: Pict,
+               ~cell_h: cell_h :: Real,
+               ~sep: sep :: Real = 20.0) :: Pict:
+  overlay(canvas, row_frame(picts, sep, for List (p in picts): 0.0, cell_h))
+
+// A rainbow sweeps the (black) `letters` left->right coloring each to `hues[i]`,
+// a traveling wave bobs them up and down, and the row spreads out so the full
+// rainbow shows. Ends on exactly `spread_row(colored letters)` (full hue, no bob).
+fun rainbow_wave(letters :: List, hues :: List,
+                 ~canvas: canvas :: Pict,
+                 ~cell_h: cell_h :: Real,
+                 ~sep_to: sep_to :: Real = 20.0,
+                 ~amp: amp :: Real = 22.0,
+                 ~wavelength: wl :: Real = 4.0,
+                 ~speed: speed :: Real = 2.0,
+                 ~sweep_frac: sweep_frac :: Real = 0.5,
+                 ~spread_from: spread_from :: Real = 0.32,
+                 ~fade: fade :: Real = 1.6,
+                 ~extent: ext :: Real = 2.5) :: Pict:
+  def n = letters.length()
+  animate(~extent: ext,
+          fun (nn):
+            def front = clamp01(nn / sweep_frac) * (n + fade)
+            def sepf = sep_to * smooth((nn - spread_from) / (1.0 - spread_from))
+            def env = math.sin(math.pi * clamp01(nn))
+            def colored = for List (i in 0..n):
+                            def prog = clamp01((front - i) / fade)
+                            letters[i].colorize(hues[i].scale(prog))
+            def dys = for List (i in 0..n):
+                        amp * env * math.sin(2.0 * math.pi * (i / wl - speed * nn))
+            overlay(canvas, row_frame(colored, sepf, dys, cell_h)))

@@ -1,0 +1,44 @@
+#lang rhombus
+import:
+  slideshow open
+  pict/rhombus open
+
+
+def e:
+  animate(
+    ~extent: 2.0,
+    fun (n):
+      ellipse(~width: 100,
+              ~height: 50,
+              ~fill: "lightblue")
+        .rotate(n*2.0),
+  )
+
+
+def r:
+  animate(
+    ~extent: 2.0,
+    fun (n):
+      rectangle(~width: 100,
+                ~height: 50,
+                ~fill: "lightred")
+        .rotate(n*2.0),
+  )
+
+slide(
+  switch(
+    switch(
+      beside(e, e)
+      switch(e, e)),
+    beside(&sequential(e, e, ~duration: #'sustain)))
+)
+
+
+
+let b = beside(e, e)
+slide(
+  switch(b,
+         b.replace(e, r))
+)
+
+

@@ -1,0 +1,266 @@
+#lang rhombus/and_meta
+// The pict AST, drawn as a tree whose nodes are the pictures themselves -- and
+// the pict constructors that build one. `ellipse`, `triangle`, `rectangle` and
+// `overlay` are shadowed here on purpose: in an `eval_steps` they read as the
+// ordinary calls they are, but each one returns a term, so evaluating the
+// expression assembles the tree on screen rather than collapsing to a picture.
+// That is the whole claim about picts being a deep embedding, made by running it.
+import:
+  slideshow open:
+    except:
+      ellipse
+      triangle
+      rectangle
+      overlay
+  pict as p                           // the real constructors, behind the shadows
+  pict/rhombus as rh                  // code metrics and the code font
+  draw
+  "../config.rhm"
+  "eval_tree_ext.rhm" open            // eval_steps + Rendered
+  "small_steps_smooth.rhm" open       // small_steps
+  "explain_picts.rhm" open            // water, so this tank matches the talk's
+  "slidehelpers.rhm" open             // talk_blue, border_width, corner_radius
+
+export:
+  pict_node
+  tree_arrow
+  node_tree
+  render_memo
+  tank_ast_code                       // the expression, and its reduction
+  tank_ast_steps
+  tank_term                           // the terms, for pinning arrows and bubbles
+  box_term
+  fish_term
+  body_term
+  tail_term
+  tri_term
+  swap_tri                            // the same tree with a swapped-in tail
+  swap_tail
+  swap_fish
+  swap_tank
+  node_of
+
+// --- nodes and trees --------------------------------------------------------
+
+// These turn up inline in a line of code, and they are taller than the line, so
+// the text after one would continue from its bottom-left -- under a node, or under
+// the last child of a tree. Anchoring the paragraph-end box to the right of the
+// node, halfway up, continues the line beside the node instead.
+fun anchor_after(q :: Pict, x :: Real, y :: Real) :: Pict:
+  def m = rh.current_rhombus_tt()("X")
+  def asc = y + m.ascent / 2
+  q.set_paragraph_end_bounds(x + 6, 0, 0, q.height, asc, q.height - asc)
+
+// A node is a box around the picture it stands for, with the function it would
+// re-run to build itself again written underneath. A leaf has no children to
+// rebuild from, so it is just the picture.
+fun pict_node(pic :: Pict, ~rebuild: rebuild :: maybe(Pict) = #false) :: Pict:
+  def inner:
+    if rebuild
+    | stack(~sep: 8, pic, rebuild)
+    | pic
+  def box:
+    p.rectangle(~around: inner.pad(~horiz: 12, ~vert: 10),
+                ~line: talk_blue,
+                ~line_width: border_width,
+                ~fill: draw.Color("gray").scale(2),
+                ~rounded: corner_radius,
+                ~refocus: #false)
+  anchor_after(box, box.width, box.height / 2)
+
+// Tree edges run centre to centre (Robby), but each end is pulled back to its
+// node's border, so a line only ever shows in the gap between two nodes and the
+// arrowhead sits just off the child's edge -- pointing along the true centre-to-
+// centre direction. Clipping a ray from a rectangle's centre to its border is one
+// `min`: whichever of the vertical or horizontal face the ray reaches first.
+def tree_vsep = 40
+def tree_edge_color = draw.Color(90, 90, 90)
+
+// How far along (dx, dy) from the centre the border of a 2*hw by 2*hh box is.
+fun border_scale(dx :: Real, dy :: Real, hw :: Real, hh :: Real) :: Real:
+  def far = 1.0e9    // a ray with no run (or no rise) never reaches that face
+  def tx = if math.abs(dx) > 1.0e-9 | hw / math.abs(dx) | far
+  def ty = if math.abs(dy) > 1.0e-9 | hh / math.abs(dy) | far
+  math.min(tx, ty)
+
+// `node_tree` hands its edges whole subtrees, but an edge has to stop at the
+// border of the child's *node*, not of everything hanging under it. Each subtree
+// records the node at its top; a leaf is its own.
+def _tree_root = MutableMap.by(===){}
+fun root_node_of(p :: Pict) :: Pict:
+  _tree_root.get(p, p)
+
+fun tree_arrow(acc :: Pict, from :: Pict, to :: Pict,
+               ~gap: gap :: Real = 2,
+               ~line: color = tree_edge_color,
+               ~line_width: lw = #'inherit,
+               ~arrow_size: asz :: Real = 8) :: Pict:
+  def (fx, fy) = Find.center(from).maybe_in(acc)
+  def (tx, ty) = Find.center(to).maybe_in(acc)
+  def dx = if fx && tx | tx - fx | 0.0
+  def dy = if fx && tx | ty - fy | 0.0
+  def dist = math.sqrt(dx * dx + dy * dy)
+  cond
+  | dist < 1.0e-9: acc      // nodes on top of each other: nothing to draw
+  | ~else:
+      def ux = dx / dist
+      def uy = dy / dist
+      def ts = border_scale(dx, dy, from.width / 2, from.height / 2)
+      def te = border_scale(dx, dy, to.width / 2, to.height / 2)
+      connect(~on: acc,
+              Find.center(from, ~dx: dx * ts + ux * gap, ~dy: dy * ts + uy * gap),
+              Find.center(to, ~dx: -(dx * te + ux * gap), ~dy: -(dy * te + uy * gap)),
+              ~style: #'arrow, ~arrow_size: asz,
+              ~line: color, ~line_width: lw)
+
+// `root` over `kids`, with an arrow down to each.
+fun node_tree(root :: Pict, kids :: List.of(Pict),
+              ~vsep: vsep :: Real = tree_vsep,
+              ~hsep: hsep :: Real = 46) :: Pict:
+  cond
+  | kids == []: root                   // `pict_node` already anchored it
+  | ~else:
+      def lay:
+        stack(~sep: vsep, ~horiz: #'center,
+              root,
+              beside(~sep: hsep, ~vert: #'top, & kids))
+      def wired :~ Pict:
+        for values(acc :~ Pict = lay) (k in kids):
+          tree_arrow(acc, root, root_node_of(k))
+      def (rx, ry) = Find.right(root).in(wired)
+      def out = anchor_after(wired, rx, ry)
+      _tree_root[out] := root
+      out
+
+// --- the pict terms ---------------------------------------------------------
+
+// A term is the picture it makes, a name for what it is, the terms it was built
+// from, and -- for a composite -- the call that made it, written as the function
+// it would re-run.
+class PTerm(pic :: Pict, name :: String,
+            rebuild :: maybe(Pict), kids :: List.of(PTerm)):
+  implements Rendered
+  override render(): tree_of(this)
+
+  // A node of its own, with rotation as its rebuild: that is what the pict really
+  // holds, and it is one more rebuild that a replacement underneath has to re-run.
+  method rotate(amt :: Real) :: PTerm:
+    def kids = [this]
+    PTerm(pic.rotate(amt), "tail", rotate_rebuild(amt, kids), kids)
+
+// One picture per term, in both shapes it gets drawn in: as a node on its own,
+// and as the subtree under that node. Memoized, so a subterm keeps the very pict
+// it was already drawn as when it turns up inside its parent's tree.
+def _nodes = MutableMap.by(===){}
+def _trees = MutableMap.by(===){}
+
+fun memoized(cache :~ MutableMap, t, make :: Function.of_arity(0)) :: Pict:
+  match cache.get(t, #false)
+  | q :: Pict: q
+  | ~else:
+      def q :: Pict = make()
+      cache[t] := q
+      q
+
+fun node_of(t :: PTerm) :: Pict:
+  memoized(_nodes, t, fun (): pict_node(t.pic, ~rebuild: t.rebuild))
+
+// The same one-picture-per-term guarantee, for terms that aren't pict terms --
+// the arithmetic ones on the slide before this one.
+fun render_memo(t, make :: Function.of_arity(0)) :: Pict:
+  memoized(_trees, t, make)
+
+// a node whose children are themselves trees needs more room between them than
+// one whose children are leaves
+fun any_composite(ks :: List.of(PTerm)) :: Boolean:
+  for values(found = #false) (k :~ PTerm in ks):
+    found || k.kids != []
+
+fun tree_of(t :: PTerm) :: Pict:
+  memoized(_trees, t,
+           fun ():
+             node_tree(node_of(t),
+                       for List (k :~ PTerm in t.kids): tree_of(k),
+                       ~hsep: if any_composite(t.kids) | 80 | 34))
+
+fun small_code(src :: String) :: Pict:
+  rh.current_rhombus_tt()(src).scale(0.66)
+
+// A node's rebuild function, written from the call that built it -- so the `~dx`
+// in it cannot drift from the `~dx` in the code above -- and from the names of the
+// children it would re-run on.
+//
+// Each constructor names what it makes, in this example's vocabulary. Only a
+// child's name is ever read, which is why the outermost `overlay` never has to
+// answer to being called a fish: it is the root, and nothing rebuilds from it.
+fun overlay_rebuild(dx :: Real, dy :: Real, kids :: List.of(PTerm)) :: Pict:
+  def [a, b] = for List (k :~ PTerm in kids): k.name
+  def args:
+    a
+      +& (if dx == 0 | "" | ", ~dx: " +& dx)
+      +& (if dy == 0 | "" | ", ~dy: " +& dy)
+      +& ", " +& b
+  small_code("fun ([" +& a +& ", " +& b +& "]): overlay(" +& args +& ")")
+
+// The reducer hands `rotate` the number `1/2 * math.pi` evaluates to, not the
+// source that says so, so name the quarter turns back.
+fun angle_src(amt :: Real) :: String:
+  cond
+  | amt == 1/2 * math.pi: "1/2 * math.pi"
+  | amt == math.pi: "math.pi"
+  | amt == 3/2 * math.pi: "3/2 * math.pi"
+  | ~else: to_string(amt)
+
+fun rotate_rebuild(amt :: Real, kids :: List.of(PTerm)) :: Pict:
+  def [a] = for List (k :~ PTerm in kids): k.name
+  small_code("fun ([" +& a +& "]): " +& a +& ".rotate(" +& angle_src(amt) +& ")")
+
+fun ellipse(~width: w :: Real, ~height: h :: Real, ~fill: fill) :: PTerm:
+  PTerm(p.ellipse(~width: w, ~height: h, ~fill: fill), "body", #false, [])
+
+fun triangle(~size: size :: Real, ~fill: fill) :: PTerm:
+  PTerm(p.triangle(~size: size, ~fill: fill), "tri", #false, [])
+
+fun rectangle(~width: w :: Real, ~height: h :: Real,
+              ~line: line, ~fill: fill) :: PTerm:
+  PTerm(p.rectangle(~width: w, ~height: h, ~line: line, ~fill: fill),
+        "box", #false, [])
+
+fun overlay(a :: PTerm, ~dx: dx :: Real = 0, ~dy: dy :: Real = 0,
+            b :: PTerm) :: PTerm:
+  PTerm(p.overlay(a.pic, ~dx: dx, ~dy: dy, b.pic), "fish",
+        overlay_rebuild(dx, dy, [a, b]), [a, b])
+
+// The example: a fish, and a box of water around it. Written with the sizes
+// spelled out, since this slide is about the shape of the tree rather than about
+// measuring a child.
+//
+// `eval_tree` rather than `eval_steps`, because the slide needs the value as well
+// as the reduction: the term the expression evaluated to is where the node picts
+// come from, and they have to be the very ones the reduction ends on for the
+// slide's arrows and bubble to land on them.
+def (tank_ast_code :: Pict, tank_value, tank_sched):
+  eval_tree:
+    overlay(rectangle(~width: 130, ~height: 80, ~line: "navy", ~fill: water),
+            ~dx: 36, ~dy: 28,
+            overlay(ellipse(~width: 60, ~height: 30, ~fill: "red"),
+                    ~dx: 36,
+                    triangle(~size: 30, ~fill: "red").rotate(1/2 * math.pi)))
+
+def tank_ast_steps :: SmallSteps = sched_to_redex_list(tank_sched)
+
+def tank_term :: PTerm = tank_value
+def box_term :: PTerm = tank_term.kids[0]
+def fish_term :: PTerm = tank_term.kids[1]
+def body_term :: PTerm = fish_term.kids[0]
+def tail_term :: PTerm = fish_term.kids[1]   // the `rotate`
+def tri_term :: PTerm = tail_term.kids[0]    // the leaf under it
+
+// The same tree with a different leaf, built from the very same body and box, so
+// the slide can show a swap at the bottom working its way up. A colour and not a
+// size: every node keeps its dimensions, so nothing in the tree has to move and the
+// only thing travelling up the picture is the change itself.
+def swap_tri = triangle(~size: 30, ~fill: "purple")
+def swap_tail = swap_tri.rotate(1/2 * math.pi)
+def swap_fish = overlay(body_term, ~dx: 36, swap_tail)
+def swap_tank = overlay(box_term, ~dx: 36, ~dy: 28, swap_fish)

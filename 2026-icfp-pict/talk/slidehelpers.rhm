@@ -1,0 +1,472 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+  pict/balloon as balloon
+  pict/rhombus as rh          // code metrics, for pinning bubbles onto code
+  lib("pict/main.rkt") as rkt
+  lib("pict/flash.rkt") as rkt_flash
+
+// Ported from ../talks/2022-explanations-talk/slidehelpers.rkt
+
+export:
+  make_bubble
+  make_flash
+  make_node
+  callout
+  code_callout
+  subst
+  multi_callout
+  callout_note
+  absolute_radius
+  brace
+  braced
+  fade_in
+  fade_through
+  anim_box
+  in_anim_box
+  on_ghost
+  explain_times
+  timeline_geom
+  TimelineGeom
+  pale
+  border_width
+  corner_radius
+  talk_blue
+  talk_light_blue
+  talk_green
+  talk_red
+
+def border_width = 3
+def corner_radius = -0.15            // negative = fraction of the smaller side
+
+// COLORS
+def talk_blue = draw.Color(38, 132, 235)
+def talk_light_blue = talk_blue.scale(2)
+def talk_green = draw.Color("green").scale(0.5)
+def talk_red = draw.Color("red")
+
+fun pale(c :: draw.Color) :: draw.Color:
+  c.scale(4)
+
+fun as_color(c :: draw.Color || String) :: draw.Color:
+  if c is_a String | draw.Color(c) | c
+
+fun gap_stack(child :: Pict, ...) :: Pict:
+  stack.left(~sep: slide.gap, child, ...)
+
+fun shape_size(content :: Pict,
+               width :: maybe(Real), height :: maybe(Real),
+               padding :: Real):
+  values(width || (content.width + padding * 2),
+         height || (content.height + padding * 2))
+
+// A rounded rectangle around `child`s: pale fill, saturated border.
+fun make_bubble(~width: width :: maybe(Real) = #false,
+                ~height: height :: maybe(Real) = #false,
+                ~padding: padding :: Real = 30,
+                ~color: color :: draw.Color || String = talk_blue,
+                child :: Pict, ...) :: Pict:
+  def line_color = as_color(color)
+  def content = gap_stack(child, ...)
+  def (w, h) = shape_size(content, width, height, padding)
+  rectangle(~around: content,
+            ~width: w,
+            ~height: h,
+            ~fill: pale(line_color),
+            ~line: line_color,
+            ~line_width: border_width,
+            ~rounded: corner_radius,
+            // The original ends in `pin-over`, which keeps the rectangle's
+            ~refocus: #false)
+
+// A starburst. Rhombus's pict has no flash shape, so this lifts `pict/flash`.
+fun flash_shape(w :: Real, h :: Real, color :: draw.Color) :: Pict:
+  fun styled(make, c :: draw.Color) :: Pict:
+    Pict.from_handle(rkt.linewidth(border_width,
+                                   rkt.colorize(make(w, h), c.handle)))
+  overlay(~horiz: #'left, ~vert: #'top,
+          styled(rkt_flash.#{filled-flash}, pale(color)),
+          styled(rkt_flash.#{outline-flash}, color))
+
+fun make_flash(~width: width :: maybe(Real) = #false,
+               ~height: height :: maybe(Real) = #false,
+               ~padding: padding :: Real = 30,
+               // the original defaults this one to the string "blue" (pure
+               // blue), not to the `blue` color object `make_bubble` uses
+               ~color: color :: draw.Color || String = "blue",
+               child :: Pict, ...) :: Pict:
+  def line_color = as_color(color)
+  def content = gap_stack(child, ...)
+  def (w, h) = shape_size(content, width, height, padding)
+  def shape = flash_shape(w, h, line_color)
+  overlay(shape, content).refocus(shape)
+
+// Callouts wrap `pict/balloon`, which draws the bubble-plus-spike as one shape
+
+// `rectangle`'s `~rounded` is a fraction of the smaller side when negative;
+// `pict/balloon` wants absolute pixels. Rule from racket/draw's `dc-path%`.
+fun absolute_radius(r :: Real, w :: Real, h :: Real) :: Real:
+  if r < 0 | -r * math.min(w, h) | r
+
+fun body_size(content :: Pict, hmargin :: Real, vmargin :: Real):
+  values(content.width + hmargin * 2, content.height + vmargin * 2)
+
+fun callout(~on: on :: Pict,
+            ~at: at :: Find,
+            ~spike: spike :: balloon.CompassDirection = #'s,
+            ~color: color :: draw.Color || String = talk_blue,
+            // #false keeps `pict/balloon`'s own margin defaults
+            ~padding: padding :: maybe(Real) = #false,
+            ~corner_radius: cr :: Real = corner_radius,
+            child :: Pict, ...,
+            ~& kws) :: Pict:
+  def line_color = as_color(color)
+  def content = gap_stack(child, ...)
+  def hmargin = padding || balloon.current_horiz_margin()
+  def vmargin = padding || balloon.current_vert_margin()
+  def (w, h) = body_size(content, hmargin, vmargin)
+  balloon.pin(content,
+              ~on: on,
+              ~at: at,
+              ~spike: spike,
+              ~horiz_margin: hmargin,
+              ~vert_margin: vmargin,
+              ~corner_radius: absolute_radius(cr, w, h),
+              ~fill: pale(line_color),
+              ~line: line_color,
+              ~line_width: border_width,
+              ~& kws)
+
+// The same bubble without a spike or a target, for when you want to place it
+// yourself. Note this is a balloon outline, not `make_bubble`'s rectangle.
+// A callout pinned to a zero-size marker sitting in a line of code. Such a
+// marker has no height, so it sits on the text's baseline and a plain `Find` at
+// it lands under the word rather than on it. Aim by which side the bubble is on:
+// the top of the line for a bubble above, the bottom for one below, the middle
+// of the line for one off to either side.
+fun code_callout(~on: on :: Pict,
+                 ~at: target :: Pict,
+                 ~spike: spike :: balloon.CompassDirection = #'s,
+                 child :: Pict, ...,
+                 ~& kws) :: Pict:
+  def m = rh.current_rhombus_tt()("X")
+  def at:
+    match spike
+    | #'s: Find.top(target, ~dy: -m.ascent)
+    | #'n: Find.bottom(target, ~dy: m.descent)
+    | #'e: Find.left(target, ~dy: -m.ascent / 2)
+    | ~else: Find.right(target, ~dy: -m.ascent / 2)
+  callout(~on: on, ~at: at, ~spike: spike, child, ..., ~& kws)
+
+// `replace`, without handing the replacement the identity of the pict it replaced.
+//
+// `Pict.replace` defaults to `~as_rebuilt: #true`, which re-labels the replacement
+// with the replaced pict's identity so that a later rebuild can find the same slot.
+// That is the right default for the talk's other uses, and exactly wrong for
+// substituting repeatedly: the next `replace` finds the whole inserted group under
+// the old identity and swaps *that*, instead of descending to the copies of the
+// target inside it. The picture then stops changing after one round.
+fun subst(p :: Pict, from :: Pict, to :: Pict) :: Pict:
+  p.replace(from, to, ~as_rebuilt: #false)
+
+// A bubble that reaches out to several targets at once. `pict/balloon` draws a
+// single spike, and separate arrows to several targets read as wiring rather than
+// as one label -- so this draws the body and every spike as one path, which is what
+// makes the outline itself protrude the way the deck's other bubbles do.
+//
+// The spikes leave the side the bubble is placed off, so every target has to be on
+// that side. Each spike's base straddles its target's own height along that edge,
+// clamped inside the rounded corners, and the tip is the target's near edge.
+// `~gap` is the clearance between `on` and the bubble, so the caller doesn't have
+// to guess the bubble's width to push it clear.
+fun multi_callout(~on: on :: Pict,
+                  ~at: targets :: List.of(Pict),
+                  ~horiz: horiz :: HorizAlignment = #'right,
+                  ~vert: vert :: VertAlignment = #'top,
+                  ~gap: gap :: Real = 24,
+                  ~dy: dy :: Real = 0,
+                  ~color: color :: draw.Color || String = talk_blue,
+                  ~padding: padding :: Real = 14,
+                  ~base: half_base :: Real = 15,
+                  ~corner_radius: cr :: Real = corner_radius,
+                  child :: Pict, ...) :: Pict:
+  def line_color = as_color(color)
+  def content = stack.left(~sep: 6, child, ...)
+  def w = content.width + padding * 2
+  def n = targets.length()
+  // Tall enough for every spike to get its own stretch of the edge. Two spikes
+  // whose bases overlap make the outline cross itself, and a self-crossing path
+  // strokes those inner edges too -- which is what draws a line across the middle
+  // of a spike. Disjoint bases are what keep the union of the shapes an outline.
+  def pitch = 2 * half_base + 6
+  // The radius comes from the body the content asks for, not from the taller body
+  // the spikes force. A negative `~corner_radius` is a fraction of the smaller side,
+  // so measuring it against the grown height would round the corners off in
+  // proportion to how many spikes there are -- and those fatter corners then eat
+  // into the run of straight edge the spikes need.
+  def natural_h = content.height + padding * 2
+  def r = absolute_radius(cr, w, natural_h)
+  // The straight part of the edge is what a base can sit on: it runs from `r` to
+  // `h - r`, and a base needs `half_base` either side of its centre plus a little
+  // clearance, so that a spike's edge does not leave the outline right where the
+  // corner starts to curve away from it.
+  def corner_clear = 5
+  def end_room = r + half_base + corner_clear
+  def min_h = n * pitch + 2 * end_room
+  def h = math.max(natural_h, min_h)
+  def dx = if horiz == #'right | w + gap | -(w + gap)
+  // an empty body, placed first, so the targets can be measured against it
+  def slot = blank(~width: w, ~height: h)
+  def probe = overlay(~horiz: horiz, ~vert: vert, ~dx: dx, ~dy: dy, on, slot)
+  def (bx, by) = Find.top_left(slot).in(probe)
+  def tips :~ List:
+    def raw:
+      for List (tg in targets):
+        def (tx, ty) = (if horiz == #'right | Find.right(tg) | Find.left(tg)).in(probe)
+        [tx - bx, ty - by]
+    // the edge is walked upwards, so the lowest spike is drawn first
+    raw.sort(fun (a :~ List, b :~ List): (a[1] :~ Real) > (b[1] :~ Real))
+  // Each spike wants its base level with its own target, but they have to stay in
+  // order and stay clear of each other. One sweep downwards pushes each base below
+  // the one before it, then one sweep upwards pulls the whole run back inside the
+  // bottom -- the standard way to place labels along an axis. Bases in the same
+  // order as the tips is also what guarantees no two spikes cross: their edges
+  // never get the chance to swap sides.
+  def base_ys :~ List:
+    def lo = end_room
+    def hi = h - end_room
+    // `tips` runs bottom-to-top, so sweep from the bottom edge upwards
+    def up_pass :~ List:
+      for values(acc :~ List = []) (p :~ List in tips):
+        def ceiling :~ Real = if acc == [] | hi + pitch | (acc.last :~ Real)
+        acc ++ [math.min(p[1] :~ Real, ceiling - pitch)]
+    // ...then back down from the top, in case that ran past the top edge
+    def down_pass :~ List:
+      for values(acc :~ List = []) (y :~ Real in up_pass.reverse()):
+        def floor :~ Real = if acc == [] | lo - pitch | (acc.last :~ Real)
+        acc ++ [math.max(y, floor + pitch)]
+    down_pass.reverse()
+  // the drawing surface has to cover the body and every tip
+  fun span(sel :: Int, lo :: Real, hi :: Real):
+    for values(a :~ Real = lo, b :~ Real = hi) (p :~ List in tips):
+      values(math.min(a, p[sel] :~ Real), math.max(b, p[sel] :~ Real))
+  def (min_x, max_x) = span(0, 0.0, w)
+  def (min_y, max_y) = span(1, 0.0, h)
+  def ox = -min_x
+  def oy = -min_y
+  def k = r * 0.55                     // circle-ish bezier handle, as in `brace`
+  def path:
+    def pth = draw.Path()
+    fun at(x :: Real, y :: Real): [x + ox, y + oy]
+    // clockwise from the top-left corner, with the spiked edge walked last
+    pth.move_to(at(r, 0))
+    pth.line_to(at(w - r, 0))
+    pth.curve_to(at(w - k, 0), at(w, k), at(w, r))
+    pth.line_to(at(w, h - r))
+    pth.curve_to(at(w, h - k), at(w - k, h), at(w - r, h))
+    pth.line_to(at(r, h))
+    pth.curve_to(at(k, h), at(0, h - k), at(0, h - r))
+    // out to the tip and back, so the base is never drawn: the outline itself is
+    // what protrudes, exactly as a balloon's spike does
+    for (i in 0 .. tips.length()):
+      def p :~ List = tips[i]
+      def cy :~ Real = base_ys[i]
+      pth.line_to(at(0, cy + half_base))
+      pth.line_to(at(p[0] :~ Real, p[1] :~ Real))
+      pth.line_to(at(0, cy - half_base))
+    pth.line_to(at(0, r))
+    pth.curve_to(at(0, k), at(k, 0), at(r, 0))
+    pth.close()
+    pth
+  def shape:
+    dc(fun (d :: draw.DC, ddx, ddy):
+         d.path(path, ~dx: ddx, ~dy: ddy),
+       ~width: max_x - min_x,
+       ~height: max_y - min_y,
+       ~fill: pale(line_color),
+       ~line: line_color,
+       ~line_width: border_width)
+  // Centred in the body, not pinned to its top: the body is often taller than the
+  // text asked for, because the spikes need a run of edge to leave from, and
+  // top-aligning the text puts all of that slack underneath it as a blank patch.
+  def bubble:
+    overlay(~horiz: #'left, ~vert: #'top,
+            ~dx: ox + padding, ~dy: oy + (h - content.height) / 2,
+            shape, content)
+  // the body sits at (ox, oy) inside `bubble`, so undo that to land it where the
+  // probe put `slot`; only a tip reaching past the body's own edges shifts it
+  overlay(~horiz: horiz, ~vert: vert,
+          ~dx: dx + (if horiz == #'right | max_x - w | -ox),
+          ~dy: dy - oy,
+          on, bubble)
+    .refocus(on)
+
+fun callout_note(~color: color :: draw.Color || String = talk_blue,
+                 ~padding: padding :: maybe(Real) = #false,
+                 ~corner_radius: cr :: Real = corner_radius,
+                 child :: Pict, ...,
+                 ~& kws) :: Pict:
+  def line_color = as_color(color)
+  def content = gap_stack(child, ...)
+  def hmargin = padding || balloon.current_horiz_margin()
+  def vmargin = padding || balloon.current_vert_margin()
+  def (w, h) = body_size(content, hmargin, vmargin)
+  balloon.note(content,
+               ~hmargin: hmargin,
+               ~vmargin: vmargin,
+               ~corner_radius: absolute_radius(cr, w, h),
+               ~fill: pale(line_color),
+               ~line: line_color,
+               ~line_width: border_width,
+               ~& kws)
+
+// ---------------------------------------------------------------------------
+
+// A horizontal curly brace; `#'down` puts the tip at the bottom.
+fun brace(~width: width :: Real,
+          ~height: height :: Real = 12,
+          ~dir: dir :: matching(#'down || #'up) = #'down,
+          ~color: color :: draw.Color || String = "black",
+          ~line_width: lw :: Real = 2) :: Pict:
+  def r = math.min(height / 2, width / 4)     // arm radius, never past midspan
+  def k = r * 0.55                            // circle-ish bezier handle
+  def mid = width / 2
+  // Each half is its own `Path`: sharing one path makes the second `move_to`
+  // close the first subpath, which strokes a diagonal back to its start.
+  fun half(end_x :: Real, sign :: Real) :: draw.Path:
+    // `sign` is +1 for the left half, -1 for the right
+    def p = draw.Path()
+    p.move_to([end_x, 0])
+    p.curve_to([end_x, k], [end_x + sign * (r - k), r], [end_x + sign * r, r])
+    p.line_to([mid - sign * r, r])
+    p.curve_to([mid - sign * (r - k), r], [mid, r + k], [mid, 2 * r])
+    p
+  def left = half(0, 1)
+  def right = half(width, -1)
+  def p:
+    dc(fun (dc :: draw.DC, dx, dy):
+         dc.path(left, ~dx: dx, ~dy: dy)
+         dc.path(right, ~dx: dx, ~dy: dy),
+       ~width: width,
+       ~height: 2 * r,
+       ~line: color,
+       ~line_width: lw)
+  if dir == #'down | p | p.vflip()
+
+fun braced(~width: width :: Real,
+           ~height: height :: Real = 12,
+           ~dir: dir :: matching(#'down || #'up) = #'down,
+           ~color: color :: draw.Color || String = "black",
+           ~line_width: lw :: Real = 2,
+           ~sep: sep :: Real = 6,
+           label :: Pict) :: Pict:
+  def b = brace(~width: width, ~height: height, ~dir: dir,
+                ~color: color, ~line_width: lw)
+  if dir == #'down
+  | stack(~sep: sep, b, label)
+  | stack(~sep: sep, label, b)
+
+// ---------------------------------------------------------------------------
+
+// Reveal `extra` over `base` by fading it in as one new slide step, rather than
+fun fade_in(base :: Pict, extra :: Pict,
+            ~horiz: horiz :: HorizAlignment = #'center,
+            ~vert: vert :: VertAlignment = #'center,
+            ~dx: dx :: Real = 0,
+            ~dy: dy :: Real = 0) :: Pict:
+  def settled = base.snapshot(math.max(0, base.duration - 1), 1.0)
+  fun over(e :: Pict) :: Pict:
+    overlay(~horiz: horiz, ~vert: vert, ~dx: dx, ~dy: dy, settled, e)
+      .refocus(settled)
+  // Two epochs, not three: the fade's own last frame is already `extra` at full
+  switch(base,
+         animate(fun (t): over(extra.alpha(t))))
+
+// Dissolve `from` into `to` over one epoch. Unlike `cross_fade`, the two are
+// only briefly on screen together (`~overlap` of the epoch), so blocks of text
+// that don't line up don't spend the middle of the transition mashed together.
+fun fade_through(from :: Pict, to :: Pict,
+                 ~overlap: overlap :: Real = 0.15,
+                 ~extent: extent :: Real = 1,
+                 ~horiz: horiz :: HorizAlignment = #'center,
+                 ~vert: vert :: VertAlignment = #'center) :: Pict:
+  def out_end = (1.0 + overlap) / 2.0        // `from` is gone by here
+  def in_start = (1.0 - overlap) / 2.0       // `to` starts here
+  fun clamp01(x :: Real) :: Real: math.min(1.0, math.max(0.0, x))
+  def slot = overlay(~horiz: horiz, ~vert: vert, from.ghost(), to.ghost())
+  animate(~extent: extent,
+          fun (n):
+            overlay(~horiz: horiz, ~vert: vert,
+                    slot,
+                    from.alpha(clamp01((out_end - n) / out_end)),
+                    to.alpha(clamp01((n - in_start) / (1.0 - in_start)))))
+
+// `timeline` launders its epoch dots, so their positions have to be derived
+// from its layout. Keep in sync with pict/private/timeline_pict.rhm.
+fun explain_times(duration :: Int, steps :: PosInt = 4) :: List:
+  List.append(& for List (i in 0..duration):
+                  for List (s in 0..steps):
+                    if s == 0 | i | i + s * math.inexact(1/steps))
+    ++ [duration]
+
+class TimelineGeom(dot_x0 :: Real, pitch :: Real, dot_y :: Real, span :: Real):
+  // centre of the k'th sample column, from the timeline's left edge
+  method dot_cx(k :: Int) :: Real: dot_x0 + k * pitch
+
+// `p` is what was passed to `explain_anim`; `tl` is the timeline it returned.
+fun timeline_geom(p :: Pict, tl :: Pict, ~steps: steps :: PosInt = 4) :: TimelineGeom:
+  def times = explain_times(p.duration, steps)
+  def snaps :~ List.of(Pict):
+    for List (t in times):
+      p.snapshot(math.exact(math.floor(t)), t - math.floor(t))
+  def w: for values(m = 0.0) (s :~ Pict in snaps): math.max(m, s.width)
+  def imgs_h: for values(m = 0.0) (s :~ Pict in snaps): math.max(m, s.height)
+  def n = times.length()
+  def pitch = w + 20
+  // whichever row is wider decides where the dots row starts
+  def dots_row_w = n * 10 + (n - 1) * (w + 10) + 48
+  def imgs_row_w = n * w + (n - 1) * 20
+  def inner_w = math.max(dots_row_w, imgs_row_w)
+  TimelineGeom(20 + (inner_w - dots_row_w) / 2 + 24 + 5,
+               pitch,
+               // dots sit at the bottom of the dots row, which is what is left
+               // of the height once the pads, the gap and the snapshots go
+               10 + (tl.height - 20 - 10 - imgs_h) - 5,
+               // first dot to last -- symmetric, so a centred brace of this
+               // width lines up under the timeline with no further offsetting
+               (n - 1) * pitch)
+
+// An animation changes size as it runs, and every combiner re-lays-out each
+// frame -- so a running pict drags its neighbours around, and a lone one drifts
+// as the slide re-centres. `anim_box` is an empty box as big as `p` ever gets:
+// four samples an epoch is enough to bound code that grows into a picture.
+fun anim_box(p :: Pict) :: Pict:
+  def q :~ Pict = p
+  overlay(~horiz: #'left, ~vert: #'top,
+          & (for List (i in 0 .. math.max(1, q.duration)):
+               overlay(~horiz: #'left, ~vert: #'top,
+                       & (for List (k in 0 .. 5):
+                            q.snapshot(i, k / 4.0).ghost()))))
+
+fun in_anim_box(p :: Pict,
+                ~horiz: horiz :: HorizAlignment = #'left,
+                ~vert: vert :: VertAlignment = #'top) :: Pict:
+  overlay(~horiz: horiz, ~vert: vert, anim_box(p), p)
+
+fun on_ghost(p :: Pict, make :: Function.of_arity(1)) :: Pict:
+  def g = p.ghost()
+  (make(g) :~ Pict).refocus(g)
+
+// A small labelled box, wider than it is tall, that highlights by swapping its
+// border to `talk_blue` at double width.
+fun make_node(label :: String, highlighted = #false) :: Pict:
+  def element = t(label)
+  rectangle(~around: element,
+            ~width: math.max(50, element.width + 10),
+            ~height: element.height + 10,
+            ~fill: draw.Color("gray").scale(2),   // a single `light`, unlike the bubbles
+            ~line: if highlighted | talk_blue | draw.Color("black"),
+            ~line_width: if highlighted | border_width * 2 | border_width,
+            ~rounded: corner_radius,
+            ~refocus: #false)

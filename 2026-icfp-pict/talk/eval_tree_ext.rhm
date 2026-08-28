@@ -1,0 +1,775 @@
+#lang rhombus/static/and_meta
+import:
+  pict open
+  pict/rhombus open
+  "alt_pict.rhm" open
+
+// ----------------------------------------
+// Program to evaluation-step library
+
+// In an `eval_tree` form, the body doubles as
+// an expression to evaluate and a description of
+// evaluation in terms of "tree expr" bindings.
+//
+// The result is three values:
+//   initial expression pict
+//   final value pict
+//   an `Eval` object to describe steps
+
+export:
+  Step
+  CallStep
+  Eval
+  Rendered
+  eval_tree
+  eval_steps
+  sched_to_redex_list
+  SmallSteps
+  tree_expr        // so other modules can add stepping rules / functions
+  tree_fun         // define a function that IS steppable (unfolds via substitution)
+  meta:
+    tree_expr_meta
+    subst_step
+
+  // tree expr bindings:
+  #%literal
+  #%call
+  #%block
+  #%brackets
+  #%parens
+  if
+  block
+  def
+  fun
+  names:
+    .
+    *
+    /
+    +
+    -
+    <
+    #,          // escape to an already-evaluated pict
+    #'          // symbol literal
+
+class Step(from :: Pict,
+           to :: Pict):
+  nonfinal
+
+class CallStep(args :: List.of(Pict)):
+  extends Step
+
+class Eval(subs :: List.of(Eval),
+           step :: maybe(Step),
+           tail :: maybe(Eval))
+
+// A value that has a picture of itself. Numbers and picts already reduce to
+// something we can show; a value of some other type normally takes no visible
+// step, since there is nothing to draw. Implement this and it reduces to its
+// picture -- which is how a term of a deep embedding can step to a drawing of
+// the tree it just built.
+interface Rendered:
+  method render() :: Pict
+
+fun maybe_step(code, val):
+  match val
+  | val :: Pict:
+      Step(code, val)
+  | val :: List.of(Pict):
+      let open = current_rhombus_tt()("[").colorize(current_paren_color())
+      let close = current_rhombus_tt()("]").colorize(current_paren_color())
+      let comma = current_rhombus_tt()(", ")
+      Step(code, beside.baseline(open,
+                                 & (if val == []
+                                    | []
+                                    | [val.first]),
+                                 & (if val == []
+                                    | []
+                                    | val.rest.map(fun (p):
+                                                     beside.baseline(comma, p))),
+                                 close))
+  | val :: Number:
+      // so that `p.width` reduces to a pict of the number, like any
+      // other value; `Int` results print without a `.0`
+      let n = if val is_a Int | val | math.exact(val)
+      let n = if n is_a Int | n | val
+      Step(code, current_rhombus_tt()(to_string(n))
+                   .colorize(current_literal_color()))
+  | val :: Rendered:
+      Step(code, val.render())
+  | ~else:
+      // change to
+      //   Step(code, text(repr(val)))
+      // to see non-pict reduction steps
+      #false
+
+// Utility to flatten tree to just the steps
+fun sched_to_redex_list(Eval([sub, ...], step, tail)) :~ List.of(Step):
+  List.append(sched_to_redex_list(sub), ...)
+    ++ (match step
+        | Step(from, to): [step]
+        | ~else: [])
+    ++ (if tail
+        | sched_to_redex_list(tail)
+        | [])
+
+annot SmallSteps = List.of(Step)
+
+// For the tree_expr protocol, each macro expands to
+//
+//   '[$src,
+//     : $defn; ...,
+//     $code_expr,
+//     $eval_expr,
+//     $defn_val_id, ...]'
+//
+// where
+//
+//   * `src`: Provides the source term, which is used for
+//      reconstructing the term as an argument to `rhombusblock`,
+//      both its content and it's prefix/suffix
+//   * `defn`s: Added for use by `code_expr` and `eval_expr`.
+//     These definitions should not perform any evaluation work,
+//     only pict work to be use by the two expressions.
+//   * `code_expr`: Produces a pict for the starting code.
+//   * `eval_expr`: Produces two values: the expression result
+//     value and an `Eval` representing the evalution-animation
+//     plan.
+//   * `defn_val_id`s: Identifiers to bind to the result value
+//     so they can be referenced later.
+
+space.enforest tree_expr:
+  space_path talk/eval_tree_ext
+  macro_definer macro: ~env
+  meta_namespace tree_expr_meta:
+    parse_syntax_class Parsed(env)
+    parsed_packer pack
+    parsed_unpacker unpack
+    identifier_parser (fun (id :: Identifier, env :: Map.of(Symbol, [Identifier, Identifier])):
+                         let val_maybe = env.maybe[id.unwrap()]
+                         if val_maybe
+                         | let [val_id, val_p] = val_maybe
+                           let val_id = syntax_meta.flip_introduce(val_id)
+                           let val_p = syntax_meta.flip_introduce(val_p)
+                           pack('[$id,
+                                  :«»,
+                                  $val_p,
+                                  values(
+                                    $val_id,
+                                    Eval([], #false, #false)
+                                  )]')
+                         | let code_id = Syntax.make_temp_id() // manual temp needed until Rhombus is fixed(?)
+                           pack(
+                              '[$id,                                
+                                :
+                                  def $code_id = rhombusblock($(strip_outside(id))),
+                                $code_id,
+                                values(
+                                  $id,
+                                  Eval([], maybe_step($code_id, $id), #false)
+                                )]'
+                            ))
+  
+meta: 
+  // Picts for subexpressions should not have any prefix or suffix text,
+  // since we leave that to the source result and context to preserve
+  fun strip_outside(stx) :~ Syntax:
+    match stx
+    | '$(stx :: Term)':
+        stx.property(#'#{raw-prefix}, #false).property(#'#{raw-suffix}, #false)
+    | '$first_stx $mid_stx ... $last_stx':
+        let first_stx = first_stx.property(#'#{raw-prefix}, #false)
+        let last_stx = last_stx.property(#'#{raw-suffix}, #false)
+        '$first_stx $mid_stx ... $last_stx'
+
+
+expr.macro 'eval_tree:
+              $code_g
+              ...':
+  ~op_stx: self
+  ~all_stx: stx
+  let '$(b :: tree_expr_meta.Parsed({}))':
+    '#%block:
+       $code_g
+       ...'
+  let '[$src, : $defn, $code_expr, $val_expr]' = tree_expr_meta.unpack(b)
+
+  // skip the last step in the eval collapsing the block
+  'block:
+     $defn
+     def code = $code_expr
+     def (val, eval) = $val_expr
+     def Eval(subs, step, tail) = eval
+     values(code, val, Eval(subs, #false, tail))'
+
+expr.macro 'eval_steps: $(code :: Block)':
+  'block:
+     let (code, val, sched) = eval_tree $code
+     [code,  sched_to_redex_list(sched)]'
+
+tree_expr.macro '#%literal $(code :: Term)':
+  tree_expr_meta.pack('[$code,
+                        :«»,
+                        rhombusblock($(strip_outside(code))),
+                        values(
+                          $code,
+                          Eval([], #false, #false)
+                        )]')
+
+
+// symbol literals, e.g. `#'extents` as a keyword argument's value
+tree_expr.macro '#' $(code :: Term)':
+  ~op_stx: self
+  let src = '$self $code'
+  tree_expr_meta.pack('[$src,
+                        :«»,
+                        rhombusblock($(strip_outside(src))),
+                        values(
+                          #' $code,
+                          Eval([], #false, #false)
+                        )]')
+
+// escape to a literal pict: `#,(expr)` is already a value, so it takes no
+// steps -- its own pict serves as both the "code" and the "value"
+tree_expr.macro '#, $(code :: Term)':
+  tree_expr_meta.pack('[$code,
+                        :«»,
+                        $code,
+                        block:
+                          values($code,
+                                 Eval([], #false, #false))]')
+
+// define a function
+tree_expr.macro 'fun $(args :: Sequence): $(body :: Block)':
+  ~all_stx: stx
+  tree_expr_meta.pack(
+    '[$stx,
+      :«»,
+      rhombusblock($stx),
+      block:
+        values(fun $args: $(build_fun_body(body)),
+               Eval([], #false, #false))]')       
+
+
+// Shared utilities for function calls and method calls
+meta:
+  // Parse arguments that might have keywords
+  syntax_class Arg:
+    kind: ~group
+    fields: kw expr splice blk
+  | '$(kw :: Keyword): $(blk :: Block)':
+      match_def ': $expr' = blk
+      field splice = #false
+  | '$(splice && '&') $(expr :: Sequence)':
+      field kw = #false
+      field blk = #false
+  | '$expr':
+      field kw = #false
+      field blk = #false
+      field splice = #false
+
+  // Adds back a keyword for rendering an argument
+  fun combine(arg :: Syntax.matched_of(Arg), new :: Syntax):
+    cond
+    | arg.kw:
+        let new = new.relocate_group(arg.expr)
+        let blk = ': $new'.relocate(arg.blk)
+        '$arg.kw $blk'.relocate_group(arg)
+    | arg.splice:
+        '$arg.splice $new'.relocate_group(arg)
+    | ~else:
+        new.relocate_group(arg)
+
+  fun handle_call(call_src, head_src, head_defn, head_code, head_more_src,
+                  head_eval_defn, head_val, head_evals,
+                  parens,
+                  env,
+                  ~show_step = #true):
+    match parens
+    | '($(arg :: Arg), ...)':
+        let [arg_code_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [arg_make_eval_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [arg_val_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [arg_eval_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [new_arg, ...] = ['#,($arg_code_tmp)', ...]
+        let new_parens = '($(combine(arg, new_arg)), ...)'.relocate(parens)
+        let new_head_code = if head_src | seq_to_escape_seq([head_src], '#,($head_code)') | head_code
+        let new_code = strip_outside('$new_head_code $head_more_src $new_parens')
+        let '[$(arg_e :: tree_expr_meta.Parsed(env)), ...]' = '[$arg.expr, ...]'
+        let ['[$_, : $arg_defn, $arg_code_expr, $arg_eval_expr]', ...] = [tree_expr_meta.unpack(arg_e), ...]
+        tree_expr_meta.pack(
+          '[$call_src,
+            :
+              $head_defn
+              $arg_defn
+              ...
+              def $arg_code_tmp = $arg_code_expr
+              ...
+              def code = rhombusblock($new_code),
+            code,
+            block:
+              $head_eval_defn
+              def ($arg_val_tmp, $arg_eval_tmp) = $arg_eval_expr
+              ...
+              def val = $head_val($(combine(arg, '$arg_val_tmp')), ...)
+              values(
+                val,
+                Eval([& $head_evals, $arg_eval_tmp, ...],
+                     $(show_step && 'maybe_step(code, val)'),
+                     #false)
+              )]'
+          )
+
+  // Gives a `#,` escape the raw source of the expression it replaces
+  fun seq_to_escape_seq([t :: Syntax, ...], esc :: Syntax):
+    Syntax.relocate_split(esc.unwrap_group(), 'x'.relocate_span([t, ...]))
+
+  // Like handle_call, but for a property access `obj.field` (no parens/args)
+  fun handle_field(call_src, head_src, head_defn, head_code, head_more_src,
+                   head_eval_defn,
+                   val, evals):
+    let new_head_code = if head_src | seq_to_escape_seq([head_src], '#,($head_code)') | head_code
+    let new_code = strip_outside('$new_head_code $head_more_src')
+    tree_expr_meta.pack(
+      '[$call_src,
+        :
+          $head_defn
+          def code = rhombusblock($new_code),
+        code,
+        block:
+          $head_eval_defn
+          values(
+            $val,
+            Eval([& $evals],
+                 maybe_step(code, $val),
+                 #false)
+          )]'
+    )
+
+tree_expr.macro '$rator #%call $(parens :: Term)':
+  ~env: env
+  let '[$rator_src, : $rator_defn, $rator_code_expr, $rator_val_expr]' = tree_expr_meta.unpack(rator)
+  let call_src = '$rator_src $parens'
+  handle_call(call_src,              
+              rator_src,
+              '$rator_defn
+               let rator_code = $rator_code_expr',
+              'rator_code', '',
+              'let (rator_val, rator_eval) = $rator_val_expr',
+              'rator_val #%alt_call', '[rator_eval]',
+              parens,
+              env)
+
+// `.` handles both a method call `obj.m(args)` and a property access `obj.field`
+// (single infix rule -- multiple infix cases aren't allowed): capture an optional
+// trailing parens and branch on whether it's there. Whatever is left over after
+// that is returned as the unconsumed tail, so `p.width + 1` still sees the `+ 1`
+// instead of silently dropping it.
+tree_expr.macro '$obj . $member $tail ...':
+  ~op_stx: self
+  ~all_stx: stx
+  ~env: env
+  let '[$obj_src, : $obj_defn, $obj_code_expr, $obj_eval_expr]' = tree_expr_meta.unpack(obj)
+  match '$tail ...'
+  | '$(parens && '($_, ...)') $rest ...':       // method call
+      let call_src = '$obj_src $self $member $parens'
+      values(
+        handle_call(call_src,
+                    obj_src,
+                    '$obj_defn
+                     let obj_code = $obj_code_expr',
+                    'obj_code', '$self $member',
+                    'use_dynamic
+                     let (obj_val, obj_eval) = $obj_eval_expr',
+                    'obj_val #%alt_dot $member', '[obj_eval]',
+                    parens,
+                    env),
+        '$rest ...'
+      )
+  | ~else:                                       // property access
+      let access_src = '$obj_src $self $member'
+      values(
+        handle_field(access_src,
+                     obj_src,
+                     '$obj_defn
+                      let obj_code = $obj_code_expr',
+                     'obj_code',
+                     '$self $member',
+                     'use_dynamic
+                      let (obj_val, obj_eval) = $obj_eval_expr',
+                     'obj_val . $member', '[obj_eval]'),
+        '$tail ...'
+      )
+
+tree_expr.macro '#%brackets $(bkts && '[$elem, ...]')':
+  ~op_stx: self
+  ~all_stx: stx
+  ~env: env
+  let parens = '($elem, ...)'.relocate(bkts)
+  handle_call(bkts, #false,
+              '',
+              '', '',
+              'use_dynamic',
+              'List', '[]',
+              parens,
+              env,
+              ~show_step: #false)
+
+tree_expr.macro '#%parens $(parens :: Term)':
+  ~op_stx: self
+  ~all_stx: stx
+  ~env: env
+  handle_call(parens, #false,
+              '',
+              '', '',
+              'use_dynamic',
+              'values', '[]',
+              parens,
+              env,
+              ~show_step: #false)
+
+meta:
+  fun parse_infix(lhs, rhs, self, op):
+    let '[$lhs_src, : $lhs_defn, $lhs_code_expr, $lhs_eval_expr]' = tree_expr_meta.unpack(lhs)
+    let '[$rhs_src, : $rhs_defn, $rhs_code_expr, $rhs_eval_expr]' = tree_expr_meta.unpack(rhs)
+    let new_lhs_code = seq_to_escape_seq([lhs_src], '#,(lhs_code)')
+    let new_rhs_code = seq_to_escape_seq([rhs_src], '#,(rhs_code)')
+    let new_code = strip_outside('$new_lhs_code $self $new_rhs_code')
+    let op_src = '$lhs_src $self $rhs_src'
+    tree_expr_meta.pack(
+      '[$op_src,
+        :
+          $lhs_defn
+          $rhs_defn
+          def lhs_code = $lhs_code_expr
+          def rhs_code = $rhs_code_expr
+          def code = rhombusblock($new_code),
+        code,
+        block:
+          def (lhs_val, lhs_eval) = $lhs_eval_expr
+          def (rhs_val, rhs_eval) = $rhs_eval_expr
+          def val = lhs_val $op rhs_val          
+          values(
+            val,
+            Eval([lhs_eval, rhs_eval],
+                 maybe_step(code, val),
+                 #false)
+          )]'
+    )
+
+tree_expr.macro '$lhs * $rhs':
+  ~op_stx: self
+  ~order: multiplication
+  parse_infix(lhs, rhs, self, '*')
+
+// `/` shares `*`'s order, matching Rhombus's own `/`
+tree_expr.macro '$lhs / $rhs':
+  ~op_stx: self
+  ~order: multiplication
+  parse_infix(lhs, rhs, self, '/')
+
+tree_expr.macro '$lhs + $rhs':
+  ~op_stx: self
+  ~order: addition
+  parse_infix(lhs, rhs, self, '+')
+
+tree_expr.macro '$lhs - $rhs':
+  ~op_stx: self
+  ~order: addition
+  parse_infix(lhs, rhs, self, '-')
+
+tree_expr.macro '$lhs < $rhs':
+  ~op_stx: self
+  ~order: order_comparison
+  parse_infix(lhs, rhs, self, syntax_meta.dynamic_name('<'))
+
+tree_expr.macro 'if $tst ... | $(thn_blk :: Block) | $(els_blk :: Block)':
+  ~op_stx: head
+  ~all_stx: stx
+  ~env: env
+  let ': $thn' = thn_blk
+  let ': $els' = els_blk
+  let new_thn = ': $(seq_to_escape_seq([thn], '#,(thn_code)'))'.relocate(thn_blk)
+  let new_els = ': $(seq_to_escape_seq([els], '#,(els_code)'))'.relocate(els_blk)
+  let new_alts = Syntax.make([#'alts, new_thn, new_els])
+  let [new_tst, ...] = seq_to_escape_seq([tst, ...], '#,(tst_code)')
+  let new_code = strip_outside('$head $new_tst ... $new_alts')
+  let '$(tst_e :: tree_expr_meta.Parsed(env))' = '$tst ...'
+  let '$(thn_e :: tree_expr_meta.Parsed(env))' = thn
+  let '$(els_e :: tree_expr_meta.Parsed(env))' = els
+  let '[$_, : $tst_defn, $tst_code_expr, $tst_eval_expr]' = tree_expr_meta.unpack(tst_e)
+  let '[$_, : $thn_defn, $thn_code_expr, $thn_eval_expr]' = tree_expr_meta.unpack(thn_e)
+  let '[$_, : $els_defn, $els_code_expr, $els_eval_expr]' = tree_expr_meta.unpack(els_e)
+  // duplicates input, so room for improvement here:
+  tree_expr_meta.pack(
+    '[$stx,
+      :
+        $tst_defn
+        $thn_defn
+        $els_defn
+        def tst_code = $tst_code_expr
+        def thn_code = $thn_code_expr
+        def els_code = $els_code_expr
+        def code = rhombusblock($new_code),
+      code,
+      block:
+        def (tst_val, tst_eval) = $tst_eval_expr
+        if tst_val
+        | let (thn_val, thn_eval) = $thn_eval_expr
+          values(
+            thn_val,
+            Eval([tst_eval],
+                 Step(code, thn_code),
+                 thn_eval)
+          )
+        | let (els_val, els_eval) = $els_eval_expr
+          values(
+            els_val,
+            Eval([tst_eval],
+                 Step(code, els_code),
+                 els_eval)
+          )]'
+  )
+
+meta:
+  fun parse_block(stx, wrap_self, env):
+    let '$_ ...:
+           $(g :: tree_expr_meta.Parsed(env))
+           ...':
+      stx
+    let ['[$g_src, : $g_defn, $g_code_expr, $g_eval_expr, $g_id, ...]', ...] = [tree_expr_meta.unpack(g), ...]
+    let [g_code, ...] = [Syntax.make_temp_id(g), ...]
+    let [g_make_eval, ...] = [Syntax.make_temp_id(g), ...]
+    let [g_val, ...] = [Syntax.make_temp_id(g), ...]
+    let [g_eval, ...] = [Syntax.make_temp_id(g), ...]
+    let [new_g_code, ...] = ['#,($g_code)'.relocate_group(g.group), ...]
+    let code_block = wrap_self(': $new_g_code; ...'.relocate(match stx |'$_ ... $blk': blk))
+    let last_g_code = [g_code, ...].last
+    tree_expr_meta.pack(
+      '[$stx,
+        :
+          $g_defn
+          ...
+          def $g_code = $g_code_expr
+          ...
+          def code = rhombusblock($code_block),
+        code,        
+        block:
+          def_eval [$g_id, ...] ($g_val, $g_eval) = $g_eval_expr
+          ...
+          def val:
+            $g_val
+            ...
+          values(
+              val,
+              Eval([$g_eval, ...],
+                   // A block whose rendered code is literally its last
+                   // group's pict (i.e. a one-group `#%block`) would emit a
+                   // step identical to that group's own step; a duplicate
+                   // step breaks `replace`, since the `from` pict is already
+                   // gone by the second one.
+                   (if (code.identity == ($last_g_code :: Pict).identity)
+                    | #false
+                    | maybe_step(code, val)),
+                   #false)
+          )]'
+    )
+
+defn.macro 'def_eval [$id, ...] ($val, $eval) = $rhs ...':
+  'def ($val, $eval) = $rhs ...
+   def $id = $val
+   ...'
+
+tree_expr.macro 'block:
+                   $(g :: tree_expr_meta.Parsed(env))
+                   ...':
+  ~op_stx: self
+  ~all_stx: stx
+  ~env: env
+  parse_block(stx, fun (code_block): '$self $code_block', env)
+
+tree_expr.macro '#%block:
+                   $(g :: tree_expr_meta.Parsed(env))
+                   ...':
+  ~env: env
+  ~all_stx: stx
+  parse_block(stx, fun (code_block):
+                     let ': $g; ...' = code_block
+                     '$g; ...',
+              env)
+
+
+meta:
+  // The RHS of a `def`, either `= rhs` or a `: block`. `blk` is the original
+  // block for the `:` form, since that form has to put the code escape *inside*
+  // a block -- `middle` alone can't express that, and dropping it renders
+  // `def b: circle(....)` as `def bcircle(....)`.
+  syntax_class Def_RHS(env)
+  | ': $(b :: Block)':
+      match_def '$(parsed :: tree_expr_meta.Parsed(env))' = b
+      field middle = ''
+      field blk = b
+  | '$(eql && '=') $(rhs :: tree_expr_meta.Parsed(env)) $()':
+      field parsed = rhs
+      field middle = eql
+      field blk = #false
+
+tree_expr.macro 'def $id $(rest :: Def_RHS(env)) $()':
+    ~all_stx: stx
+    ~op_stx: self
+    ~env: env
+    let '[$rhs_src, : $rhs_defn, $rhs_code_expr, $rhs_val_expr]' = tree_expr_meta.unpack(rest.parsed)
+    let new_code:
+      if rest.blk
+      | let ': $g0; $_; ...' = rest.blk
+        let new_rhs = seq_to_escape_seq([g0], '#,(rhs_code)')
+        let blk = ': $new_rhs'.relocate(rest.blk)
+        strip_outside('$self $id $(rest.middle) $blk')
+      | strip_outside('$self $id $(rest.middle) #,(rhs_code)')
+    tree_expr_meta.pack(
+      '[$stx,
+        :
+          $rhs_defn
+          def rhs_code = $rhs_code_expr
+          def code = rhombusblock($new_code),
+        code,
+        block:
+          def (rhs_val, rhs_eval) = $rhs_val_expr
+          values(
+            rhs_val,
+            Eval([rhs_eval],
+                 #false,
+                 #false)
+          ),
+        $id]'
+    )
+
+
+
+// ---------------------------------------------------------------------------
+// EXTENSION: turn a user function into a stepping macro. Write a tree_expr macro
+// for `f(arg)` whose body calls `subst_step` with the call syntax and the
+// function body as a block that binds the parameter -- e.g.
+//
+//   tree_expr.macro 'box $(parens && '($p)')':
+//     ~all_stx: stx
+//     subst_step(stx, 'block: def p = $p
+//                             «the body of box, using p»')
+//
+// `subst_step` shows one step from the call to that block, then the existing
+// block/def/identifier rules animate the substitution (each parameter morphs
+// into the argument) as the body reduces.
+// ---------------------------------------------------------------------------
+meta:
+  fun fun_pass(stx :: Syntax, env :: Map) :: Syntax:
+    let '$name' = stx
+    tree_expr_meta.pack(
+      '[$stx,
+        :«»,
+        rhombusblock($stx),
+        values(
+          $stx,
+          Eval([], #false, #false)
+        )]'
+    )
+
+  fun build_fun_body(body):
+    // essentially return `body`, but parse it as tree-eval code to
+    // substitute alts; this create unnecessary work building up
+    // a pict (in `body_defn`), but it keeps evaluation in sync
+    let '$(e :: tree_expr_meta.Parsed({}))' = body
+    let '[$_, : $body_defn, $body_code_expr, $body_val_expr]' = tree_expr_meta.unpack(e)
+    '$body_defn
+     def (body_val, body_eval) = $body_val_expr
+     body_val'
+
+  fun subst_step(stx :: Syntax, env :: Map, [arg :: Identifier, ...], body) :: Syntax:
+    let '$name $(parens && '($(param :: tree_expr_meta.Parsed(env)), ...)')' = stx
+    let l = [tree_expr_meta.unpack(param), ...]
+    let ['[$param_src, : $param_defn, $param_code_expr, $param_val_expr]', ...] = l
+    let [param_code, ...] = [Syntax.make_temp_id(arg), ...]
+    let [param_make_eval, ...] = [Syntax.make_temp_id(arg), ...]
+    let [param_val, ...] = [Syntax.make_temp_id(arg), ...]
+    let [param_val_pict, ...] = [Syntax.make_temp_id(arg), ...]
+    let [param_eval, ...] = [Syntax.make_temp_id(arg), ...]
+    let new_env = env ++ { arg.unwrap() : [syntax_meta.flip_introduce(param_val),
+                                           syntax_meta.flip_introduce(param_val_pict)],
+                           ...}
+
+    let '$(e :: tree_expr_meta.Parsed(new_env))' = body
+    let '[$_, : $body_defn, $body_code_expr, $body_val_expr]' = tree_expr_meta.unpack(e)
+    let [param_code_g, ...] = ['#,($param_code)'.relocate_group(param.group), ...] 
+
+    let new_parens = '($param_code_g, ...)'.relocate(parens)
+    let new_call = '$name $new_parens'
+    tree_expr_meta.pack(
+      '[$stx,
+        :
+          $param_defn
+          ...
+          def $param_code = $param_code_expr
+          ...
+          def call_code = rhombusblock($new_call),
+        call_code,        
+        block:
+          def ($param_val, $param_eval) = $param_val_expr
+          ...
+          def $param_val_pict = perform_eval($param_code, $param_eval)
+          ...
+          $body_defn
+          def body_code = $body_code_expr
+          def (body_val, body_eval) = $body_val_expr
+          values(
+            body_val,
+            Eval([$param_eval, ...],
+                 CallStep(call_code, body_code,
+                          [$param_code, ...]),
+                 body_eval)
+          )]'
+    )
+
+fun perform_eval(p :: Pict, Eval(subs, step, tail)):
+  let p :: Pict:
+    for fold(p = p) (sub in subs):
+      perform_eval(p, sub)
+  let p:
+    match step
+    | Step(from, to):
+        p.replace(from, to)
+    | ~else:
+        p
+  if tail
+  | perform_eval(p, tail)
+  | p
+
+// ---------------------------------------------------------------------------
+// tree_fun: define a function AND make it steppable in one shot -- generating the
+// per-function stepping macro that `subst_step` needs, so `f(arg)` unfolds in an
+// `eval_steps` (the argument substitutes for the parameter as the body reduces),
+// with no hand-written macro. Single parameter, multi-statement body:
+//
+//   tree_fun tank(p):
+//     def w = p.width
+//     def h = p.height
+//     overlay(rectangle(~width: w, ~height: h, ~line: "navy"), p, ....)
+//
+// (The `'«...»'`/`$(Syntax.literal '$a')` dance keeps the generated macro's own
+//  pattern variables literal instead of escaping them at generation time.)
+// ---------------------------------------------------------------------------
+defn.macro 'tree_fun $code_name $(rest :: Sequence && '$name($param, ...): $(body :: Block)')':
+  ~op_stx: self_op
+  '«fun $name($param, ...): $(build_fun_body(body))
+    def $code_name:
+      rhombusblock($(self_op.property(#'raw, "fun", #true)) $rest)
+
+    tree_expr.macro:
+    | '$name ($('$')_, $('...'))':
+        ~all_stx: stx
+        ~env: env
+        subst_step(stx, env, ['$param', ...], '$body')
+    | '$name':
+        ~all_stx: stx
+        fun_pass(stx, env)
+      »'
+
+
+  

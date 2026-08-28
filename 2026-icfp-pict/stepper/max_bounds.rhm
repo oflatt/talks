@@ -1,0 +1,20 @@
+#lang rhombus/static
+import:
+  pict open
+
+export:
+  max_bounds
+
+// A pict with a bound box as large as any epoch's
+fun max_bounds(p :: Pict) :~ Pict:
+  rebuildable(
+    ~deps: [p],
+    fun (~deps: [p :: Pict]):
+      let b :~ Pict:
+        for values(b = p.snapshot()) (i in 0..p.duration):
+          overlay(b, p.snapshot(i, 1))
+      // the rebuild prompt here is just a performance hint,
+      // since any rebuild would discard the ghost and call
+      // the enclosing function again, anyway
+      b.ghost().launder(~rebuild_prompt: #true)
+  )

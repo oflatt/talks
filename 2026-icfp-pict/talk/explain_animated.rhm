@@ -1,0 +1,522 @@
+#lang rhombus/and_meta
+import:
+  slideshow:
+    open
+    except explain_anim    // shadowed by the talk-local wrapper below
+  pict/rhombus open        // rhombusblock, for showing code
+  draw
+  "../config.rhm"
+  "eval_tree_ext.rhm" open            // eval_steps + tree_expr + subst_step
+  "small_steps_smooth.rhm" open       // small_steps: wiggle+fade as one step
+  "../stepper/wiggle.rhm" open        // wiggle
+  "staged.rhm" as staged              // staged_slide: talk.rhm's slide registration
+  "explain_picts.rhm" open
+  "slidehelpers.rhm" open             // callout, brace, fade_in
+  "live_timeline.rhm" as timeline_lib // one widget: static strip or live playhead
+
+
+export:
+  explain_animated_slides
+
+// This talk's timelines are about real time, so default to seconds; `~label_as`
+// still takes #'epochs when a timeline should count epochs instead.
+fun explain_anim(p :: Pict,
+                 ~steps: steps = 2,
+                 ~label_as: label_as = #'extents,
+                 ~& kws) :: Pict:
+  timeline_lib.explain_anim(p, ~steps: steps, ~label_as: label_as, ~& kws)
+
+tree_fun spinny_fish_code spinny_fish_func(t):
+  fish("red", 50).rotate(t * 2 * math.pi)
+
+// the ??? hole: where a's duration should come from
+// `rectangle` refocuses on its `~around` argument by default, so the box takes
+// the label's baseline and lines up where it sits inline in the code (mflatt)
+def huh:
+  def lbl = t("???").colorize("white")
+  rectangle(~around: lbl.pad(~horiz: 12.0, ~vert: 7.0),
+            ~fill: draw.Color(190, 45, 45), ~line: draw.Color(130, 20, 20))
+
+tree_fun my_switch_code my_switch(a, b, t):
+  if t < 1        // assumes a's duration!
+  | a(t)
+  | b(t - 1)
+
+def [dur_code :: Pict, dur_steps :: SmallSteps]:
+  eval_steps:
+    my_switch(spinny_fish_func, spinny_fish_func, 0.2)
+
+
+def [spinny2 :: Pict, spinny2_steps]:
+  eval_steps:
+    def spinny_fish:
+      animate(
+        ~extent: 2,
+        fun (t):
+          fish("red", 50).rotate(t * 2 * math.pi)
+      )
+
+def spinny_fish = spinny2_steps.last.to
+
+// `spin_back`, built in one block with escape slots at the tokens that change,
+// so `replace` + `cross_fade` can generalize it in place
+def sb_rtt = current_rhombus_tt()
+fun sb_code(str :: String) :: Pict: sb_rtt(str)
+def sb_arg = blank(~width: 0, ~height: 0)
+def sb_f1 = sb_code("spinny_fish_func")
+def sb_f2 = sb_code("spinny_fish_func")
+def sb_one = sb_code("1").colorize(current_literal_color())
+def sb_two = sb_code("2").colorize(current_literal_color())
+
+def spin_back_block:
+  @rhombusblock(
+    fun spin_back(#,(sb_arg)t):
+      if t < #,(sb_one)
+      | #,(sb_f1)(t)
+      | #,(sb_f2)(#,(sb_two) - t)
+  )
+
+def sb_a1 = sb_code("f")
+def sb_a2 = sb_code("f")
+def sb_args = sb_code("f, ")
+
+// generalizing over the animation: a plain parameter, so this just works
+def spin_back_general:
+  spin_back_block
+    .replace(sb_arg, cross_fade(sb_arg, sb_args))
+    .replace(sb_f1, cross_fade(sb_f1, sb_a1))
+    .replace(sb_f2, cross_fade(sb_f2, sb_a2))
+def spin_back_general_settled:
+  spin_back_block.replace(sb_arg, sb_args).replace(sb_f1, sb_a1).replace(sb_f2, sb_a2)
+
+// generalizing over the duration: nowhere to get it
+def spin_back_stuck:
+  spin_back_general_settled
+    .replace(sb_one, cross_fade(sb_one, huh))
+    .replace(sb_two, cross_fade(sb_two, huh))
+def spin_back_stuck_settled:
+  spin_back_general_settled.replace(sb_one, huh).replace(sb_two, huh)
+
+// Play `p` backwards. Result epoch i replays source epoch d-1-i in reverse, so
+// this works for any duration, not just one epoch.
+fun reverse(p :: Pict) :: Pict:
+  def d = p.duration
+  fun frame(s :: Real) :: Pict:                     // s is total time in [0, d]
+    def e = math.min(d - 1, math.max(0, math.exact(math.floor(s))))
+    p.snapshot(e, math.min(1.0, math.max(0.0, s - e)))
+  switch(& (for List (i in 0..d):
+              animate(~extent: p.epoch_extent(d - 1 - i),
+                      fun (n): frame(d - i - n))))
+
+// the previous slide's helper, now writable: `switch` reads p's duration, so
+// nothing has to say when to turn around
+fun play_then_reverse(p :: Pict) :: Pict:
+  switch(p, reverse(p))
+def ptr_anim = play_then_reverse(spinny_fish)
+def ptr_tl = explain_anim(ptr_anim)
+def ptr_geom = timeline_geom(ptr_anim, ptr_tl, ~steps: 2)
+
+// The same strip in live mode, so the slide can play the spin once its code has
+// reduced to the timeline. Same `~steps`, so it drops into the reduction's footprint.
+def ptr_live = explain_anim(ptr_anim, ~live: #true)
+
+def [exp_code :: Pict, exp_steps :: SmallSteps]:
+  eval_steps:
+    explain_anim(#,(ptr_anim))
+
+def helper_block:
+  @rhombusblock(
+    fun play_then_reverse(p):
+      switch(p, reverse(p))
+  )
+def [ptr_code :: Pict, ptr_steps :: SmallSteps]:
+  eval_steps:
+    play_then_reverse(spinny_fish)
+
+def [spinny3 :: Pict, spinny3_steps]:
+  eval_steps:
+    explain_anim(#,(spinny_fish))
+
+def [spinny4 :: Pict, spinny4_steps]:
+  eval_steps:
+    switch(#,(spinny_fish), #,(spinny_fish).scale(2))
+
+// separate reductions so the static one can be shown and reduced alone first
+def [pair_static :: Pict, beside_static_steps :: SmallSteps]:
+  eval_steps:
+    stack(blue_fish, blue_fish)
+
+// A real rotation for this one, so the pair visibly lays itself out again as the fish
+// turn. `spinny_fish` comes out of an `eval_steps`, where a method call is routed
+// through `#%alt_dot` and `.rotate` becomes `alt_rotate` -- which draws the turned
+// fish over a ghost of the upright one and pins the bounding box. That is what keeps
+// reducing code from jittering, and it also leaves `stack` nothing to react to.
+def spinny_fish_real:
+  animate(~extent: 2, fun (t): fish("red", 50).rotate(t * 2 * math.pi))
+
+// shadowed locally, so the code still reads `spinny_fish` while the value that runs
+// is the one that really turns
+def [pair_anim :: Pict, beside_anim_steps :: SmallSteps]:
+  block:
+    def spinny_fish = spinny_fish_real
+    eval_steps:
+      stack(spinny_fish, spinny_fish)
+
+// wrapping each result in `explain_anim`, so the call can magic-move around the
+// pict that is already on screen and then reduce to its timeline
+def beside_static_res :: Pict = beside_static_steps.last.to
+def beside_anim_res :: Pict = beside_anim_steps.last.to
+
+def [static_exp :: Pict, static_exp_steps :: SmallSteps]:
+  eval_steps:
+    explain_anim(#,(beside_static_res))
+
+def [anim_exp :: Pict, anim_exp_steps :: SmallSteps]:
+  eval_steps:
+    explain_anim(#,(beside_anim_res))
+
+// The same two calls in live mode, for the slide to play once its code has
+// reduced to them. Same strip, so they drop into the reduction's own footprint;
+// the static one comes back a still, because a pict with no extent has no time
+// in which to run -- which is the whole point of that slide.
+def static_live = explain_anim(beside_static_res, ~live: #true)
+def anim_live = explain_anim(beside_anim_res, ~live: #true)
+
+
+// Annotations for the `explain_anim` timelines; dot positions come from
+// `timeline_geom`.
+def tl_pict :: Pict = spinny3_steps.last.to
+def tl_geom = timeline_geom(spinny_fish, tl_pict)
+
+// `~dy` defaults to 20; a longer spike lifts the bubble clear of the labels.
+fun dots_note(tl :: Pict, geom :: TimelineGeom,
+              ~dot: k :: Int = 0,
+              ~sprout: sprout :: Real = 0.12) :: Pict:
+  on_ghost(tl,
+           fun (g :~ Pict):
+             callout(~on: g,
+                     ~at: Find(g, ~horiz: #'left, ~vert: #'top,
+                               ~dx: geom.dot_cx(k), ~dy: geom.dot_y),
+                     ~spike: #'s,
+                     ~sprout: sprout,
+                     ~dy: 24,
+                     ~color: talk_blue,
+                     t("wait for slide advance")))
+
+fun epoch_brace(geom :: TimelineGeom, label :: String) :: Pict:
+  braced(~width: geom.span, ~color: talk_blue, t(label))
+
+// A duration-2 pict gets twice as many sample columns: at 4 steps the timeline
+// is 2374 wide against a 1320 client area, so use 2.
+def tl2_steps = 2
+
+def switch_fish :: Pict = spinny4_steps.last.to
+
+def [spinny5 :: Pict, spinny5_steps :: SmallSteps]:
+  eval_steps:
+    explain_anim(#,(switch_fish), ~steps: 2)
+
+def tl2_pict :: Pict = spinny5_steps.last.to
+def tl2_geom = timeline_geom(switch_fish, tl2_pict, ~steps: tl2_steps)
+
+// like magic move, but adds an extra epoch instead of overwriting the last one
+fun magic_move_trans(pict1, pict2):
+  def pict1_prime:
+    switch(pict1, pict1.snapshot(pict1.duration-1, 1))
+  magic_move(pict1_prime, pict2)
+
+fun explain_animated_slides():
+  staged.staged_slide:
+    ~title: "Animations as Functions of Time"
+    def live = spinny_fish
+    // a rotating pict sweeps its bounding circle, so reserve that much room
+    def d = math.sqrt(live.width * live.width + live.height * live.height)
+    fun in_box(p :: Pict) :: Pict: overlay(blank(~width: d, ~height: d), p)
+    // the goal: forward over [0,1), back over [1,2]
+    fun spin_back_of(u :: Real) :: Pict:
+      if u < 1
+      | fish("red", 50).rotate(u * 2 * math.pi)
+      | fish("red", 50).rotate((2 - u) * 2 * math.pi)
+    def sb_anim = animate(~extent: 2.0, fun (n): spin_back_of(n * 2))
+    def top_play = in_box(sb_anim)
+    def top_rest = in_box(sb_anim.snapshot(0, 1.0))
+    // the same motion cut into an epoch per unit of t, so that walking it beat
+    // by beat stops exactly where the epoch boundary is
+    def sb_play :: Pict:
+      switch(& (for List (i in [0, 1]):
+                  animate(fun (n): spin_back_of(i + n))))
+
+    // The timeline the rest of the talk uses, in its live mode: the same strip,
+    // with a playhead running along it as the fish turns. Stripped back to the
+    // axis and its labels, though -- the epoch dots stand for waiting on the
+    // presenter and the box for a duration, and neither is a thing yet here.
+    // Seconds are not either, so label plain t.
+    // `~one_epoch`: the sweep is one advance rather than stopping at the epoch
+    // boundary. That stop is the subject of the *next* slide, not this one.
+    // `sustain` so the t = 2 column has a fish in it. The strip's last sample is
+    // exactly the duration, which is one tick outside a duration-2 pict's own time
+    // box, and the column comes back empty -- but this slide is about `spin_back` as
+    // a raw function of t, where t = 2 is a perfectly good input. `~end: 2` keeps the
+    // strip five columns wide rather than growing one for the extra epoch.
+    def live_tl :: Pict:
+      explain_anim(sb_play.sustain(), ~live: #true, ~label_as: #'epochs,
+                   ~end: 2,
+                   ~one_epoch: #true,
+                   ~show_dots: #false, ~show_timebox: #false)
+    def tl0 = live_tl.snapshot(0, 0)
+    def no_tl = tl0.ghost()
+    // where the playhead comes to rest: the timeline stays up for the rest of
+    // the slide rather than blinking out when the fish stops
+    def tl_end = live_tl.snapshot(live_tl.duration - 1, 1.0)
+
+    // every layout reserves the widest code and the timeline, so nothing shifts
+    def no_defn = spinny_fish_code.ghost()
+    def no_code = spin_back_stuck_settled.ghost()
+    fun rows(top :: Pict, defn :: Pict, code :: Pict, tl :: Pict) :: Pict:
+      stack(~sep: 26, top,
+            stack(~sep: 24, ~horiz: #'left, defn,
+                  overlay(~horiz: #'left, ~vert: #'top, no_code, code)),
+            // the timeline stays up once it appears, so leave the bubbles that
+            // point up at the code somewhere to sit
+            blank(~height: 44),
+            tl)
+
+    // `~dx` overrides the balloon's own spike-length offset, to push a bubble
+    // clear of code that reaches further right than its anchor does
+    fun note(on :: Pict, at :: Pict, msg :: String, color, spike) :: Pict:
+      on_ghost(on,
+               fun (g :~ Pict):
+                 callout(~on: g,
+                         ~at: (if spike == #'n | Find.bottom(at) | Find.right(at)),
+                         ~spike: spike, ~color: color, t(msg)))
+
+    def goal = rows(top_play, no_defn, no_code, no_tl)
+    def goal_rest = rows(top_rest, no_defn, no_code, no_tl)
+    def with_defn = rows(top_rest, spinny_fish_code, no_code, no_tl)
+    fun sb_rows(c :: Pict, tl :: Pict = no_tl) :: Pict:
+      rows(top_rest, spinny_fish_code, c, tl)
+    def sb_spec = sb_rows(spin_back_block)
+    // the same rows once the timeline has played, which is where it stays
+    def sb_spec_tl = sb_rows(spin_back_block, tl_end)
+    def sb_general = sb_rows(spin_back_general, tl_end)
+    def sb_stuck = sb_rows(spin_back_stuck, tl_end)
+    def sb_settled = sb_rows(spin_back_stuck_settled, tl_end)
+    // The fish up top holds still for this beat; a second copy running alongside the
+    // timeline competes with it.
+    def playing = rows(top_rest, spinny_fish_code, spin_back_block, live_tl)
+
+    def goal_note = note(goal_rest, top_rest,
+                         "play an animation, then play it in reverse", talk_blue, #'n)
+    def time_note = note(with_defn, spinny_fish_code,
+                         "function over time t in [0, 1]", talk_blue, #'n)
+    def how_note = note(sb_spec, spin_back_block, "how to generalize?", talk_blue, #'n)
+    def when_note = note(sb_settled, spin_back_stuck_settled, "need duration of f!", talk_red, #'w)
+    // just the timeline, so it can fade in over the code without redrawing it
+    def tl_in = rows(top_rest.ghost(), no_defn, no_code, tl0)
+
+    switch(goal_rest,
+           animate(fun (n): overlay(~vert: #'top, goal_rest, goal_note.alpha(n))),
+           // now that they know what to watch for, play it
+           animate_map(~deps: [goal, goal_note],
+                       fun (~deps: [g :~ Pict, b :~ Pict], epoch, n):
+                         overlay(~vert: #'top, g, b)),
+           animate(fun (n):
+                     overlay(~vert: #'top, goal_rest,
+                             goal_note.alpha(1.0 - n), with_defn.alpha(n))),
+           animate(fun (n): overlay(~vert: #'top, with_defn, time_note.alpha(n))),
+           animate(fun (n):
+                     overlay(~vert: #'top, with_defn,
+                             time_note.alpha(1.0 - n), sb_spec.alpha(n))),
+           animate(fun (n): overlay(~vert: #'top, sb_spec, tl_in.alpha(n))),
+           // t runs to 1, stops there, then carries on to 2
+           playing,
+           animate(fun (n): overlay(~vert: #'top, sb_spec_tl, how_note.alpha(n))),
+           animate_map(~deps: [sb_general, how_note],
+                       fun (~deps: [g :~ Pict, b :~ Pict], epoch, n):
+                         overlay(~vert: #'top, g, b.alpha(1.0 - n))),
+           sb_stuck,
+           animate(fun (n): overlay(~vert: #'top, sb_settled, when_note.alpha(n))),
+           overlay(~vert: #'top, sb_settled, when_note))
+
+  staged.staged_slide:
+    ~title: "Built-in Animation Abstraction"
+    def defn = spinny2
+    def no_helper = helper_block.ghost()
+    def run = small_steps(ptr_code, ptr_steps)
+    def run0 = run.snapshot(0, 0)
+    def run_done = run.snapshot(run.duration - 1, 1.0)
+    def exp_run = small_steps(exp_code, exp_steps)
+    def exp_code0 = exp_run.snapshot(0, 0)
+    def exp_done = exp_run.snapshot(exp_run.duration - 1, 1.0)
+    // columns are every half epoch at `~steps: 2`, so t = 1 is column 2
+    def dots = dots_note(ptr_tl, ptr_geom, ~dot: 2, ~sprout: 0.5)
+    def brace = epoch_brace(ptr_geom, "two epochs")
+    // one epoch's worth: two columns wide, aligned under the first epoch
+    def ext_secs = math.exact(ptr_anim.epoch_extent(0))
+    def ext_b:
+      braced(~width: ptr_geom.pitch * 2.0, ~color: talk_blue,
+             t("extent: " +& ext_secs))
+    def ext_brace:
+      overlay(~horiz: #'left, ~vert: #'top, brace.ghost(), ext_b)
+    def no_row = stack(~sep: 18, exp_done, brace, ext_brace).ghost()
+    fun rows(helper :: Pict, row :: Pict) :: Pict:
+      stack(~sep: 64, ~horiz: #'left,
+            stack(~sep: 22, ~horiz: #'left, defn, helper),
+            overlay(~horiz: #'left, ~vert: #'top, no_row, row))
+    fun with_brace(row :: Pict, b :: Pict, e :: Pict) :: Pict:
+      rows(helper_block, stack(~sep: 18, row, b, e))
+
+    def just_defn = rows(no_helper, no_row)
+    def with_helper = rows(helper_block, no_row)
+    def with_call = rows(helper_block, run0)
+    def settled = with_brace(exp_done, brace.ghost(), ext_brace.ghost())
+
+    def cw = current_rhombus_tt()("X").width
+    // `~extent: 2` is the third line; point just past its text
+    def secs_note:
+      on_ghost(just_defn,
+               fun (g :~ Pict):
+                 callout(~on: g,
+                         ~at: Find(g, ~horiz: #'left, ~vert: #'top,
+                                   ~dx: cw * 15.0,
+                                   ~dy: current_rhombus_tt()("X").height * 2.5),
+                         ~spike: #'w, ~color: talk_blue,
+                         t("lasts " +& ext_secs +& " seconds")))
+    // `animate(` is the second line
+    def animate_y = current_rhombus_tt()("X").height * 1.5
+    def dsl_note:
+      on_ghost(just_defn,
+               fun (g :~ Pict):
+                 callout(~on: g,
+                         ~at: Find(g, ~horiz: #'left, ~vert: #'top,
+                                   ~dx: 60.0, ~dy: animate_y),
+                         // just above the block: the spike drops from the
+                         // bubble's underside to the `animate` line
+                         ~spike: #'s, ~dy: animate_y + 8.0,
+                         ~color: talk_blue,
+                         t("time info built in to Pict DSL")))
+    // the callout is sized like the timeline, so it has to sit in the timeline's
+    // row rather than be centred on the whole layout
+    fun layer(row :: Pict) :: Pict:
+      stack(~sep: 64, ~horiz: #'left,
+            stack(~sep: 22, ~horiz: #'left, defn.ghost(), no_helper),
+            overlay(~horiz: #'left, ~vert: #'top, no_row, row))
+    def dots_layer = layer(stack(~sep: 18, dots, brace.ghost(), ext_brace.ghost()))
+    def brace_layer = layer(stack(~sep: 18, exp_done.ghost(), brace, ext_brace.ghost()))
+    def ext_layer = layer(stack(~sep: 18, exp_done.ghost(), brace.ghost(), ext_brace))
+
+    switch(just_defn,
+           animate(fun (n): overlay(~vert: #'top, just_defn, dsl_note.alpha(n))),
+           animate(fun (n):
+                     overlay(~vert: #'top, just_defn,
+                             dsl_note.alpha(1.0 - n), secs_note.alpha(n))),
+           animate(fun (n):
+                     overlay(~vert: #'top, just_defn,
+                             secs_note.alpha(1.0 - n), with_helper.alpha(n))),
+           animate(fun (n):
+                     overlay(~vert: #'top, with_helper, with_call.alpha(n))),
+           rows(helper_block, run),
+           // explain_anim wraps around the fish that is already there
+           // `magic_move` rests again on its own result; that press would show
+           // nothing, since the next epoch starts from the same picture
+           rows(helper_block,
+                magic_move(run_done, exp_code0, ~other: #'fade).time_pad(~after: -1)),
+           rows(helper_block, exp_run),
+           animate(fun (n): overlay(~vert: #'top, settled, dots_layer.alpha(n))),
+           animate(fun (n):
+                     overlay(~vert: #'top,
+                             overlay(~vert: #'top, settled, dots_layer),
+                             brace_layer.alpha(n))),
+           animate(fun (n):
+                     overlay(~vert: #'top,
+                             overlay(~vert: #'top, settled, dots_layer, brace_layer),
+                             ext_layer.alpha(n))),
+           // ...and then play it: the same strip, with a playhead crossing the spin
+           overlay(~vert: #'top,
+                   with_brace(ptr_live, brace.ghost(), ext_brace.ghost()),
+                   dots_layer, brace_layer, ext_layer))
+      .sustain()
+
+  
+  // static picts are just a special case of animated picts
+  staged.staged_slide:
+    ~title: "All Picts are Animated"
+    def static_run = small_steps(pair_static, beside_static_steps)
+    // the pair's spin is about to play again in the timeline below, so the
+    // reduction that builds it stays still
+    def anim_run = small_steps(pair_anim, beside_anim_steps, ~play: #false)
+    def static_done = static_run.snapshot(static_run.duration - 1, 1.0)
+    def anim0 = anim_run.snapshot(0, 0)
+    def anim_done = anim_run.snapshot(anim_run.duration - 1, 1.0)
+    // the same tool on both: the static pict is the degenerate case, one epoch
+    // whose extent is 0, so its clock never advances
+    def static_exp_run = small_steps(static_exp, static_exp_steps)
+    def anim_exp_run = small_steps(anim_exp, anim_exp_steps)
+    def static_call = static_exp_run.snapshot(0, 0)
+    def anim_call = anim_exp_run.snapshot(0, 0)
+    // the live timelines at rest, which is what the code reduces into
+    def static_tl = static_live.snapshot(0, 0)
+    def anim_tl = anim_live.snapshot(0, 0)
+    fun slot(p :: Pict, ...) :: Pict:
+      overlay(~horiz: #'left, ~vert: #'top, p.ghost(), ...)
+    def top_slot = slot(pair_static, static_done, static_call, static_tl)
+    def bot_slot = slot(anim0, anim_done, anim_call, anim_tl)
+    fun rows(top :: Pict, bottom :: Pict) :: Pict:
+      stack(~sep: 34, ~horiz: #'left,
+            overlay(~horiz: #'left, ~vert: #'top, top_slot, top),
+            overlay(~horiz: #'left, ~vert: #'top, bot_slot, bottom))
+    switch(rows(static_run, bot_slot),
+           animate(fun (n):
+                     overlay(~vert: #'top, rows(static_done, bot_slot),
+                             rows(static_done.ghost(), anim0).alpha(n))),
+           rows(static_done, anim_run),
+           // the stack is built, so now let it play: the reduction itself stays
+           // still (~play: #false above), and the spin arrives here, once, on the
+           // evaluated pair -- which lays itself out again as the fish turn
+           rows(static_done, beside_anim_res),
+           // `explain_anim` wraps around the picts already on screen
+           // trimmed: `magic_move` rests again on its own result, and the next
+           // epoch starts from that same picture, so that press would show nothing
+           rows(magic_move(static_done, static_call, ~other: #'fade).time_pad(~after: -1),
+                magic_move(anim_done, anim_call, ~other: #'fade).time_pad(~after: -1)),
+           // then fade to the timelines: morphing here would match the one
+           // escaped pict against each of the timeline's snapshots of it
+           cross_fade(rows(static_call, anim_call), rows(static_tl, anim_tl)),
+           // and run them: the bottom playhead crosses two seconds of fish while
+           // the top one sits at 0s, having nowhere to be
+           rows(static_live, anim_live))
+      .sustain()
+
+  // 6. ...and in time: every field becomes a function of `Time`; `duration` is
+  //    the time box. The paper's model exactly -- answers the `???`.
+  #//
+  staged.staged_slide:
+    ~title: "Picts in Time"
+    def time_class:
+      @rhombusblock(
+        // a moment in an animation
+        class Time(epoch :: Int,
+                   n :: Real.in(0, 1))
+      )
+    // The record as "What is a Pict?" left it, and the same record in time. Both
+    // come from one block with slots filled in, so they line up token for token
+    // where they agree -- but a `magic_move` here slides each shared glyph on its
+    // own, and three lines of `Real` sliding out from behind a fading `Time ->`
+    // reads as smearing. Dissolving in place is calmer, and top-left alignment is
+    // what keeps the text that does not change from moving at all.
+    def was = pict_class_plain
+    def now = stack.left(pict_class_time, pict_class_props)
+    // each field dissolves on its own, the way the other code slides do
+    def morph:
+      stack.left(pict_class_to_time,
+                 cross_fade(pict_class_props.ghost(), pict_class_props))
+    def slot = overlay(~horiz: #'left, ~vert: #'top, was.ghost(), now.ghost())
+    fun content(p :: Pict) :: Pict:
+      stack(~sep: 34, ~horiz: #'left,
+            time_class,
+            overlay(~horiz: #'left, ~vert: #'top, slot, p))
+    switch(content(was),
+           content(morph).sustain())
+
+module main:
+  explain_animated_slides()

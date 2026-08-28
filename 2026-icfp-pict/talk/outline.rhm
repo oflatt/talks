@@ -1,0 +1,97 @@
+#lang rhombus
+import:
+  slideshow open
+  pict/rhombus open
+  "write.rhm"
+  "rainbow.rhm"
+  "mathx.rhm" open
+  "helpers.rhm" open
+
+export:
+  outline_intro
+  outline_recap
+
+def RH = 96.0
+def R = 30.0
+def LEFT = 14.0
+def DISC_CX = LEFT + R
+def GAP = 34.0
+def TEXT_X = DISC_CX + R + GAP
+
+fun hue_of(i, n): rainbow.hue_color(1.0 * i / math.max(1.0, n - 1.0) * 0.85)
+fun row_cy(i :: Real): i * RH + RH / 2.0
+
+fun geom_width(items :: List) :: Real:
+  def mw = for values(m = 0.0) (s in items): math.max(m, t(s).width)
+  TEXT_X + mw + 26.0
+
+fun place_center(base :: Pict, p :: Pict, cx :: Real, cy :: Real) :: Pict:
+  overlay(~horiz: #'left, ~vert: #'top, ~dx: cx - p.width / 2.0, ~dy: cy - p.height / 2.0, base, p)
+fun place_left(base :: Pict, p :: Pict, x :: Real, cy :: Real) :: Pict:
+  overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: cy - p.height / 2.0, base, p)
+
+fun disc(i :: Int, n :: Int, hl :: Real) :: Pict:
+  def hue = hue_of(i, n)
+  def rr = R * (1.0 + 0.18 * hl)
+  def core = overlay(circle(~size: rr * 2.0, ~fill: hue, ~line: #false),
+                     bold((i + 1) +& "").colorize("white").scale(1.0 + 0.12 * hl))
+  def glow = circle(~size: rr * 2.0 + 28.0, ~fill: hue, ~line: #false).alpha(0.34 * hl)
+  overlay(glow, core.alpha(lerp(0.55, 1.0, hl)))
+
+fun render(items :: List, text_picts :: List, current :: Real,
+           disc_prog :: List, accent) :: Pict:
+  def n = items.length()
+  def base = blank(~width: geom_width(items), ~height: n * RH)
+  def y0 = row_cy(0.0)
+  def yN = row_cy(1.0 * (n - 1))
+  def spine = place_center(base, rectangle(~width: 5.0, ~height: yN - y0, ~fill: "gray", ~line: #false).alpha(0.22),
+                           DISC_CX, (y0 + yN) / 2.0)
+  def cc = math.max(0.0, math.min(1.0 * (n - 1), current))
+  def yfill = row_cy(cc)
+  def filled:
+    if yfill - y0 > 0.5
+    | place_center(spine, rectangle(~width: 5.0, ~height: yfill - y0, ~fill: accent, ~line: #false),
+                   DISC_CX, (y0 + yfill) / 2.0)
+    | spine
+  recur go(i = 0, acc = filled):
+    if i >= n
+    | acc
+    | def hl = clamp01(1.0 - absr(current - i))
+      def acc1 = place_center(acc, disc(i, n, hl).scale(smooth(disc_prog[i])), DISC_CX, row_cy(1.0 * i))
+      go(i + 1, place_left(acc1, text_picts[i], TEXT_X, row_cy(1.0 * i)))
+
+// The first reveal: each item writes itself out top-to-bottom, discs pop in, and
+// the highlight settles on the first section.
+fun outline_intro(items :: List, ~accent: accent = "steelblue",
+                  ~animate: anim = #true, ~extent: ext :: Real = 3.2) :: Pict:
+  def n = items.length()
+  if anim
+  | def writers = for List (s in items): write.write_out(s, ~extent: 1.0, ~color: accent)
+    def step = 0.6 / math.max(1.0, 1.0 * n)
+    hold_last(animate(~extent: ext,
+                      fun (p):
+                        def text_picts = for List (i in 0..n):
+                                           def wp = clamp01((p - i * step) / 0.34)
+                                           def full = writers[i].snapshot(0, 1.0)
+                                           overlay(~horiz: #'left, ~vert: #'top, full.ghost(), writers[i].snapshot(0, wp))
+                        def disc_prog = for List (i in 0..n): clamp01((p - i * step + 0.06) / 0.16)
+                        def current = lerp(-1.0, 0.0, clamp01((p - 0.82) / 0.18))
+                        render(items, text_picts, current, disc_prog, accent)))
+  | // just the settled last frame -- no write-out, so the fancy reveal stays a surprise
+    render(items, for List (s in items): t(s).colorize(accent), 0.0,
+           for List (i in 0..n): 1.0, accent)
+
+// Between sections: the marker slides from section `from` to section `to`.
+fun outline_recap(items :: List, ~to: k :: Int, ~from: from0 :: Int = k - 1,
+                  ~accent: accent = "steelblue", ~extent: ext :: Real = 1.4) :: Pict:
+  def n = items.length()
+  def ones = for List (i in 0..n): 1.0
+  hold_last(animate(~extent: ext,
+                    fun (p):
+                      def current = lerp(1.0 * from0, 1.0 * k, smooth(p))
+                      def text_picts = for List (i in 0..n):
+                                         def hl = clamp01(1.0 - absr(current - i))
+                                         def bp = t(items[i])
+                                         overlay(bp.colorize("black").alpha(lerp(0.7, 0.0, hl)),
+                                                 bp.colorize(accent).alpha(hl)).scale(lerp(1.0, 1.1, hl))
+                      render(items, text_picts, current, ones, accent)))

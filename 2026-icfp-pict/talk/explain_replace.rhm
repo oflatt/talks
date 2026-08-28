@@ -1,0 +1,541 @@
+#lang rhombus/and_meta
+import:
+  slideshow open
+  "rebuildable_sugar.rhm" open  // as_rebuildable, until Rhombus ships it
+  pict/rhombus open
+  "../config.rhm"
+  "eval_tree_ext.rhm" open
+  "small_steps_smooth.rhm" open
+  "explain_picts.rhm" open            // fish, red_fish, tank_code, water
+  "staged.rhm" as staged
+  "slidehelpers.rhm" open
+  "mathx.rhm" open                    // clamp01, smooth
+  "alt_pict.rhm" as alt
+
+export:
+  explain_replace_slides
+
+def spikes = 12
+def spike_len = 110   // centred lines, so this is the ring's full diameter
+
+// Same baseline treatment the reducer gives its own `overlay`s, so the slot
+// this fills has consistent paragraph-end bounds before, during, and after a
+// step -- otherwise the text after it jumps when `wiggle` swaps the pict out.
+def spike_ring:
+  alt.alt_baseline(
+    overlay(& (for List (i in 0..spikes):
+                 def angle = 2 * math.pi * i / spikes
+                 line(~dx: spike_len * math.cos(angle),
+                      ~dy: spike_len * math.sin(angle),
+                      ~line: "purple", ~line_width: 4))))
+
+// `eval_steps` has no `for`, so the loop can't be stepped by the reducer. Its
+// source gets its own hand-written step instead, prepended to the reduction so
+// it collapses into the ring in place, like every other step on the slide.
+def ring_body:
+  @rhombusblock(
+    overlay(& (for List (i in 0..spikes):
+                 def angle = 2 * math.pi * i / spikes
+                 line(~dx: spike_len * math.cos(angle),
+                      ~dy: spike_len * math.sin(angle),
+                      ~line: "purple", ~line_width: 4)))
+  )
+
+// The body sits on its own line, not after `def spike_ring =`: a step's wiggle
+// rotates its target about the centre, and a block this size swings far enough
+// to land on anything sharing the line.
+def ring_line:
+  @rhombusblock(
+    def spike_ring:
+      #,(ring_body)
+  )
+
+// Every pict that lands inline in reduced code gets the reducer's baseline
+// treatment, so trailing text and parens don't drift as steps swap them in.
+def urchin = alt.alt_baseline(overlay(spike_ring, circle(~size: 30, ~fill: "purple")))
+
+// A row built from built-in combinators, so `replace` re-runs the layout.
+def row_red = alt.alt_baseline(fish("red", 30))
+def row_blue = alt.alt_baseline(fish("blue", 30))
+def row_green = alt.alt_baseline(fish("seagreen", 30))
+
+def row = beside(~sep: 24, row_red, row_blue, row_green)
+
+// Three reductions rather than one block, so each arrives when it is needed
+// and then stays -- the slide only ever gains content.
+def [urchin_line :: Pict, urchin_line_steps :: SmallSteps]:
+  eval_steps:
+    def urchin = overlay(spike_ring, circle(~size: 30, ~fill: "purple"))
+
+def [row_line :: Pict, row_steps :: SmallSteps]:
+  eval_steps:
+    def row = beside(~sep: 24, #,(row_red), #,(row_blue), #,(row_green))
+
+def [replace_line :: Pict, replace_steps :: SmallSteps]:
+  eval_steps:
+    row.replace(#,(row_blue), urchin)
+
+// the loop's own step, then the reducer's
+def build_code = stack(~sep: 30, ~horiz: #'left, ring_line, urchin_line)
+def build_steps = [Step(ring_body, spike_ring)] ++ urchin_line_steps
+
+// The tank as the user wrote it: `rectangle` reads the fish's size once, at
+// construction, so replacing the fish leaves the box behind.
+fun plain_tank(p :: Pict) :: Pict:
+  overlay(rectangle(~width: p.width + 20, ~height: p.height + 20,
+                    ~line: "navy", ~fill: water),
+          p)
+
+fun rebuildable_tank(p :: Pict):
+  as_rebuildable (p):
+    overlay(rectangle(~width: p.width + 20, ~height: p.height + 20,
+                      ~line: "navy", ~fill: water),
+            p)
+
+// One body pict, escaped into both versions of the definition, so `magic_move`
+// matches it and slides it into place under the wrapper instead of dissolving.
+def m_width = blank(~width: 0, ~height: 0)
+
+def tank_body:
+  @rhombusblock(
+    overlay(rectangle(~width: p.width#,(m_width) + 20, ~height: p.height + 20,
+                      ~line: "navy", ~fill: water),
+            p)
+  )
+
+def rtt = current_rhombus_tt()
+
+// `as_rebuildable` wraps the body rather than prefixing the definition, so the two
+// shapes differ by a whole line and an indent -- there is no keyword to slide into
+// place, the way the old prefix spelling had.
+//
+// The wrapper line is its own pict so the "a Rhombus macro" bubble has something to
+// point at; the body is one pict shared by both blocks, which is what lets the
+// morph below carry it rather than redraw it.
+def wrap_pict = rtt("as_rebuildable (p):")
+
+// The plain definition is just that -- no gap held open for what is coming, and
+// no indent it does not need yet:
+def plain_tank_code:
+  @rhombusblock(
+    fun tank(p :: Pict):
+      #,(tank_body)
+  )
+
+// The rebuildable one is the same block with its body replaced by [wrapper line,
+// body indented under it]. Built that way rather than typeset a second time, the
+// header and the body are the very same picts in both, which is what lets the
+// beat below move them instead of dissolving one into the other.
+def indent_w = rtt("  ").width
+
+fun tank_def_at(open :: Real, ink :: Real) :: Pict:
+  def wrapped:
+    stack.left(wrap_pict.alpha(ink), tank_body.pad(~left: indent_w * open))
+  // The body's own ghost, grown upward: it keeps the body's box *and* its
+  // baseline, so at rest `replace` puts back something the block cannot tell from
+  // what it took out. A `blank` slot is a line-and-a-bit off, because a blank sits
+  // on its own bottom edge while a line of code sits on its baseline.
+  def slot:
+    tank_body.ghost().pad(~top: (wrapped.height - tank_body.height) * open)
+  plain_tank_code.replace(tank_body,
+                          overlay(~horiz: #'left, ~vert: #'bottom, slot, wrapped)
+                            .refocus(slot))
+
+def rebuildable_tank_code = tank_def_at(1.0, 1.0)
+
+// One press, two motions in sequence: the line opens and the body slides into its
+// new indent, and then the wrapper fades into the space that just appeared.
+// Nothing is scaled, and nothing is drawn twice.
+def tank_def_morph:
+  animate(~extent: 1.0,
+          fun (n):
+            // one progress for both: opening the line first and fading the wrapper
+            // in after leaves an empty line sitting there in between
+            def p = smooth(clamp01(n))
+            tank_def_at(p, p))
+
+// The same source reduced twice, against the two definitions of `tank`: once
+// as the user wrote it (the box is left behind) and once rebuildable.
+def tank_fish = alt.alt_baseline(red_fish)
+
+def [broken_code :: Pict, broken_steps :: SmallSteps]:
+  block:
+    def tank = plain_tank
+    def red_fish = tank_fish
+    eval_steps:
+      tank(red_fish).replace(red_fish, urchin)
+
+def [fixed_code :: Pict, fixed_steps :: SmallSteps]:
+  block:
+    def tank = rebuildable_tank
+    def red_fish = tank_fish
+    eval_steps:
+      tank(red_fish).replace(red_fish, urchin)
+
+
+// --- what `as_rebuildable` expands to --------------------
+
+def m_init = blank(~width: 0, ~height: 0)
+def m_spec = blank(~width: 0, ~height: 0)
+
+// escapes sit at end-of-line, the one position that never disturbs a
+// rhombusblock's continuation indentation
+def expanded_code_sugar:
+  @rhombusblock(
+    fun tank(p :: Pict):
+      rebuildable(~deps: [p]#,(m_init),
+                  fun (~deps: [p]#,(m_spec)):
+                    #,(tank_body))
+  )
+
+// --- replacing with an animation -------------------------------------------
+
+// The spinning fish from the animated-picts section, dropped into a static row.
+// A rotating fish's bounding box really does change -- widest lying flat,
+// narrowest standing up -- so the built-in row lays itself out again at every
+// moment, which is the point. It comes to rest level, one whole turn later, in a
+// colour the row didn't have, so the replacement still reads once it stops.
+def spin_fish = alt.alt_baseline(fish("purple", 30))
+
+// The box has to change for the row to lay itself out again -- that is the point --
+// but the *paragraph-end* box does not: pinning it to the upright fish's keeps the
+// trailing paren in the code from wandering as the fish turns.
+def spinning_fish:
+  def (edx, edy, ew, eh, ea, ed) = spin_fish.paragraph_end_bounds()
+  animate(~extent: 2,
+          fun (n):
+            spin_fish.rotate(n * 2 * math.pi)
+              .set_paragraph_end_bounds(edx, edy, ew, eh, ea, ed))
+
+// The definition's own copy keeps a fixed box as well: `alt_rotate` draws the turned
+// fish over a ghost of the upright one, so the line below it stays put. Only the copy
+// inside the row needs a box that really moves.
+def spinning_fish_shown:
+  animate(~extent: 2, fun (n): alt.alt_rotate(spin_fish, n * 2 * math.pi))
+
+// The reducer can't parse arithmetic on a lambda's own parameter next to a
+// `math.` access, so this call gets a hand-written step, like the ring's `for`
+// loop above -- it collapses to the animation where it stands all the same.
+// Broken across three lines: on one line this runs off the side of the slide.
+def spin_body:
+  @rhombusblock(
+    animate(~extent: 2,
+            fun (n):
+              fish("purple", 30).rotate(n * 2 * math.pi))
+  )
+
+def spin_line:
+  @rhombusblock(
+    def spinning_fish:
+      #,(spin_body)
+  )
+
+// `row_blue` is not laundered: the call really does run, and it can only find the
+// fish it was given. The definition's copy of the animation is laundered instead,
+// since that one is only ever looked at.
+def [anim_row_line :: Pict, anim_row_line_steps :: SmallSteps]:
+  eval_steps:
+    row.replace(#,(row_blue), spinning_fish)
+
+def anim_code = stack(~sep: 26, ~horiz: #'left, spin_line, anim_row_line)
+def anim_steps:
+  [Step(spin_body, spinning_fish_shown)] ++ anim_row_line_steps
+
+// --- a fractal, out of nothing but replacement -------------------------------
+
+// Three fish in a triangle, and then that triangle put in place of every fish --
+// again and again. Nothing here knows what a fractal is: each level is one more
+// substitution, and the self-similarity is just what replacement does when what you
+// substitute in still contains what you substituted for.
+//
+// Each level substitutes into the seed with the whole level below as the replacement,
+// so `subst` never has to descend into its own output -- see `subst` in
+// slidehelpers.rhm for why the substitution has to keep the replacement's identity.
+def frac_fish = alt.alt_baseline(fish("lightblue", 11))
+
+def frac_seed:
+  stack(~sep: 5, ~horiz: #'center,
+        frac_fish,
+        beside(~sep: 6, frac_fish, frac_fish))
+
+def frac_code:
+  @rhombusblock(
+    def seed:
+      stack(#,(frac_fish.launder()),
+            beside(#,(frac_fish.launder()), #,(frac_fish.launder())))
+
+    fun level(k):
+      if k == 0
+      | fish
+      | seed.replace(fish, level(k-1))
+  )
+
+fun frac_level(k :: Int) :: Pict:
+  if k == 0
+  | frac_fish
+  | subst(frac_seed, frac_fish, frac_level(k - 1))
+
+// The same thing one level deeper, as a morph: every innermost fish dissolves into
+// the triangle at the same moment, and the picture swells as the detail arrives.
+// `cross_fade` grows its own box, which is exactly what is wanted here.
+fun frac_growing(k :: Int) :: Pict:
+  if k == 0
+  | cross_fade(frac_fish, frac_seed)
+  | subst(frac_seed, frac_fish, frac_growing(k - 1))
+
+def frac_top = 4                       // how many levels the slide reaches
+
+// One more press, for fun: every fish in the finished fractal turns at once.
+// Substituting the leaf for a spinning one reaches all 3^frac_top of them, since
+// they are all the same pict -- the same trick the fractal is built out of.
+// `alt_rotate` draws the turned fish over a ghost of the upright one, so nothing
+// in the layout moves while they spin.
+def frac_spinning:
+  def spinner:
+    animate(~extent: 2.5, fun (t): alt.alt_rotate(frac_fish, t * 2 * math.pi))
+  subst(frac_level(frac_top), frac_fish, spinner)
+
+// --- the school, for `magic_move` at the end of the section -----------------
+
+def f1 = fish("red", 44)
+def f2 = fish("blue", 44)
+def f3 = fish("seagreen", 44)
+def f4 = fish("goldenrod", 44)
+
+// The two schools are escaped rather than stepped: the point is `magic_move`,
+// and the same pict on both sides is what it matches by identity.
+def [school_code :: Pict, school_steps :: SmallSteps]:
+  eval_steps:
+    magic_move(beside(~sep: 14, #,(f1), #,(f2), #,(f3), #,(f4)),
+               stack(~sep: 10,
+                     beside(~sep: 14, #,(f3), #,(f1)),
+                     beside(~sep: 14, #,(f4), #,(f2))))
+
+fun explain_replace_slides():
+  // 1. Build the urchin, build a row, then replace one fish with it. Each line
+  //    reduces where it stands, so the slide only ever gains content.
+  staged.staged_slide:
+    ~title: "Replacing Part of a Pict"
+    def build = small_steps(build_code, build_steps)
+    def rows = small_steps(row_line, row_steps)
+    def repl = small_steps(replace_line, replace_steps)
+    fun settled(p :~ Pict) :: Pict: p.snapshot(p.duration - 1, 1.0)
+    fun start(p :~ Pict) :: Pict: p.snapshot(0, 0)
+    // one slot per region, sized to the widest state that region ever holds
+    fun slot_of(p :~ Pict) :: Pict:
+      overlay(~horiz: #'left, start(p).ghost(), settled(p).ghost())
+    def s_build = slot_of(build)
+    def s_rows = slot_of(rows)
+    def s_repl = slot_of(repl)
+    fun scene(a :: Pict, b :: Pict, c :: Pict) :: Pict:
+      stack(~sep: 30, ~horiz: #'left,
+            overlay(~horiz: #'left, s_build, a),
+            overlay(~horiz: #'left, s_rows, b),
+            overlay(~horiz: #'left, s_repl, c))
+    switch(scene(build, s_rows.ghost(), s_repl.ghost()),
+           // each new line fades in, then reduces where it stands
+           animate(fun (n): scene(settled(build), start(rows).alpha(n), s_repl.ghost())),
+           scene(settled(build), rows, s_repl.ghost()),
+           animate(fun (n): scene(settled(build), settled(rows), start(repl).alpha(n))),
+           scene(settled(build), settled(rows), repl))
+      .sustain()
+
+  // 3. The same replacement inside a combinator the user wrote: the box is
+  //    left behind, until its construction is made rebuildable.
+  staged.staged_slide:
+    ~title: "Replacement through User-Defined Functions"
+    def broken_run = small_steps(broken_code, broken_steps)
+    def fixed_run = small_steps(fixed_code, fixed_steps)
+    fun settled(p :~ Pict) :: Pict: p.snapshot(p.duration - 1, 1.0)
+    def def_slot:
+      overlay(~horiz: #'left, plain_tank_code.ghost(),
+              rebuildable_tank_code.ghost(), expanded_code_sugar.ghost())
+    def width_note:
+      on_ghost(plain_tank_code,
+               fun (g :~ Pict):
+                 code_callout(~on: g,
+                              ~at: m_width,
+                              ~spike: #'s,     // bubble above, pointing down
+                              ~color: talk_red,
+                              t("still the fish's width")))
+    // Bubbles pinned onto the code, overlapping it, so the block can stay at
+    // its natural size instead of shrinking to make room for a label column.
+    def expansion = expanded_code_sugar
+    // The two markers are five characters apart, so two bubbles above them would
+    // land on top of each other: the second one goes out to the right instead.
+    fun dep_note(target :: Pict, color, label :: String,
+                 ~spike: spike = #'s) :: Pict:
+      on_ghost(expansion,
+               fun (g :~ Pict):
+                 code_callout(~on: g, ~at: target, ~spike: spike,
+                              ~color: color, t(label)))
+    // `as_rebuildable` is not a new form of expression -- it is a macro, and the
+    // next beat shows what it stands for. `wrap_pict` is real text with a real
+    // height, so it takes a plain `Find.top` rather than `code_callout`'s
+    // correction for zero-height markers.
+    def macro_note:
+      on_ghost(rebuildable_tank_code,
+               fun (g :~ Pict):
+                 callout(~on: g,
+                         // the spike lands on the end of `as_rebuildable (p):`
+                         // itself; the bubble is lifted off that row, since the
+                         // wrapper is the second line and a bubble level with it
+                         // would cover the body underneath
+                         ~at: Find.right(wrap_pict),
+                         ~spike: #'w,
+                         ~dy: 34,
+                         ~color: talk_blue,
+                         t("a Rhombus macro")))
+    // spec first, so the labels arrive in the order they are explained
+    def spec_note = dep_note(m_spec, talk_green, "specify dependencies", ~spike: #'w)
+    def init_note = dep_note(m_init, talk_blue, "initial dependencies")
+    def call_slot:
+      overlay(~horiz: #'left,
+              broken_code.ghost(), settled(broken_run).ghost(), settled(fixed_run).ghost())
+    fun scene(d :: Pict, c :: Pict) :: Pict:
+      stack(~sep: 40, ~horiz: #'left,
+            overlay(~horiz: #'left, def_slot, d),
+            overlay(~horiz: #'left, call_slot, c))
+    switch(// the definition on its own first, then the call arrives
+           scene(plain_tank_code, call_slot.ghost()),
+           animate(fun (n): scene(plain_tank_code, broken_code.alpha(n))),
+           scene(plain_tank_code, broken_run),
+           // the box kept the size it measured before the replacement
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left, plain_tank_code, width_note.alpha(n)),
+                           settled(broken_run))),
+           // undo the reduction, so the same call can be run again
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left, plain_tank_code, width_note),
+                           // left, like everything else in this slot: centring
+                           // would slide the result sideways before it dissolved
+                           fade_through(settled(broken_run), broken_code,
+                                        ~horiz: #'left).snapshot(0, n))),
+           // No rest beat between the undo and the morph: left-aligned, the undo
+           // lands on exactly this picture, so a beat holding it was one press
+           // that did nothing -- right before the press people are waiting on.
+           // Only the two things that changed arrive, and they arrive as one
+           // motion: the gap opens, then the words fade into it. The extent is the
+           // outer beat's, since sampling by `n` is what drives the morph -- a
+           // default-length beat has to rush both phases.
+           animate(~extent: 1.2,
+                   fun (n): scene(tank_def_morph.snapshot(0, n), broken_code)),
+           // ...and the same reduction, run again against the new definition
+           scene(rebuildable_tank_code, fixed_run),
+           // name the sugar before unfolding it
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left, rebuildable_tank_code,
+                                   macro_note.alpha(n)),
+                           settled(fixed_run))),
+           // finally, what the sugar stands for, labelled
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left,
+                                   magic_move(rebuildable_tank_code, expansion,
+                                              ~other: #'fade).snapshot(0, n),
+                                   macro_note.alpha(1.0 - n)),
+                           settled(fixed_run))),
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left, expansion, spec_note.alpha(n)),
+                           settled(fixed_run))),
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left, expansion, spec_note, init_note.alpha(n)),
+                           settled(fixed_run))))
+      .sustain()
+
+  // 4. What the sugar's two arguments really are: two more fields on the record,
+  //    and replacement falls out of them in four lines.
+  #//
+  staged.staged_slide:
+    ~title: "Picts that Rebuild"
+    // `===` and not `==`: a pict is replaced where it *is* the one asked for,
+    // not where it merely looks like it
+    def replace_fun:
+      @rhombusblock(
+        fun replace(p :: Pict, from :: Pict, to :: Pict) :: Pict:
+          if p === from
+          | to
+          | p.rebuild(for List (d in p.dependencies || p.children):
+                        replace(d, from, to))
+      )
+    // the same record once more, gaining the two fields the sugar wrote out: the
+    // shared glyphs slide down to make room instead of the block dissolving
+    // starting from exactly what the last class slide left on screen, properties
+    // and all -- they are one shared pict, so the morph slides them down to make
+    // room for the two new fields
+    def was = stack.left(pict_class_time, pict_class_props)
+    def now = stack.left(pict_class_rebuild, pict_class_props)
+    def class_slot = overlay(~horiz: #'left, ~vert: #'top, was.ghost(), now.ghost())
+    def code_slot = replace_fun.ghost()
+    fun content(cls :: Pict, code :: Pict) :: Pict:
+      stack(~sep: 40, ~horiz: #'left,
+            overlay(~horiz: #'left, ~vert: #'top, class_slot, cls),
+            overlay(~horiz: #'left, ~vert: #'top, code_slot, code))
+    // the two new fields dissolve into their own slot, the way slide 15 does it:
+    // everything already on the block stays put, and the properties just move
+    // down to make room as the beat starts
+    def morph = stack.left(pict_class_to_rebuild, pict_class_props)
+    switch(content(was, code_slot.ghost()),
+           content(morph, code_slot.ghost()),
+           content(now, cross_fade(code_slot, replace_fun)).sustain())
+
+  // 5. Every payoff on one slide, now that each is a single reduction. What gets
+  //    replaced can itself be animated, and a built-in combinator keeps up: the
+  //    spinning fish changes size at every moment, so `beside` lays the row out
+  //    again around it. Then `magic_move`, which is this same machinery with the
+  //    interpolation written for you. And last the flex -- a fractal, with no
+  //    fractal anywhere in the code, one more substitution per press.
+  //
+  //    The two reductions leave the right of the slide empty, so the fractal goes
+  //    there: its code up in that space, its picture growing beneath.
+  staged.staged_slide:
+    ~title: "More Examples"
+    def anim_run = small_steps(anim_code, anim_steps)
+    def school_run = small_steps(school_code, school_steps)
+    fun settled(p :~ Pict) :: Pict: p.snapshot(p.duration - 1, 1.0)
+    // the reductions change size as they play -- that is the point -- so each one
+    // keeps the widest and tallest it ever gets
+    def a_box = anim_box(anim_run)
+    def s_box = anim_box(school_run)
+    // the fractal's own column, sized for its deepest level from the first frame
+    def frac_room:
+      def deepest = frac_level(frac_top)
+      blank(~width: deepest.width, ~height: deepest.height)
+    // Each row reserves its full height but only its *settled* width, so the wide
+    // intermediate frames -- the school's source line is nearly the width of the
+    // slide -- draw past the right edge into the space the fractal takes later.
+    // Nothing collides, because the fractal only arrives once the school has finished
+    // reducing. Reserving that width for the whole slide is what left the examples
+    // huddled in a corner with the fractal's code shrunk down beside them.
+    fun row_of(run_box :~ Pict, set :~ Pict, content :: Pict) :: Pict:
+      def slot = blank(~width: set.width, ~height: run_box.height)
+      overlay(~horiz: #'left, ~vert: #'top, slot, content).refocus(slot)
+    def frac_col_slot:
+      stack(~sep: 26, ~horiz: #'left, frac_code.ghost(), frac_room)
+    fun frac_col(p :: Pict) :: Pict:
+      stack(~sep: 26, ~horiz: #'left,
+            frac_code,
+            overlay(~horiz: #'center, ~vert: #'top, frac_room, p))
+    fun scene(a :: Pict, b :: Pict, right :: Pict) :: Pict:
+      beside(~sep: 54, ~vert: #'top,
+             stack(~sep: 40, ~horiz: #'left,
+                   row_of(a_box, settled(anim_run), a),
+                   row_of(s_box, settled(school_run), b)),
+             overlay(~horiz: #'left, ~vert: #'top, frac_col_slot, right))
+    switch(scene(anim_run, s_box.ghost(), frac_col_slot.ghost()),
+           animate(fun (n):
+                     scene(settled(anim_run), school_run.snapshot(0, 0).alpha(n),
+                           frac_col_slot.ghost())),
+           scene(settled(anim_run), school_run, frac_col_slot.ghost()),
+           // the fractal arrives, then one more level per press
+           animate(fun (n):
+                     scene(settled(anim_run), settled(school_run),
+                           frac_col(frac_level(1)).alpha(n))),
+           & (for List (k in 1 .. frac_top):
+                scene(settled(anim_run), settled(school_run),
+                      frac_col(frac_growing(k)))),
+           // and then the whole thing turns
+           scene(settled(anim_run), settled(school_run), frac_col(frac_spinning)))
+      .sustain()
+
+module main:
+  explain_replace_slides()

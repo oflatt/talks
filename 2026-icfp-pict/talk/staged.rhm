@@ -1,0 +1,222 @@
+#lang rhombus/and_meta
+import:
+  slideshow open
+  draw
+  lib("slideshow/main.rkt") as ss
+  "swirl.rhm"
+
+export:
+  staged_slide
+  dead_beats                // advances that change nothing; see below
+  set_start_from
+  set_transitions
+  set_pan_extent
+  set_debug_epochs
+  set_reveal
+  set_reveal_extent
+
+def _slide_no = Array(0)
+def _start_from = Array(1)
+def _current = Array(0)   // logical number of the slide currently being assembled
+def _transitions = Array(#true)
+def _emitted = Array(#false)   // has any slide been emitted yet?
+fun set_start_from(n :: Int): _start_from[0] := n
+
+// Global on/off for the end-of-slide transition, so it can be A/B'd without
+// touching every slide.
+fun set_transitions(on): _transitions[0] := on
+
+// Print each slide's epoch count (= advances it costs) as it is built. Turn on
+def _debug_epochs = Array(#false)
+fun set_debug_epochs(on): _debug_epochs[0] := on
+
+// Does this pict draw anything at all? Used by the debug report to spot slides
+// whose first frame is empty, where the reveal fade shows only the title.
+fun has_ink(p :: Pict) :: Boolean:
+  def w = math.max(1, math.exact(math.ceiling(p.width)))
+  def h = math.max(1, math.exact(math.ceiling(p.height)))
+  def bm = draw.Bitmap([w, h])
+  p.draw(bm.make_dc())
+  def px = bm.argb_pixels()
+  recur go(i = 0):
+    cond
+    | i >= px.length(): #false
+    | px[i] > 0: #true
+    | ~else: go(i + 4)
+
+// The pixels a slide comes to rest on at the end of epoch `i`.
+fun frame_pixels(p :: Pict, i :: Int, n :: Real) :: Bytes:
+  def q = p.snapshot(i, n)
+  def w = math.max(1, math.exact(math.ceiling(q.width)))
+  def h = math.max(1, math.exact(math.ceiling(q.height)))
+  def bm = draw.Bitmap([w, h])
+  q.draw(bm.make_dc())
+  bm.argb_pixels()
+
+fun rest_pixels(p :: Pict, i :: Int) :: Bytes: frame_pixels(p, i, 1.0)
+
+// A quarter in, not half way: `small_steps` wiggles its target through a whole
+// sine cycle, so a wiggle epoch is back at rest at its own midpoint and only a
+// quarter-way sample tells it apart from an epoch that never moves.
+fun early_pixels(p :: Pict, i :: Int) :: Bytes: frame_pixels(p, i, 0.25)
+
+// Two frames that look the same on screen. Byte equality is too strict: a pict
+// that reaches the screen through an `alpha(1.0)` layer, or through the wrapper
+// `sustain` puts around it, is composited rather than drawn straight, and channel
+// values all over the frame come out a shade off.
+//
+// So the two thresholds do different jobs. The per-pixel one absorbs that
+// everywhere-but-tiny difference; the budget stays small, because what it has to
+// notice is a *small* thing that really moved -- a short redex rotating a few
+// degrees under `wiggle` touches only a few hundred pixels, and a budget scaled to
+// the frame would swallow it.
+fun looks_same(a :: Bytes, b :: Bytes) :: Boolean:
+  a.length() == b.length()
+    && block:
+         def n = a.length()
+         recur go(i = 0, bad = 0):
+           cond
+           | i >= n: #true
+           | bad > 24: #false
+           | ~else: go(i + 32, if math.abs(a[i] - b[i]) > 8 | bad + 1 | bad)
+
+// Advances that change nothing: an epoch is dead when it comes to rest looking
+// like the epoch before it AND never moves on the way -- so one press of the
+// clicker does no work at all. Epoch counts alone can't tell you which press is
+// the dead one, and reading the frames back is the only way to be sure: a beat
+// can differ in structure and still look identical.
+//
+// The early sample is what keeps `small_steps` honest here: every step it takes
+// is a wiggle epoch followed by a morph epoch, and a wiggle ends exactly where it
+// began -- so comparing rests alone would flag every step in the talk.
+//
+// A slide that ends in `.sustain()` always reports its last epoch, since that is
+// what sustaining is: one more advance holding the same frame.
+fun dead_beats(p :: Pict) :: List:
+  def q :~ Pict = p
+  recur go(i = 1, prev :~ Bytes = rest_pixels(q, 0), acc :~ List = []):
+    if i >= q.duration
+    | acc
+    | def cur = rest_pixels(q, i)
+      def still = looks_same(cur, prev) && looks_same(early_pixels(q, i), prev)
+      go(i + 1, cur, if still | acc ++ [i] | acc)
+
+fun force(make): if make is_a Function | make() | make
+
+// Every slide comes up from blank: one epoch fading in a snapshot of the
+// slide's first frame, then the content. Costs one advance per slide.
+def _reveal = Array(#true)
+def _reveal_extent = Array(0.4)
+fun set_reveal(on): _reveal[0] := on
+fun set_reveal_extent(e :: Real): _reveal_extent[0] := e
+
+fun reveal_first(p :: Pict) :: Pict:
+  def first = p.snapshot(0, 0)
+  def fade = animate(~extent: _reveal_extent[0], fun (n): first.alpha(n))
+  // A slide whose own first beat is a still repeats the picture the fade just
+  // landed on, so that press shows nothing. Splice it away instead of spending a
+  // press on it. A slide that starts by animating keeps its own beat.
+  if p.epoch_extent(0) == 0
+  | switch(fade, p, ~join: #'splice)
+  | switch(fade, p)
+
+// Pan from the previous slide to the next: the old page slides off one edge as
+def _pan_extent = Array(0.5)
+fun set_pan_extent(e :: Real): _pan_extent[0] := e
+
+fun pan_offset(dir, w :: Real, h :: Real):
+  match dir
+  | #'right: values(w, 0.0)
+  | #'left: values(-w, 0.0)
+  | #'down: values(0.0, h)
+  | #'up: values(0.0, -h)
+
+// `#'swirl`: the outgoing page twists and shrinks away while the new one fades
+fun swirl_transition(prev :: StaticPict, next :: Pict, data :: Map):
+  def page = next.snapshot(0, 0)
+  def away = swirl.swirl_shrink(prev, ~play_first: #false)
+  def lead:
+    animate(~extent: _pan_extent[0],
+            fun (n):
+              overlay(page.alpha(n), away.snapshot(0, n)))
+  values(switch(lead, next).time_pad(~before: -1), #true)
+
+fun pan_transition(dir):
+  fun (prev :: StaticPict, next :: Pict, data :: Map):
+    def page = next.snapshot(0, 0)
+    def w = math.max(prev.width, page.width)
+    def h = math.max(prev.height, page.height)
+    def (dx, dy) = pan_offset(dir, w, h)
+    def frame = blank(~width: w, ~height: h)
+    def lead:
+      animate(~extent: _pan_extent[0],
+              fun (n):
+                overlay(~horiz: #'left, ~vert: #'top,
+                        frame,
+                        prev.translate(-n * dx, -n * dy),
+                        page.translate((1.0 - n) * dx, (1.0 - n) * dy))
+                  .refocus(frame))
+    values(switch(lead, next).time_pad(~before: -1), #true)
+
+// Draw each slide's logical number (the --skip value) big in the bottom-right.
+def _default_asm = ss.#{current-slide-assembler}()
+fun numbered_asm(s, v_sep, p):
+  def base = Pict.from_handle(_default_asm(s, v_sep, p))
+  def tag = bold("" +& _current[0]).colorize("black")
+  overlay(~horiz: #'right, ~vert: #'bottom, base, tag.pad(~right: 6, ~bottom: 2)).snapshot().handle
+block:
+  ss.#{current-slide-assembler}(numbered_asm)
+  ss.#{set-page-numbers-visible!}(#false)
+
+// `~transition` names where the next slide comes from: `#'down` (the default)
+fun do_staged_slide(make, ~title: ttl = #false, ~transition: tr = #false,
+                    ~reveal: rv = #true, ~& kws):
+  _slide_no[0] := _slide_no[0] + 1
+  when _slide_no[0] >= _start_from[0]
+  | _current[0] := _slide_no[0]
+    def content = force(make)
+    // skipped for the first slide: a transition needs a previous page.
+    // `#'none` suits a predecessor that already animates itself out.
+    when _transitions[0] && _emitted[0] && (tr || #'down) != #'none
+    | slide_transition(if (tr || #'down) == #'swirl
+                       | swirl_transition
+                       | pan_transition(tr || #'down))
+    _emitted[0] := #true
+    def shown:
+      if _reveal[0] && rv && (content is_a Pict)
+      | reveal_first(content)
+      | content
+    when _debug_epochs[0]
+    | println("slide " +& _current[0] +& " [" +& (ttl || "-") +& "] epochs: "
+                +& (if content is_a Pict | (content :~ Pict).duration | "n/a")
+                +& (if shown is_a Pict | " -> " +& (shown :~ Pict).duration | "")
+                +& (if content is_a Pict
+                    | block:
+                        def c :~ Pict = content
+                        // on what is *shown*, too: the reveal fades in the first
+                        // frame, so a static first epoch repeats it -- a dead press
+                        // that never shows up when only `content` is measured
+                        def shown_dead = if shown is_a Pict | dead_beats(shown) | []
+                        def e0 = !has_ink(c.snapshot(0, 0))
+                        def e0_end = !has_ink(c.snapshot(0, 1.0))
+                        def dead = dead_beats(c)
+                        (if e0 | "  EMPTY-first-frame" | "")
+                          +& (if e0_end | "  EMPTY-epoch0" | "")
+                          +& (if dead == [] | "" | "  DEAD-BEATS " +& dead)
+                          +& (if shown_dead == [] | "" | "  SHOWN-DEAD " +& shown_dead)
+                    | ""))
+    if shown is_a List
+    | slide(& shown, ~title: ttl, ~& kws)
+    | slide(shown, ~title: ttl, ~& kws)
+
+expr.macro 'staged_slide:
+              $(group_option_sequence
+                | '~title: $(ttl :: Block)':
+                    default ttl = ': #false'
+                | '~transition: $(tr :: Block)':
+                    default tr = ': #false'
+                | '~reveal: $(rv :: Block)':
+                    default rv = ': #true')
+              $body
+              ... ~nonempty':
+  'do_staged_slide(fun (): $body; ..., ~title $ttl, ~transition $tr, ~reveal $rv)'

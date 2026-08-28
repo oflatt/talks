@@ -1,0 +1,139 @@
+#lang rhombus
+// Slides after the end of the talk, for questions. They are numbered like the
+// rest, so `--skip` reaches them, but nothing before them leads here.
+import:
+  slideshow open
+  pict/rhombus open        // rhombusblock
+  "../config.rhm"          // the paper's fonts
+  draw
+  "staged.rhm" as staged
+  "slidehelpers.rhm" open  // callout, multi_callout, on_ghost, colors
+  "mathx.rhm" open         // clamp01, smooth
+
+export:
+  backup_slides
+
+// --- the picture the identity slide talks about ------------------------------
+// Built exactly as the code beside it reads: `a` and `b` are two separate
+// constructions of the same square, and `q` is `p` with `a` replaced.
+//
+// Stacked rather than `beside`, so that one bubble off to the right can reach
+// both shapes without its spike to the far one crossing the near one.
+def a = square(~size: 80, ~fill: "lightblue")
+def b = square(~size: 80, ~fill: "lightblue")
+def p = stack(~sep: 24, a, b)
+def c = circle(~size: 120, ~fill: "pink")
+def q = p.replace(a, c)
+
+// The left shape answers to one name before the replacement and to two after it:
+// `Find.left(a)` and `Find.left(c)` land on the very same point in `q`, since what
+// sits there is `c` wearing `a`'s identity. The tag widens for the second name over
+// the back half of the morph, while everything else is moving anyway; holding it at
+// the wider size all along instead leaves a conspicuously roomy bubble around a
+// lone `a`.
+def a_only = tt("a")
+def and_c = tt(", c")
+fun a_label(t :: Real) :: Pict:
+  def x = clamp01(t * 2.0 - 1.0)
+  // The second name arrives beside the first rather than by cross-fading `a` into
+  // `a, c`: the code font is fixed-width, so this lands in exactly the same place,
+  // and two centred labels dissolving through each other would put the two `a`s at
+  // different offsets and read as a smudge. `refocus`, because a layer at
+  // `alpha(0)` still counts toward an overlay's bounds.
+  def slot = blank(~width: and_c.width * x, ~height: and_c.height)
+  beside.top(a_only,
+             overlay(~horiz: #'left, ~vert: #'top, slot, and_c.alpha(x)).refocus(slot))
+
+// Which shape is which, in the margin. `Find.left(a)` is the same expression in
+// both pictures: in `p` it lands on the square, and in `q` -- where the square is
+// gone -- on the circle that took its place, because `replace` labelled the circle
+// with `a`'s identity.
+fun tagged(pic :: Pict, t :: Real) :: Pict:
+  callout(~on: callout(~on: pic, ~at: Find.left(a), ~spike: #'e,
+                       ~padding: 10, a_label(t)),
+          ~at: Find.left(b), ~spike: #'e,
+          ~padding: 10, ~color: talk_green, tt("b"))
+
+// `magic_move` matches the square to the circle -- which it can only do because
+// the circle carries the square's identity, so the morph is itself the point. Its
+// epoch 0 is the transition; epoch 1 is the rest at `q`.
+def move = magic_move(p, q, ~extent: 1.0)
+// one slot as big as the picture ever gets, anchored at its top left, so the code
+// beside it holds still while the shapes change size. `launder` on the ghosts is
+// what keeps them out of the way of the bubbles: without it there are three copies
+// of `a` in the overlay below, and `Find` refuses an ambiguous target.
+def pic_slot = overlay(~horiz: #'left, ~vert: #'top,
+                       move.snapshot(0, 0.0).ghost().launder(),
+                       move.snapshot(0, 1.0).ghost().launder())
+
+fun picture(t :: Real) :: Pict:
+  def n = clamp01(t)
+  overlay(~horiz: #'left, ~vert: #'top, pic_slot, tagged(move.snapshot(0, n), n))
+    .refocus(pic_slot)
+
+// --- what the bubbles say ----------------------------------------------------
+// Each is pinned onto a ghost of what it points at and then overlaid, so a bubble
+// arriving or leaving never moves anything: a callout refocuses on its target,
+// which leaves the bubble itself hanging outside the box.
+fun note(child :: Pict) :: Pict: child.scale(0.85)
+
+fun ref_note(g :: Pict) :: Pict:
+  multi_callout(~on: g, ~at: [a, b], ~horiz: #'right, ~vert: #'center, ~gap: 26,
+                note(t("reference equality")))
+
+fun same_note(g :: Pict) :: Pict:
+  callout(~on: g, ~at: Find.right(a), ~spike: #'w, ~color: talk_red,
+          note(beside.baseline(~sep: 8, t("same identity as"), tt("a"))))
+
+// --- the code, in three pieces so each beat can bring in its own -------------
+def code_build:
+  @rhombusblock(
+    def a = square(~size: 80)
+    def b = square(~size: 80)
+    def p = stack(a, b)
+  )
+
+def code_replace:
+  @rhombusblock(
+    def c = circle(~size: 120)
+    def q = p.replace(a, c)
+  )
+
+fun code_at(replace_t :: Real) :: Pict:
+  stack.left(~sep: 24,
+             code_build,
+             code_replace.alpha(replace_t))
+
+fun picture_at(t :: Real, ref_a :: Real, same_a :: Real) :: Pict:
+  def base = picture(t)
+  overlay(~horiz: #'left, ~vert: #'top,
+          base,
+          on_ghost(base, ref_note).alpha(ref_a),
+          on_ghost(base, same_note).alpha(same_a))
+    .refocus(base)
+
+fun identity_slide():
+  parameterize { current_font: current_font() with (size = 30) }:
+    fun scene(~pic: pt :: Real, ~replace: rt :: Real,
+              ~ref: ref_a :: Real, ~same: same_a :: Real) :: Pict:
+      beside(~sep: 150, ~vert: #'top,
+             code_at(rt),
+             picture_at(pt, ref_a, same_a))
+
+    staged.staged_slide:
+      ~title: "How does pict identity work?"
+      switch(
+        scene(~pic: 0.0, ~replace: 0.0, ~ref: 1.0, ~same: 0.0),
+        // the replacement: the shapes morph, the tag picks up the second name, and
+        // the bubble that named them both gives way to the one saying why
+        animate(~extent: 1.0,
+                fun (n):
+                  def s = smooth(n)
+                  scene(~pic: s, ~replace: s,
+                        ~ref: clamp01(1.0 - n * 2.0), ~same: clamp01(n * 2.0 - 1.0))))
+
+fun backup_slides():
+  identity_slide()
+
+module main:
+  backup_slides()

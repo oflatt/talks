@@ -1,0 +1,392 @@
+#lang rhombus/static/and_meta
+import:
+  pict open
+  pict/rhombus open
+
+// ----------------------------------------
+// Program to evaluation-step library
+
+// In an `eval_tree` form, the body doubles as
+// an expression to evaluate and a description of
+// evaluation in terms of "tree expr" bindings.
+//
+// The result is three values:
+//   initial expression pict
+//   final value pict
+//   an `Eval` object to describe steps
+
+export:
+  Step
+  Eval
+  eval_tree
+  eval_steps
+  sched_to_redex_list
+
+  // tree expr bindings:
+  #%literal
+  #%call
+  #%block
+  #%brackets
+  #%parens
+  if
+  block
+  def
+  names:
+    .
+    *
+    +
+
+class Step(from :: Pict,
+           to :: Pict)
+
+class Eval(subs :: List.of(Eval),
+           step :: maybe(Step),
+           tail :: maybe(Eval))
+
+fun maybe_step(code, val):
+  match val
+  | val :: Pict:
+      Step(code, val)
+  | val :: List.of(Pict):
+      let open = current_rhombus_tt()("[").colorize(current_paren_color())
+      let close = current_rhombus_tt()("]").colorize(current_paren_color())
+      let comma = current_rhombus_tt()(", ")
+      Step(code, beside.baseline(open,
+                                 & (if val == []
+                                    | []
+                                    | [val.first]),
+                                 & (if val == []
+                                    | []
+                                    | val.rest.map(fun (p):
+                                                     beside.baseline(comma, p))),
+                                 close))
+  | ~else:
+      // change to
+      //   Step(code, text(repr(val)))
+      // to see non-pict reduction steps
+      #false
+
+// Utility to flatten tree to just the steps
+fun sched_to_redex_list(Eval([sub, ...], step, tail)) :~ List:
+  List.append(sched_to_redex_list(sub), ...)
+    ++ (match step
+        | Step(from, to): [[from, to]]
+        | ~else: [])
+    ++ (if tail
+        | sched_to_redex_list(tail)
+        | [])
+
+// For the tree_expr protocol, each macro expands to
+//
+//   '[$src,
+//     $defn,
+//     $expr]'
+//
+// where `src` provides the source term, which is used for
+// reconstructing the term as an argument to `rhombusblock`,
+// both its content and it's prefix/suffix. The `expr` part
+// is three values, just like the result of `tree_eval`; the
+// pict returns as the first value shold not have any prefix/suffix
+// space or text. The `defn` is spliced before the use of `expr`,
+// in case the expansion needs to bind anything (which is the
+// case for `def`).
+
+space.enforest tree_expr:
+  space_path stepper/eval_tree
+  macro_definer macro
+  meta_namespace tree_expr_meta:
+    parse_syntax_class Parsed
+    parsed_packer pack
+    parsed_unpacker unpack
+    identifier_parser (fun (id):
+                         pack(
+                           '[$id,
+                             #void,
+                             block:
+                               let code = rhombusblock($(strip_outside(id)))
+                               values(code,
+                                      $id,
+                                      Eval([], maybe_step(code, $id), #false))]'
+                         ))
+
+meta:
+  // Picts for subexpressions should not have any prefix or suffix text,
+  // since we leave that to the source result and context to preserve
+  fun strip_outside(stx) :~ Syntax:
+    match stx
+    | '$(stx :: Term)':
+        stx.property(#'#{raw-prefix}, #false).property(#'#{raw-suffix}, #false)
+    | '$first_stx $mid_stx ... $last_stx':
+        let first_stx = first_stx.property(#'#{raw-prefix}, #false)
+        let last_stx = last_stx.property(#'#{raw-suffix}, #false)
+        '$first_stx $mid_stx ... $last_stx'
+
+
+expr.macro 'eval_tree: $(code :: tree_expr_meta.Parsed)':
+  let '[$src, $defn, $expr]' = tree_expr_meta.unpack(code)
+  'block:
+     $defn     
+     $expr'
+
+expr.macro 'eval_steps: $(code :: Block)':
+  'block:
+     let (code, val, sched) = eval_tree $code
+     [code,  sched_to_redex_list(sched)]'
+
+tree_expr.macro '#%literal $(code :: Term)':
+  tree_expr_meta.pack('[$code,
+                        #void,
+                        values(rhombusblock($(strip_outside(code))),
+                               $code,
+                               Eval([], #false, #false))]')
+
+// Shared utilities for function calls and method calls
+meta:
+  // Parse arguments that might have keywords
+  syntax_class Arg:
+    kind: ~group
+    fields: kw expr splice blk
+  | '$(kw :: Keyword): $(blk :: Block)':
+      match_def ': $expr' = blk
+      field splice = #false
+  | '$(splice && '&') $(expr :: Sequence)':
+      field kw = #false
+      field blk = #false
+  | '$expr':
+      field kw = #false
+      field blk = #false
+      field splice = #false
+
+  // Adds back a keyword for rendering an argument
+  fun combine(arg :: Syntax.matched_of(Arg), new :: Syntax):
+    cond
+    | arg.kw:
+        let new = new.relocate_group(arg.expr)
+        let blk = ': $new'.relocate(arg.blk)
+        '$arg.kw $blk'.relocate_group(arg)
+    | arg.splice:
+        '$arg.splice $new'.relocate_group(arg)
+    | ~else:
+        new.relocate_group(arg)
+
+  fun handle_call(head_src, head_code, head_more_src, head_val, head_evals, parens,
+                  ~show_step = #true):
+    match parens
+    | '($(arg :: Arg), ...)':
+        let [arg_code_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [arg_val_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [arg_eval_tmp, ...] = [Syntax.make_temp_id(arg), ...]
+        let [new_arg, ...] = ['#,($arg_code_tmp)', ...]
+        let new_parens = '($(combine(arg, new_arg)), ...)'.relocate(parens)
+        let new_head_code = if head_src | seq_to_escape_seq([head_src], '#,($head_code)') | head_code
+        let new_code = strip_outside('$new_head_code $head_more_src $new_parens')
+        let '[$(arg_e :: tree_expr_meta.Parsed), ...]' = '[$arg.expr, ...]'
+        let ['[$_, $arg_defn, $arg_expr]', ...] = [tree_expr_meta.unpack(arg_e), ...]
+        'block:
+           $arg_defn
+           ...
+           let ($arg_code_tmp, $arg_val_tmp, $arg_eval_tmp) = $arg_expr
+           ...
+           let code = rhombusblock($new_code)
+           let val = $head_val($(combine(arg, arg_val_tmp)), ...)
+           values(code,
+                  val,
+                  Eval([& $head_evals, $arg_eval_tmp, ...],
+                       $(show_step && 'maybe_step(code, val)'),
+                       #false))'
+
+  // Gives a `#,` escape the raw source of the expression it replaces
+  fun seq_to_escape_seq([t :: Syntax, ...], esc :: Syntax):
+    Syntax.relocate_split(esc.unwrap_group(), 'x'.relocate_span([t, ...]))
+
+tree_expr.macro '$rator #%call $(parens :: Term)':
+  let '[$rator_src, $rator_defn, $rator_expr]' = tree_expr_meta.unpack(rator)
+  let call_src = '$rator_src $parens'
+  tree_expr_meta.pack('[$call_src,
+                        #void,
+                        block:
+                          $rator_defn
+                          let (code, val, eval) = $rator_expr
+                          $(handle_call(rator_src, 'code', '', 'val', '[eval]', parens))]')
+
+tree_expr.macro '$obj . $method $(parens && '($_, ...)')':
+  ~op_stx: self
+  ~all_stx: stx
+  let '[$obj_src, $obj_defn, $obj_expr]' = tree_expr_meta.unpack(obj)
+  let call_src = 'obj_src $self $method $parens'
+  tree_expr_meta.pack(
+    '[$call_src,
+      #void,
+      block:
+        use_dynamic
+        $obj_defn
+        let (obj_code, obj_val, obj_eval) = $obj_expr
+        $(handle_call(obj_src, 'obj_code', '$self $method', 'obj_val . $method', '[obj_eval]', parens))]'
+  )
+
+tree_expr.macro '#%brackets $(bkts && '[$elem, ...]')':
+  ~op_stx: self
+  ~all_stx: stx
+  let parens = '($elem, ...)'.relocate(bkts)
+  tree_expr_meta.pack(
+    '[$bkts,
+      #void,
+      block:
+        use_dynamic
+        $(handle_call(#false, '', '', 'List', '[]', parens, ~show_step: #false))]'
+  )
+
+tree_expr.macro '#%parens $(parens :: Term)':
+  ~op_stx: self
+  ~all_stx: stx
+  tree_expr_meta.pack(
+    '[$parens,
+      #void,
+      block:
+        use_dynamic
+        $(handle_call(#false, '', '', 'values', '[]', parens, ~show_step: #false))]'
+  )
+
+meta:
+  fun parse_infix(lhs, rhs, self, op):
+    let '[$lhs_src, $lhs_defn, $lhs_expr]' = tree_expr_meta.unpack(lhs)
+    let '[$rhs_src, $rhs_defn, $rhs_expr]' = tree_expr_meta.unpack(rhs)
+    let new_lhs_code = seq_to_escape_seq([lhs_src], '#,(lhs_code)')
+    let new_rhs_code = seq_to_escape_seq([rhs_src], '#,(rhs_code)')
+    let new_code = strip_outside('$new_lhs_code $self $new_rhs_code')
+    let op_src = '$lhs_src $self $rhs_src'
+    tree_expr_meta.pack(
+      '[$op_src,
+        #void,
+        block:
+          $lhs_defn
+          let (lhs_code, lhs_val, lhs_eval) = $lhs_expr
+          $rhs_defn
+          let (rhs_code, rhs_val, rhs_eval) = $rhs_expr
+          let code = rhombusblock($new_code)
+          let val = lhs_val $op rhs_val
+          values(code,
+                 val,
+                 Eval([lhs_eval, rhs_eval],
+                      maybe_step(code, val),
+                      #false))]')
+
+tree_expr.macro '$lhs * $rhs':
+  ~op_stx: self
+  ~order: multiplication
+  parse_infix(lhs, rhs, self, '*')
+
+tree_expr.macro '$lhs + $rhs':
+  ~op_stx: self
+  ~order: addition
+  parse_infix(lhs, rhs, self, '+')
+
+tree_expr.macro 'if $tst ... | $(thn_blk :: Block) | $(els_blk :: Block)':
+  ~op_stx: head
+  ~all_stx: stx
+  let ': $thn' = thn_blk
+  let ': $els' = els_blk
+  let new_thn = ': $(seq_to_escape_seq([thn], '#,(thn_code)'))'.relocate(thn_blk)
+  let new_els = ': $(seq_to_escape_seq([els], '#,(els_code)'))'.relocate(els_blk)
+  let new_alts = Syntax.make([#'alts, new_thn, new_els])
+  let [new_tst, ...] = seq_to_escape_seq([tst, ...], '#,(tst_code)')
+  let new_code = strip_outside('$head $new_tst ... $new_alts')
+  let '$(tst_e :: tree_expr_meta.Parsed)' = '$tst ...'
+  let '$(thn_e :: tree_expr_meta.Parsed)' = thn
+  let '$(els_e :: tree_expr_meta.Parsed)' = els
+  let '[$_, $tst_defn, $tst_expr]' = tree_expr_meta.unpack(tst_e)
+  let '[$_, $thn_defn, $thn_expr]' = tree_expr_meta.unpack(thn_e)
+  let '[$_, $els_defn, $els_expr]' = tree_expr_meta.unpack(els_e)
+  // duplicates input, so room for improvement here:
+  tree_expr_meta.pack(
+    '[$stx,
+      #void,
+      block:
+        $tst_defn
+        let (tst_code, tst_val, tst_eval) = $tst_expr
+        if tst_val
+        | $thn_defn
+          let (thn_code, thn_val, thn_eval) = $thn_expr
+          let els_code = rhombusblock($els)
+          let code = rhombusblock($new_code)
+          values(code,
+                 thn_val,
+                 Eval([tst_eval],
+                      Step(code, thn_code),
+                      thn_eval))
+        | $els_defn
+          let (els_code, els_val, els_eval) = $els_expr
+          let thn_code = rhombusblock($thn)
+          let code = rhombusblock($new_code)
+          values(code,
+                 els_val,
+                 Eval([tst_eval],
+                      Step(code, els_code),
+                      els_eval))]'
+  )
+
+meta:
+  fun parse_block(stx, wrap_self):
+    let '$_:
+           $(g :: tree_expr_meta.Parsed)
+           ...':
+      stx
+    let ['[$g_src, $g_defn, $g_expr]', ...] = [tree_expr_meta.unpack(g), ...]
+    let [g_code, ...] = [Syntax.make_temp_id(g), ...]
+    let [g_val, ...] = [Syntax.make_temp_id(g), ...]
+    let [g_eval, ...] = [Syntax.make_temp_id(g), ...]
+    let [new_g_code, ...] = ['#,($g_code)'.relocate_group(g.group), ...]
+    let code_block = wrap_self(': $new_g_code; ...'.relocate(match stx |'$_ $blk': blk))
+    tree_expr_meta.pack(
+      '[$stx,
+        #void,
+        block:
+          $g_defn
+          ...
+          let ($g_code, $g_val, $g_eval) = $g_expr
+          ...
+          let code = rhombusblock($code_block)
+          let val:
+            $g_val
+            ...
+          values(code,
+                 val,
+                 Eval([$g_eval, ...],
+                      maybe_step(code, val),
+                      #false))]'
+    )
+
+tree_expr.macro 'block:
+                   $(g :: tree_expr_meta.Parsed)
+                   ...':
+  ~op_stx: self
+  ~all_stx: stx
+  parse_block(stx, fun (code_block): '$self $code_block')
+
+tree_expr.macro '#%block:
+                   $(g :: tree_expr_meta.Parsed)
+                   ...':
+  ~all_stx: stx
+  parse_block(stx, fun (code_block):
+                     let ': $g; ...' = code_block
+                     '$g; ...')
+
+tree_expr.macro 'def $id $(eql && '=') $(rhs :: tree_expr_meta.Parsed) $()':
+  ~op_stx: self
+  ~all_stx: stx
+  let '[$rhs_src, $rhs_defn, $rhs_expr]' = tree_expr_meta.unpack(rhs)
+  let new_code = strip_outside('$self $id $eql #,(rhs_code)')
+  tree_expr_meta.pack(
+    '[$stx,
+      def ($id, rhs_code, rhs_val, rhs_eval):
+        $rhs_defn
+        let (rhs_code, rhs_val, rhs_eval) = $rhs_expr
+        values(rhs_val, rhs_code, rhs_val, rhs_eval),
+      block:
+        let code = rhombusblock($new_code)
+        values(code,
+               #void,
+               Eval([rhs_eval],
+                    #false,
+                    #false))]'
+  )

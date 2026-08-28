@@ -1,0 +1,327 @@
+#lang rhombus
+import:
+  draw
+  "argstrip.rhm"   // MUST precede slideshow: strips `--skip N` before slideshow's parser sees it
+  slideshow open
+  rhombus/logo
+  "boring.rhm"
+  "identity.rhm"
+  "swirl.rhm"
+  "write.rhm"
+  "pachinko.rhm"
+  "rainbow.rhm"
+  "datagraph.rhm"
+  "outline.rhm"
+  "whattouse.rhm"
+  "explain_picts.rhm"
+  "explain_animated.rhm"
+  "explain_replace.rhm"
+  "school.rhm"
+  "mathx.rhm" open
+  "helpers.rhm" open
+  "staged.rhm" open   // staged_slide macro + set_start_from
+  "slidehelpers.rhm" open   // make_flash, make_bubble, on_ghost, colors
+  "reflect.rhm"
+  "backup.rhm"
+  "charge.rhm" open
+
+set_start_from(argstrip.skip_count() + 1)   // --skip N: render only slides after the first N
+
+def outline_items = ["Motivation", "Making Animations Composable", "Replacing Parts of Animations", "Reflection"]
+// The outline slides are the section boundaries, so they're the ones that pan
+// sideways; everything else keeps the default downward pan within a section.
+fun outline_slide(mk):
+  parameterize { current_font: current_font() with (size = 40) }:
+    staged_slide:
+      ~title: "Outline"
+      ~transition: #'right
+      mk()
+
+
+// Hoisted so the talk can come back to it at the end. `slide` stacks a list of
+// picts with `slide.gap` between them, so the closing slide rebuilds the same stack
+// by hand -- it needs one pict to pin bubbles onto.
+def title_parts:
+  [@titlet{Animated Pictures for Slide Presentations}.scale(1.2).translate(50, 0),
+   blank(10),
+   beside(~sep: 60,
+          logo.to_pict(dc),
+          block:
+            fun who(c): @bold(c).colorize("darkblue")
+            fun where(c): @italic(c).scale(0.8).colorize("darkred")
+            stack.right(
+              @who{Oliver Flatt},
+              @where{University of  Washington},
+              blank(slide.gap),
+              @who{Robert Bruce Findler},
+              @where{Northwestern University},
+              blank(slide.gap),
+              @who{Matthew Flatt},
+              @where{University of Utah}
+            ))]
+
+staged_slide: title_parts
+
+// `~animate` defaults to #true: the outline writes itself out
+outline_slide(fun (): outline.outline_intro(outline_items))
+
+parameterize { current_font: current_font() with (size = 36)}:
+  parameterize { current_font: current_font() with (name = "Comic Sans MS"),
+                 current_title_font: current_title_font() with (name = "Comic Sans MS") }:
+    staged_slide:
+      ~title: "What makes a good talk?"
+      let bul = bullets(
+                  @{A clear narrative?},
+                  @{Nice visual examples?},
+                  @{Bullet points?},
+                  @{Lots of explanatory text covering the slide from top to bottom which is meant to be read verbatim by the speaker?},
+                  @{A series of rhetorical questions?},
+                  @{Tasteful font choices?})
+      step(
+        overlay,
+        ~vert: #'top,
+        x_out(bul),
+        t("Nope!").colorize("red"))
+
+  block:
+    // "fancy animations": write -> scatter -> charge -> pachinko out; one epoch (fuse)
+    // `titlet`, not `t`: `assemble_slide` passes a Pict title through as-is,
+    // so `t` would render it in the body font. Stays a pict for `blank_client`.
+    def title_p = titlet("What makes a good talk is....")
+    staged_slide:
+      ~title: title_p
+      // the previous slide swirls away as this one arrives
+      ~transition: #'swirl
+      ~reveal: #false        // the write-out already starts from nothing
+      def (wanim, letters) = write.write_out("fancy animations", ~extent: 3.0,
+                                             ~return_letters: #true)
+      def n = letters.length()
+      def canvas = blank_client(~title: title_p)   // fills the slide below the title
+      // scatter layout shared by `place` (draws) and `starts` (positions)
+      def scatter_x = 420.0
+      def scatter_y = 90.0
+      def scatter_rise = 200.0
+      fun place(items): scatter(items, ~canvas: canvas,
+                                ~spread_x: scatter_x, ~spread_y: scatter_y, ~rise: scatter_rise)
+      // rainbow sweep + wave-bob + spread; letters stay rainbow through the rest
+      def hues = for List (i in 0..n): rainbow.hue_color(i / math.max(1.0, n - 1.0) * 0.85)
+      def rainbow_letters = for List (i in 0..n): letters[i].colorize(hues[i])
+      def amp = 22.0
+      def cell_h = (for values(m = 0.0) (l in letters): math.max(m, l.height)) + 2.0 * amp + 14.0
+      def sep_to = 20.0
+      def rwave = rainbow.rainbow_wave(letters, hues, ~canvas: canvas, ~cell_h: cell_h,
+                                       ~sep_to: sep_to, ~amp: amp, ~extent: 2.5)
+      def spread = rainbow.spread_row(rainbow_letters, ~canvas: canvas, ~cell_h: cell_h, ~sep: sep_to)
+      def move = magic_move(spread, place(rainbow_letters), ~extent: 2.0)
+      def charges = for List (i in 0..n):
+                      charge_up(rainbow_letters[i], ~color: hues[i], ~fade: #true, ~reach: 45.0, ~gap: 2)
+      def cwidth = 0.4
+      def base_delay = 0.06
+      def lag = (1.0 - base_delay - cwidth) / math.max(1.0, 1.0 * (n - 1))
+      def charged = animate(~extent: 2.5,
+                            fun (nn):
+                              def items = for List (i in 0..n):
+                                            def start = base_delay + i * lag
+                                            if nn <= start
+                                            | rainbow_letters[i]
+                                            | overlay(rainbow_letters[i],
+                                                      charges[i].snapshot(0, clamp01((nn - start)/cwidth)))
+                              place(items))
+      // each ball is a letter's fully-charged frame; `starts` = the scatter positions
+      def charged_letters = for List (i in 0..n): overlay(rainbow_letters[i], charges[i].snapshot(0, 1.0))
+      def starts = scatter_positions(n, ~canvas: canvas,
+                                     ~spread_x: scatter_x, ~spread_y: scatter_y, ~rise: scatter_rise)
+      def pach = pachinko.pachinko(charged_letters, starts,
+                                   ~width: canvas.width, ~height: canvas.height,
+                                   ~peg_cols: 18, ~peg_rows: 15,
+                                   ~peg_top: 0.28, ~peg_bot: 0.97, ~extent: 6.5)
+      // `fuse` flattens all four into one epoch; `switch` holds the final frame
+      def wanim_c = overlay(canvas, wanim)
+      def anim = fuse(wanim_c, rwave, move, charged, pach)
+      switch(anim, snap_last(anim))
+
+
+
+// "Animations as code": reveal three wants, each with a live graph, -> "we have to CODE"
+parameterize { current_font: current_font() with (size = 34) }:
+  block:
+    def accent = "steelblue"
+    def intro = t("And if we want our animations to....")
+    def points = ["react to real data", "be interactive", "be reusable and refactorable"]
+
+    // --- one continuous graph across the phases, at `bins_state` bins ---
+    def gw = 620.0
+    def gh = 380.0
+    def slider_h = 34.0
+    def chart_h = gh - slider_h - 18.0
+    def data = datagraph.sample_curve(12)
+    def bins_state = Array(12)   // point-2's slider writes it; point 3 reads it back
+    def garea = blank(~width: gw, ~height: gh)   // fixed slot: chart pinned to top
+
+    // --- text that writes itself out (3b1b-style, faster than the title) ---
+    def writer = for List (s in points): write.write_out(s, ~extent: 1.0, ~color: accent)
+    def code_a = write.write_out("...we have to ", ~extent: 0.7)
+    def code_b = write.write_out("CODE", ~extent: 0.7, ~color: "firebrick",
+                                 ~font: current_font() with (size = 51))
+    // a string being written out, over a ghost of its final size (layout stays put)
+    fun writing(w :: Pict, prog :: Real) :: Pict:
+      overlay(~horiz: #'left, ~vert: #'top, w.snapshot(0, 1.0).ghost(), w.snapshot(0, clamp01(prog)))
+
+    // the points column: 0..cur-1 written (plain), `cur` writing out (accent), rest hidden
+    fun points_col(cur :: Int, prog :: Real) :: Pict:
+      stack.left(~sep: 24,
+                 & for List (i in 0..3):
+                     def num = t((i + 1) +& ")")
+                     // once written, use clean text (the writer's last glyph renders heavy)
+                     def body = if prog >= 1.0 | t(points[i]).colorize(accent) | writing(writer[i], prog)
+                     cond
+                     | i < cur: beside.top(~sep: 12, num.colorize(accent), t(points[i]).colorize(accent))
+                     | i == cur: beside.top(~sep: 12, num.colorize(accent).alpha(clamp01(prog / 0.06)), body)
+                     | ~else: beside.top(~sep: 12, num, t(points[i])).ghost())
+
+    // "...we have to CODE" writing out (CODE bigger + red)
+    fun code_line(prog :: Real) :: Pict:
+      if prog >= 1.0
+      | beside.baseline(t("...we have to "), bold("CODE").colorize("firebrick").scale(1.5))
+      | beside.baseline(writing(code_a, prog / 0.4), writing(code_b, (prog - 0.4) / 0.6))
+
+    // hold the finished line's space so nothing above it shifts
+    def code_slot = code_line(1.0).ghost()
+
+    fun layout(cur :: Int, prog :: Real, graph :: Pict, code_prog :: Real) :: Pict:
+      def body = beside(~sep: 70, ~vert: #'center, points_col(cur, prog),
+                        overlay(~horiz: #'center, ~vert: #'top, garea, graph))
+      stack.left(~sep: 30, intro, body,
+                 if code_prog <= 0.0 | code_slot | code_line(code_prog))
+
+    // step k reveals point k: rest (n=0) = previous point done; the transition writes
+    // point k while `gfn` brings its graph in, so text and graph arrive together
+    fun step(k :: Int, gfn, ~extent: ext :: Real) :: Pict:
+      animate(~extent: ext, fun (n): layout(k, n, gfn(n), 0.0))
+
+    staged_slide:
+      def react = datagraph.react_demo(data, ~width: gw, ~height: chart_h, ~extent: 2.5)
+      def bars = datagraph.bars_widget(data, ~bins_state: bins_state, ~width: gw, ~chart_height: chart_h, ~slider_height: slider_h)
+      def split_anim = datagraph.split_demo(~bins_state: bins_state, ~width: gw, ~height: chart_h)
+      def final_split = datagraph.split_widget(~bins_state: bins_state, ~width: gw, ~height: chart_h, ~animate: #false)
+      def react_rest = react.snapshot(0, 1.0)   // graph shown at the point-1 rest
+      hold_last(switch(step(0, fun (n): react.snapshot(0, n).alpha(clamp01(n / 0.3)), ~extent: 2.0),  // -> react + point 1
+                       step(1, fun (n): if n <= 0.0 | react_rest | bars, ~extent: 1.3),               // -> slider + point 2
+                       step(2, fun (n): if n <= 0.0 | bars | split_anim.snapshot(0, n), ~extent: 1.8),// -> split + point 3
+                       animate(~extent: 1.6, fun (n): layout(3, 0.0, final_split, n))))               // -> ...we have to CODE
+
+
+// ...so what should we code in? Survey the options, land on Pict
+whattouse.what_to_use_slides()
+
+outline_slide(fun (): outline.outline_recap(outline_items, ~to: 1))   // -> Making Animations Composable
+
+// "Making Animations Composable" is one section spanning both: build a fish,
+// compose, grab width/height, then bridge to the animated pict datatype
+explain_picts.explain_picts_slides()
+
+
+explain_animated.explain_animated_slides()
+
+outline_slide(fun (): outline.outline_recap(outline_items, ~to: 2, ~from: 1))   // -> Replacing Parts of Animations
+
+explain_replace.explain_replace_slides()
+
+reflect.this_talk()
+
+outline_slide(fun (): outline.outline_recap(outline_items, ~to: 3, ~from: 2))   // -> Reflection
+
+// shallow vs deep: the picture on screen is a tree, and every node in it knows
+// how to build itself again
+reflect.reflect_slides()
+
+// What is missing: back to the field of options, with the one thing the tools we
+// rejected still have over us. This is the cue to alt-tab to the GUI demo.
+whattouse.what_next_slide()
+
+// ...and back to where we started, to take questions on.
+staged_slide:
+  def base = stack(~sep: slide.gap, ~horiz: #'center, & title_parts)
+  // spiky, because it is a sales pitch; the bubble beside it is the ordinary kind.
+  // The starburst's points stick out past its body, so it needs more padding than a
+  // rectangle would to keep the text off them.
+  // big, because a school has to be able to spell it
+  // The pitch is never written out: the school spells it, so there is no spiky
+  // bubble and no text to give it away beforehand. The words are only a stencil.
+  def words = @bold{Try Pict today!}.scale(4.0)
+  def slot = words.ghost()
+  def url = t("https://rhombus-lang.org/").scale(0.72)
+  def questions = make_bubble(~color: talk_blue, @bold{questions?})
+  // padded below so the whole row sits above the slide number in the corner,
+  // which the "questions?" bubble otherwise runs into now that the pitch is wide
+  fun row(top :: Pict, ua :: Real, qa :: Real) :: Pict:
+    stack(~sep: 44, ~horiz: #'center,
+          base,
+          beside(~sep: 70, ~vert: #'center,
+                 stack(~sep: 10, ~horiz: #'center, top, url.alpha(ua)),
+                 questions.alpha(qa)).pad(~bottom: 70))
+
+  // One fish per inked point of the words. Small fish on a fine grid, so the
+  // thin strokes -- the tail of the "y", the "!" -- come out readable.
+  def fish_h = 4.5
+  def letter_spots = school.ink_points(words, ~step: 13, ~step_y: 7)
+  def empty_row = row(slot, 0.0, 1.0)
+  // where the words sit within the slide, so the school can be placed over the
+  // whole picture and still land exactly on the letters
+  def (wx, wy) = Find.top_left(slot).in(empty_row)
+  def targets = for List (s in letter_spots): [wx + s[0], wy + s[1]]
+  def open_water = blank(~width: empty_row.width, ~height: empty_row.height)
+  def splashes = school.launch_points(empty_row.width, empty_row.height, targets.length())
+  // The school sits a deeper blue than the ripple leaves it: the fish the wave is
+  // passing over turn *and* light up, since a turn this small is easy to miss.
+  def fish_dim = draw.Color(20, 88, 170)
+  def fish_lit = draw.Color(150, 220, 255)
+  // pre-turned fish for the leap, in the blue the school settles at, so nothing
+  // changes colour on landing
+  def fan = school.turn_fan(explain_picts.fish(fish_dim, fish_h))
+  // one crossing of the ripple, built once as finished frames; the animation below
+  // plays them round and round, which is what keeps it smooth with this many fish
+  def lit_fan:
+    school.ripple_fan(fun (e):
+                        explain_picts.fish(school.mix_color(fish_dim, fish_lit, e), fish_h))
+  def glints = school.ripple_frames(slot, lit_fan, letter_spots)
+
+  // no static first beat: `staged_slide` already fades this picture in, so one
+  // here would be a press that shows what the fade just landed on
+  switch(animate(fun (n): row(slot, 0.0, n)),
+         // One press for the whole finale: the school leaps out of the water, a
+         // few fish at a time, every one of them lands on a letter, and the
+         // ripple keeps crossing them afterwards.
+         // `~bend: values` for real time: `animate` eases its clock by default
+         // (fast in the middle, slow at the edges), and the leap lives in the first
+         // tenth of this beat -- the slowest, most sharply accelerating part of that
+         // curve. Under it the jump starts sluggish and speeds up as it goes, which
+         // is not what gravity does, and the ripple's sweep drifts in speed too.
+         animate(~extent: 30.0, ~bend: values,
+                 fun (n):
+                   def lead = 0.1          // the leap is the first three seconds
+                   if n <= lead
+                   | block:
+                       def ln = clamp01(n / lead)
+                       // a short stagger, so the water breaks all along the
+                       // bottom at once rather than trickling: the first moment
+                       // of the press has to show something
+                       def (pts, angs, progs):
+                         school.leap(splashes, targets, ln, ~stagger: 0.6, ~arc: 240.0)
+                       // a fish points along its arc while it flies
+                       overlay(~horiz: #'left, ~vert: #'top,
+                               row(slot, smooth(clamp01((ln - 0.55) / 0.45)), 1.0),
+                               school.place_leap(open_water, fan, pts, angs, progs))
+                   | block:
+                       def rn = (n - lead) / (1.0 - lead)
+                       // starts half a cycle in, where the band is off the words:
+                       // about a second of stillness, then it comes in from the top
+                       // left, crosses, and leaves before the next one arrives
+                       def ph = frac(0.5 + rn * 6.0)
+                       def k = math.exact(math.floor(ph * glints.length()))
+                       row(glints[math.min(glints.length() - 1, k)], 1.0, 1.0)))
+    .sustain()
+
+
+// Slides for questions, past the end of the talk.
+backup.backup_slides()

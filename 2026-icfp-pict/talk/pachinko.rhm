@@ -1,0 +1,177 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+  "mathx.rhm" open   // frac, absr
+
+export:
+  pachinko
+
+// Pachinko where you supply the balls: each pict in `balls` starts at the matching
+// center in `starts`, is released in staggered order, then falls under gravity,
+// bounces off a peg lattice, and drops out the bottom. Physics is simulated once
+// (seeded, so renders match); each frame interpolates and places the ball picts.
+
+fun pachinko(balls :: List,
+             starts :: List,                    // [x, y] center per ball, same length
+             ~width: W :: Real = 1100.0,
+             ~height: H :: Real = 480.0,
+             ~radius: r :: Real = 14.0,          // collision radius for each ball
+             ~peg_radius: pr :: Real = 4.0,
+             ~peg_rows: prows :: Int = 11,
+             ~peg_cols: pcols :: Int = 15,
+             ~peg_top: peg_top_frac :: Real = 0.30,
+             ~peg_bot: peg_bot_frac :: Real = 0.94,
+             ~gravity: g :: Real = 1150.0,
+             ~restitution: rest :: Real = 0.5,
+             ~stagger: stagger_frac :: Real = 0.28,   // spread of release times (0..1)
+             ~extent: ext :: Real = 6.5,
+             ~show_pegs: show_pegs = #true,
+             ~peg_color: peg_color = "gainsboro",
+             ~oversample: os :: Int = 2,
+             ~seed: seed0 :: Real = 1.0) :: Pict:
+  def count = balls.length()
+  def canvas = blank(~width: W, ~height: H)
+  def peg_col = if peg_color is_a draw.Color | peg_color | draw.Color(peg_color)
+  def wall_rest = 0.55
+  def maxv = 850.0
+  def dt = 1.0 / 120.0
+  def max_steps = 1000
+  def spawn_span = 1.0 * math.exact(math.floor(500.0 * stagger_frac))
+
+  fun rnd(s :: Real) :: Real:
+    frac(math.sin(s * 12.9898 + 78.233 + seed0) * 43758.5453)
+
+  def peg_top = H * peg_top_frac
+  def peg_bot = H * peg_bot_frac
+  def rgap = (peg_bot - peg_top) / math.max(1.0, 1.0 * (prows - 1))
+  def cgap = W / (pcols + 1.0)
+  def pegs:
+    for values(acc = []) (row in 0..prows):
+      def y = peg_top + row * rgap
+      def off = if row mod 2 == 0 | (- cgap / 4.0) | (cgap / 4.0)
+      def rowpegs = for List (col in 0..pcols): [cgap * (col + 1.0) + off, y]
+      acc ++ rowpegs
+  def npegs = pegs.length()
+  // below this line balls stop colliding and free-fall out, so none can get
+  // wedged among the lowest pegs (the bottom rows are then visual-only)
+  def drain_y = peg_bot - 1.8 * rgap
+
+  fun resolve_pegs(px :: Real, py :: Real, vx :: Real, vy :: Real, sd :: Real):
+    fun find(j, best, bestd):
+      cond
+      | j >= npegs: values(best, bestd)
+      | ~else:
+          def pg = pegs[j]
+          def ddx = px - pg[0]
+          def ddy = py - pg[1]
+          def dd = math.sqrt(ddx*ddx + ddy*ddy)
+          if dd < (r + pr) && dd < bestd
+          | find(j + 1, j, dd)
+          | find(j + 1, best, bestd)
+    def (bi, bd) = find(0, -1, 1.0e18)
+    cond
+    | py > drain_y: values(px, py, vx, vy)   // drain zone: free-fall out
+    | bi < 0: values(px, py, vx, vy)
+    | ~else:
+        def pg = pegs[bi]
+        def dist = math.max(0.0001, bd)
+        def nnx = (px - pg[0]) / dist
+        def nny = (py - pg[1]) / dist
+        def overlap = (r + pr) - dist
+        def ox = px + nnx * overlap
+        def oy = py + nny * overlap
+        def vdotn = vx * nnx + vy * nny
+        cond
+        | vdotn < 0.0:
+            // always roll off to one side (never balance on top of a peg)
+            def side = if (px - pg[0]) + (rnd(sd) - 0.5) * 2.0 >= 0.0 | 1.0 | -1.0
+            def push = side * 130.0 + (rnd(sd + 3.0) - 0.5) * 120.0
+            values(ox, oy,
+                   vx - (1.0 + rest) * vdotn * nnx + push,
+                   vy - (1.0 + rest) * vdotn * nny)
+        | ~else: values(ox, oy, vx, vy)
+
+  fun resolve_walls(x :: Real, vx :: Real):
+    cond
+    | x < r: values(r, absr(vx) * wall_rest)
+    | x > W - r: values(W - r, - absr(vx) * wall_rest)
+    | ~else: values(x, vx)
+
+  // one ball -> per-step [x,y]; it sits at its start until release, then drops,
+  // and the list ENDS the step it falls out (so trajectory length == exit step).
+  fun sim_ball(i :: Int):
+    def st = starts[i]
+    def sp = math.exact(math.floor(i * spawn_span / math.max(1.0, 1.0 * count)))
+    def vx0 = (rnd(i * 2.3 + 1.1) - 0.5) * 70.0
+    fun go(s, x, y, vx, vy, acc):
+      cond
+      | s >= max_steps: acc
+      | s < sp: go(s + 1, st[0], st[1], vx, vy, acc ++ [[st[0], st[1]]])
+      | y > H + r: acc
+      | ~else:
+          def vyg = math.min(maxv, vy + g * dt)
+          def (qx, qy, qvx, qvy) = resolve_pegs(x + vx * dt, y + vyg * dt,
+                                                vx, vyg, rnd(i * 13.0 + s * 0.37))
+          def (wx, wvx) = resolve_walls(qx, qvx)
+          go(s + 1, wx, qy, wvx, qvy, acc ++ [[wx, qy]])
+    go(0, st[0], st[1], vx0, 0.0, [])
+
+  def traj = for List (i in 0..count): sim_ball(i)
+  // size the animation to the last ball's exit, so there's no empty tail
+  def nsteps_eff = for values(m = 2) (tr in traj): math.max(m, tr.length())
+
+  def peg_pict:
+    def bw = math.exact(math.ceiling(W * os))
+    def bh = math.exact(math.ceiling(H * os))
+    def obm = draw.Bitmap([bw, bh])
+    def dc = obm.make_dc()
+    dc.smoothing := #'smoothed
+    dc.pen := draw.Pen.none
+    dc.brush := draw.Brush(~color: peg_col)
+    for (pg in pegs):
+      dc.ellipse([[(pg[0] - pr) * os, (pg[1] - pr) * os], [2.0 * pr * os, 2.0 * pr * os]])
+    bitmap(obm).scale(1.0 / os)
+
+  fun render(positions :: List, peg_alpha :: Real) :: Pict:
+    def base:
+      if show_pegs && peg_alpha > 0.01
+      | overlay(~horiz: #'left, ~vert: #'top, canvas,
+                peg_pict.alpha(math.min(1.0, peg_alpha)))
+      | canvas
+    recur go(i = 0, acc = base):
+      cond
+      | i >= count: acc.refocus(canvas).clip()
+      | ~else:
+          def p = positions[i]
+          if p
+          | def b = balls[i]
+            go(i + 1, overlay(~horiz: #'left, ~vert: #'top,
+                              ~dx: p[0] - b.width / 2.0, ~dy: p[1] - b.height / 2.0,
+                              acc, b))
+          | go(i + 1, acc)
+
+  // pegs fade in as balls arrive, out once they've cleared
+  fun peg_ramp(x :: Real) :: Real:
+    cond
+    | x < 0.06: x / 0.06
+    | x > 0.85: math.max(0.0, (1.0 - x) / 0.15)
+    | ~else: 1.0
+
+  animate(~extent: ext,
+          fun (nn):
+            def sf = nn * (1.0 * (nsteps_eff - 1))
+            def si = math.min(nsteps_eff - 1, math.max(0, math.exact(math.floor(sf))))
+            def sj = si + 1
+            def fr = sf - si
+            def positions = for List (i in 0..count):
+                              def tr = traj[i]
+                              def len = tr.length()
+                              def a = if si < len | tr[si] | #false
+                              def b = if sj < len | tr[sj] | #false
+                              cond
+                              | a && b: [a[0] + (b[0] - a[0]) * fr, a[1] + (b[1] - a[1]) * fr]
+                              | a: a
+                              | b: b
+                              | ~else: #false
+            render(positions, peg_ramp(nn)))

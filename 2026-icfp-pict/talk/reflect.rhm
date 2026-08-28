@@ -1,0 +1,375 @@
+#lang rhombus/and_meta
+import:
+  slideshow open
+  pict/rhombus open        // rhombusblock, for the rebuild annotations
+  "../config.rhm"
+  "eval_tree_ext.rhm" open            // eval_steps + tree_fun + Rendered
+  "small_steps_smooth.rhm" open       // small_steps
+  "explain_picts.rhm" open            // fish, red_fish, water
+  "ast_pict.rhm" as ast               // node/tree drawing + the pict-term demo
+  "big_step.rhm" as big               // the same fish, evaluated big-step
+  "staged.rhm" as staged
+  "slidehelpers.rhm" open             // callout, talk_blue, node styling
+  "mathx.rhm" open                    // smooth (clamp01 is defined below)
+
+export:
+  reflect_slides
+  this_talk
+
+// --- the pieces of the tank, as the picts they are ---------------------------
+// `fish` is an overlay of a body and a tail, and the tank is an overlay of a box
+// and that fish, so the picture on screen is already a tree. The tree is not drawn
+// here: it is what `ast_pict.rhm`'s expression evaluates to, and this slide plays
+// that evaluation. These are the nodes it ends on.
+
+def n_tank = ast.node_of(ast.tank_term)
+def n_box = ast.node_of(ast.box_term)
+def n_fish = ast.node_of(ast.fish_term)
+def n_body = ast.node_of(ast.body_term)
+def n_tail = ast.node_of(ast.tail_term)     // the `rotate`
+def n_tri = ast.node_of(ast.tri_term)       // the leaf under it
+
+// The chain from the leaf up to the root, in red: those are the rebuilds that a
+// replacement down there has to re-run -- three of them, since the rotation is a
+// node too. Drawn over the arrows the tree already has, on whichever frame it is
+// given, so it can go on the reduction's last one.
+fun hot_path(on :: Pict) :: Pict:
+  fun arrow(acc :: Pict, from :: Pict, to :: Pict) :: Pict:
+    // same orthogonal route as the tree's own edges, so the red overlay lands
+    // exactly on them
+    ast.tree_arrow(acc, from, to, ~arrow_size: 10,
+                   ~line: talk_red, ~line_width: 4)
+  arrow(arrow(arrow(on, n_tank, n_fish), n_fish, n_tail), n_tail, n_tri)
+
+// Do the swap, and watch it climb. One press: the leaf turns over first, then each
+// rebuild above it re-runs in turn, staggered so the order is legible. A colour and
+// not a size: every node keeps its dimensions, so nothing in the tree has to move
+// and the only thing travelling up the picture is the change itself.
+
+def swap_chain:
+  [[n_tri, ast.node_of(ast.swap_tri)],
+   [n_tail, ast.node_of(ast.swap_tail)],
+   [n_fish, ast.node_of(ast.swap_fish)],
+   [n_tank, ast.node_of(ast.swap_tank)]]
+
+fun rebuilt_at(tree :: Pict, t_of :: Function.of_arity(1)) :: Pict:
+  for values(acc :~ Pict = tree) (i in 0 .. swap_chain.length()):
+    def [was :~ Pict, now :~ Pict] = swap_chain[i]
+    def t = t_of(i)
+    cond
+    | t <= 0.0: acc
+    | t >= 1.0: acc.replace(was, now)
+    | ~else: acc.replace(was, overlay(was.alpha(1.0 - t), now.alpha(t)))
+
+fun swap_ripple(tree :: Pict) :: Pict:
+  animate(~extent: 2.5,
+          fun (n):
+            rebuilt_at(tree, fun (i): clamp01((n - i * 0.19) / 0.34)))
+
+// The three nodes that carry a rebuild function, taken together, are what would
+// otherwise have been a separate interpreter. One bubble names all three, with its
+// outline reaching out to each of them. It goes off to the right of the tree, the
+// one side where a spike reaches its node without crossing another node.
+fun interp_layer(base :: Pict) :: Pict:
+  on_ghost(base,
+           fun (g :~ Pict):
+             multi_callout(~on: g,
+                           ~at: [n_tank, n_fish, n_tail],
+                           ~horiz: #'right,
+                           ~vert: #'center,
+                           ~gap: 26,
+                           ~color: talk_blue,
+                           // `para` wraps it, rather than hand-broken lines: there is
+                           // only so much room to the right of the tree, and the body
+                           // is already taller than the text needs -- the spikes want
+                           // a run of edge to leave from -- so height is the cheap
+                           // direction to spend.
+                           para(~width: 150, "user-specified interpreter on the AST")))
+
+// --- shallow vs deep, on something that isn't a pict ------------------------
+// Arithmetic is the smallest example that shows the difference, and both sides
+// run on screen: shallow, `add` and `sub` are host functions and the expression
+// collapses to a number, leaving nothing behind; deep, the constructors build a
+// term that survives, and `eval` is the extra thing you have to write.
+
+// shallow: two host functions, steppable so the reduction plays out
+tree_fun sh_add_code add(a, b): a + b
+tree_fun sh_sub_code sub(a, b): a - b
+
+def shallow_defs = stack.left(~sep: 4, sh_add_code, sh_sub_code)
+
+def [shallow_code :: Pict, shallow_steps :: SmallSteps]:
+  eval_steps:
+    add(1, sub(5, 2))
+
+// deep: the same arithmetic as data. `Rendered` is how a term steps to a picture
+// of itself, so the tree on screen really is what the constructors returned.
+fun kid_pict(v) :: Pict:
+  match v
+  | r :: Rendered: r.render()
+  | ~else: ast.pict_node(t(to_string(v)))
+
+fun term_pict(term :: Rendered) :: Pict:
+  ast.render_memo(term,
+                  fun ():
+                    match term
+                    | Add(a, b): ast.node_tree(ast.pict_node(t("Add")),
+                                               [kid_pict(a), kid_pict(b)])
+                    | Sub(a, b): ast.node_tree(ast.pict_node(t("Sub")),
+                                               [kid_pict(a), kid_pict(b)]))
+
+class Add(a, b):
+  implements Rendered
+  override render(): term_pict(this)
+
+class Sub(a, b):
+  implements Rendered
+  override render(): term_pict(this)
+
+fun eval(e):
+  match e
+  | Add(a, b): eval(a) + eval(b)
+  | Sub(a, b): eval(a) - eval(b)
+  | ~else: e
+
+// Written out a second time for the slide: the reducer has no `match`, so unlike
+// `add` and `sub` above, these definitions can't double as their own display.
+// Keep the two copies in step.
+def deep_defs:
+  @rhombusblock(
+    class Add(a, b)
+    class Sub(a, b)
+
+    fun eval(e):
+      match e
+      | Add(a, b): eval(a) + eval(b)
+      | Sub(a, b): eval(a) - eval(b)
+      | ~else: e
+  )
+
+// Three steps: the constructors build the tree, then `eval` collapses it in one --
+// `eval` is a host function, so the reducer cannot see inside its recursion.
+def [deep_code :: Pict, deep_steps :: SmallSteps]:
+  eval_steps:
+    eval(
+      Add(1, Sub(5, 2)))
+
+
+// The same expression `big_step.rhm` reduces the other way.
+def [impl_code :: Pict, impl_steps :: SmallSteps]:
+  eval_steps:
+    overlay(ellipse(~width: 100, ~height: 50, ~fill: "lightblue"),
+            ~dx: 60,
+            triangle(~size: 50, ~fill: "lightblue").rotate(1/2 * math.pi))
+
+// slots on `steps` and on `eval_steps`, for the bubbles to point at
+def m_steps = blank(~width: 0, ~height: 0)
+def m_eval = blank(~width: 0, ~height: 0)
+// the `steps` argument of the call, its own pict so the list it holds can take
+// its place there
+def steps_arg = current_rhombus_tt()("steps")
+
+// The `def` half stays a `rhombusblock`; the call is built by hand, because the
+// list has to be able to stand where `steps` does and a `rhombusblock` lays a line
+// out by its source columns -- an escape in the middle of one leaves the closing
+// paren behind, lines away from the argument it closes.
+def def_block:
+  @rhombusblock(
+    def [code, steps#,(m_steps)]:
+      eval_steps#,(m_eval):
+        overlay(ellipse(~width: 100, ~height: 50, ~fill: "lightblue"),
+                ~dx: 60,
+                triangle(~size: 50, ~fill: "lightblue").rotate(1/2 * math.pi))
+  )
+
+def steps_word = current_rhombus_tt()("steps)")
+
+// Box tops aligned, not baselines and not toplines: on a baseline the list would
+// hang above the call rather than run down from it, and a topline is a property of
+// text, so the growing slot the argument sits in would shift the line as it grew.
+fun call_line(arg :: Pict) :: Pict:
+  def rtt = current_rhombus_tt()
+  beside.top(rtt("small_steps(code, "), arg)
+
+fun usage_of(arg :: Pict) :: Pict:
+  stack(~sep: 26, ~horiz: #'left, def_block, call_line(arg))
+
+def steps_usage = usage_of(steps_word)
+
+// What `steps` actually holds: each entry is one pict standing in for another, so
+// showing the list means showing those picts inline. Laundered, since the originals
+// are already on screen inside the block above.
+def steps_list:
+  def rtt = current_rhombus_tt()
+  def items :~ List:
+    for List (s in impl_steps):
+      def Step(from, to) = s
+      @rhombusblock(Step(#,(from.launder()), #,(to.launder())))
+  def rows:
+    for List (i in 0 .. items.length()):
+      beside.baseline(items[i] :~ Pict,
+                      if i == items.length() - 1 | nothing | rtt(","))
+  stack.left(~sep: 6,
+             rtt("["),
+             stack.left(~sep: 6, & rows).pad(~left: rtt("  ").width),
+             // the call's own closing paren rides along, so it lands after the
+             // list rather than stranded at the end of the first line
+             rtt("])"))
+    .scale(0.75)
+
+// `steps` giving way to what it holds, in the call itself. The argument's box grows
+// from `steps)` to the list, rather than the list being padded down to nothing:
+// negative padding puts the list's box above its own origin, and `beside.topline`
+// lines the call up on that, which drops `steps)` below the line it belongs on.
+fun usage_with_list(open :: Real, ink :: Real) :: Pict:
+  def slot:
+    blank(~width: lerp(steps_word.width, steps_list.width, open),
+          ~height: lerp(steps_word.height, steps_list.height, open))
+  usage_of(overlay(~horiz: #'left, ~vert: #'top,
+                   slot,
+                   steps_word.alpha(1.0 - ink),
+                   steps_list.alpha(ink)))
+
+fun this_talk():
+  // The `small_steps` call behind every reduction in the talk, then the same
+  // expression through `big_step.rhm` instead.
+  staged.staged_slide:
+    ~title: "How was this slideshow implemented?"
+    def run = big.big_fish
+    def steps_note:
+      on_ghost(steps_usage,
+               fun (g :~ Pict):
+                 code_callout(~on: g,
+                              ~at: m_steps,
+                              ~spike: #'w,       // to the right: above would land on the title
+                              ~color: talk_blue,
+                              t("a list of pict replacements")))
+    // `eval_steps` is where the reductions come from, and it is a macro like
+    // `as_rebuildable`: said first, since the list below is what it hands back
+    def macro_note:
+      on_ghost(steps_usage,
+               fun (g :~ Pict):
+                 code_callout(~on: g,
+                              ~at: m_eval,
+                              ~spike: #'w,
+                              ~color: talk_blue,
+                              t("a Rhombus macro")))
+    // both bubbles hang off the same ghost of the usage, so they share a box and
+    // can simply be overlaid
+    fun notes(ma :: Real, sa :: Real) :: Pict:
+      overlay(~horiz: #'left, ~vert: #'top, macro_note.alpha(ma), steps_note.alpha(sa))
+    // The usage, then what `steps` is, then the same expression the other way. Each
+    // stage sits in a slot big enough for the largest thing it ever holds.
+    // the list is not a row of its own any more -- it arrives in the call, where
+    // `steps` was -- so one slot holds every shape this ever takes
+    def full_usage = usage_with_list(1.0, 1.0)
+    def top_slot:
+      overlay(~horiz: #'left, ~vert: #'top,
+              steps_usage.ghost(), full_usage.ghost(), anim_box(run))
+    fun scene(top :: Pict, note :: Pict) :: Pict:
+      overlay(~horiz: #'left, ~vert: #'top, top_slot, top, note)
+    def no_note = steps_note.ghost()
+    def big0 = run.snapshot(0, 0)
+    switch(scene(steps_usage, no_note),
+           // what `eval_steps` is, then what it hands back
+           animate(fun (n): scene(steps_usage, notes(n, 0.0))),
+           animate(fun (n): scene(steps_usage, notes(1.0, n))),
+           // ...and then `steps` gives way to that list, in the call itself
+           animate(fun (n):
+                     scene(usage_with_list(smooth(clamp01(n / 0.6)),
+                                           smooth(clamp01((n - 0.4) / 0.6))),
+                           notes(1.0, 1.0))),
+           // and then the same expression again, taken big-step
+           animate(fun (n):
+                     scene(overlay(~horiz: #'left, ~vert: #'top,
+                                   full_usage.alpha(1.0 - n), big0.alpha(n)),
+                           notes(1.0 - n, 1.0 - n))),
+           scene(run, no_note))
+      .sustain()
+
+fun reflect_slides():
+  
+
+  // Both sides run: the shallow expression reduces away to a number, the deep one
+  // grows a tree and only then reduces. Shallow plays first, then deep arrives.
+  staged.staged_slide:
+    ~title: "Shallow vs Deep Embeddings"
+    fun column(head :: Pict, defs :: Pict, run :: Pict) :: Pict:
+      stack(~sep: 22, ~horiz: #'left,
+            head,
+            defs,
+            in_anim_box(run))
+    def shallow:
+      column(@bold{Shallow}, shallow_defs,
+             small_steps(shallow_code, shallow_steps))
+    def deep:
+      column(@bold{Deep}, deep_defs,
+             small_steps(deep_code, deep_steps))
+    def shallow_done = shallow.snapshot(shallow.duration - 1, 1.0)
+    def deep_start = deep.snapshot(0, 0)
+    // Both columns get the width of the wider one, so the gap between them falls
+    // on the middle of the slide. Left to themselves the deep column is much the
+    // wider of the two -- it has an interpreter in it -- and takes more than half.
+    def col_w = math.max(shallow.width, deep.width)
+    def col_slot = blank(~width: col_w, ~height: 0)
+    fun column_slot(c :: Pict) :: Pict:
+      overlay(~horiz: #'left, ~vert: #'top, col_slot, c)
+    fun both(l :: Pict, r :: Pict) :: Pict:
+      beside(~sep: 60, ~vert: #'top, column_slot(l), column_slot(r))
+    switch(both(shallow, deep_start.ghost()),
+           animate(fun (n):
+                     both(shallow_done,
+                          overlay(~horiz: #'left, ~vert: #'top,
+                                  deep_start.ghost(), deep_start.alpha(n)))),
+           both(shallow_done, deep))
+      .sustain()
+
+  // Every pict on screen is this tree, and every node in it knows how to build
+  // itself again -- and the tree is not drawn here, it is what the expression
+  // evaluates to. So the slide runs it: each constructor call becomes the node it
+  // returns, the nodes slide together into a tree, and only then does the point
+  // about replacement land. Swapping a leaf is what makes the difference between
+  // shallow and deep show up: the rebuilds above it all have to run.
+  staged.staged_slide:
+    // answers the previous slide's title rather than echoing it: not a choice
+    // between the two, but a term whose interpreter rides along on it
+    ~title: "What about Pict?"
+    def run = small_steps(ast.tank_ast_code, ast.tank_ast_steps)
+    def built = run.snapshot(run.duration - 1, 1.0)
+    // one box for the whole slide: the code line is far wider than the tree it
+    // grows into, and the tree is where the slide comes to rest
+    def box = anim_box(run)
+    fun scene(c :: Pict) :: Pict:
+      overlay(~horiz: #'center, ~vert: #'top, box, c)
+    // Every layer is built on the bare tree, not on the scene: the sizing box is
+    // made of snapshots of the run, so its last one holds a second copy of every
+    // node and any `Find` over the scene is ambiguous.
+    def deep = hot_path(built)
+    def interp = interp_layer(built)
+    def note:
+      on_ghost(deep,
+               fun (g :~ Pict):
+                 // below the leaf, not beside it: it is already at the right of
+                 // the tree, and a bubble there runs off the slide
+                 callout(~on: g,
+                         ~at: Find.bottom(n_tri),
+                         ~spike: #'n,
+                         ~color: talk_red,
+                         t("swap the tail, and every rebuild above it re-runs")))
+    fun layers(tree :: Pict, child :: Pict, ...) :: Pict:
+      scene(overlay(~vert: #'top, tree, child, ...))
+    // Said, then done: the last beat performs the swap the bubble promised and the
+    // rebuilds go off up the tree.
+    def ripple = swap_ripple(deep)
+    switch(scene(run),
+           // the rebuilds are the interpreter, named where they sit
+           animate(fun (n): layers(built, interp.alpha(n))),
+           layers(deep, interp),
+           animate(fun (n): layers(deep, interp, note.alpha(n))),
+           // the ripple carries its own extent, so it plays at its own pace
+           layers(ripple, interp, note))
+      .sustain()
+
+module main:
+  this_talk()
+  reflect_slides()

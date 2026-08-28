@@ -1,0 +1,253 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+  "mathx.rhm" open   // clamp01, lerp, smooth, frac
+  rhombus/rkt_obj as rkt
+  lib("racket/gui/base.rkt") as g
+
+export:
+  chart          // reusable primitives (slider_graphic, data_curve stay internal)
+  sample_curve
+  split_demo     // pict animation for the split; talk syncs its flex to the reveal
+  react_demo
+  bars_widget
+  split_widget
+
+// a smooth underlying "signal" on [0,1] that the bar bins sample
+fun data_curve(x :: Real) :: Real:
+  clamp01(0.5 + 0.30 * math.sin(x * math.pi * 3.0) + 0.13 * math.sin(x * math.pi * 7.0 + 1.0))
+fun sample_curve(bins :: Int) :: List:
+  for List (i in 0..bins): data_curve((i + 0.5) / (1.0 * bins))
+
+// A chart pict of fixed size -- a bitmap that renders `draw_chart_on` at
+// `oversample` resolution (crisp on Retina). `kind` is #'bar, #'line, or #'area.
+fun chart(vs :: List,
+          ~kind: kind = #'bar,
+          ~width: w :: Real = 560.0,
+          ~height: h :: Real = 320.0,
+          ~color: color = "steelblue",
+          ~baseline: base = #true,
+          ~oversample: os :: Int = 2) :: Pict:
+  def col = if color is_a draw.Color | color | draw.Color(color)
+  def bm = draw.Bitmap([math.exact(math.ceiling(w * os)), math.exact(math.ceiling(h * os))])
+  def dc = bm.make_dc()
+  dc.scale(1.0 * os)
+  draw_chart_on(dc, kind, vs, w, h, col, ~baseline: base)
+  bitmap(bm).scale(1.0 / os)
+
+// Draw a chart DIRECTLY onto a dc at origin (ox,oy), logical size w x h (no bitmap
+// alloc) -- used for the live interactive canvas so repaints while dragging stay
+// cheap. `kind` is #'bar, #'line, or #'area.
+fun draw_chart_on(dc :: draw.DC, kind, vs :: List, w :: Real, h :: Real, col :: draw.Color,
+                  ~ox: ox :: Real = 0.0, ~oy: oy :: Real = 0.0, ~baseline: base = #true) :: Void:
+  def n = math.max(1, vs.length())
+  dc.smoothing := #'smoothed
+  cond
+  | kind == #'bar:
+      dc.pen := draw.Pen.none
+      dc.brush := draw.Brush(~color: col)
+      def slot = w / n
+      def bw = math.max(2.0, slot * 0.70)
+      for (i in 0..n):
+        def bh = math.max(2.0, clamp01(vs[i]) * h)
+        dc.rounded_rectangle([[ox + i * slot + (slot - bw) / 2.0, oy + h - bh], [bw, bh]],
+                             math.min(bw / 2.0, 6.0))
+  | ~else:
+      def pts = for List (i in 0..n): [ox + (i + 0.5) / n * w, oy + (1.0 - clamp01(vs[i])) * h]
+      when kind == #'area
+      | def ap = draw.Path()
+        ap.move_to([pts[0][0], oy + h])
+        for (i in 0..n): ap.line_to(pts[i])
+        ap.line_to([pts[n - 1][0], oy + h])
+        ap.close()
+        dc.pen := draw.Pen.none
+        dc.brush := draw.Brush(~color: col with (alpha = 0.35))
+        dc.path(ap)
+      def lp = draw.Path()
+      lp.move_to(pts[0])
+      for (i in 1..n): lp.line_to(pts[i])
+      dc.brush := draw.Brush.none
+      dc.pen := draw.Pen(~color: col, ~width: 3.0)
+      dc.path(lp)
+  when base
+  | dc.pen := draw.Pen.none
+    dc.brush := draw.Brush(~color: "gray")
+    dc.rectangle([[ox, oy + h - 1.5], [w, 1.5]])
+
+// Point 1: bars react to "live data", jittering around `target` with an amplitude
+// that damps to zero -- so the phase SETTLES onto exactly `chart(target)`, which
+// is what the next phase starts from (seamless hand-off).
+fun react_demo(target :: List,
+               ~width: w :: Real = 560.0,
+               ~height: h :: Real = 320.0,
+               ~color: color = "steelblue",
+               ~amp: amp :: Real = 0.32,
+               ~cycles: cyc :: Real = 2.0,
+               ~extent: ext :: Real = 2.5) :: Pict:
+  def n = target.length()
+  def phase = for List (i in 0..n): frac(math.sin((i + 1.0) * 12.9898) * 43758.5453)
+  def freq = for List (i in 0..n): 0.6 + frac(math.sin((i + 3.0) * 7.13) * 9731.7) * 1.3
+  animate(~extent: ext,
+          fun (nn):
+            def damp = 1.0 - smooth(nn)
+            def vals = for List (i in 0..n):
+                         clamp01(target[i] + damp * amp * math.sin(2.0 * math.pi * (cyc * freq[i] * nn + phase[i])))
+            chart(vals, ~kind: #'bar, ~width: w, ~height: h, ~color: color))
+
+// Shared 4-pane spec + geometry for the split (used by both split_demo and
+// draw_split_on so they can't diverge). Each pane is [kind, color, data].
+fun split_panes(bins :: Int, ~base: base :: draw.Color = draw.Color("steelblue")) :: List:
+  def data = sample_curve(bins)
+  def data2 = for List (v in data): clamp01(v * 0.65 + 0.22)
+  [[#'bar, base, data],
+   [#'line, draw.Color("seagreen"), data],
+   [#'area, draw.Color("darkorange"), data],
+   [#'bar, draw.Color("mediumpurple"), data2]]
+fun split_off(w :: Real, h :: Real) :: List:
+  [[-w / 4.0, -h / 4.0], [w / 4.0, -h / 4.0], [-w / 4.0, h / 4.0], [w / 4.0, h / 4.0]]
+fun pane_alpha(k :: Int, sp :: Real) :: Real:  // pane 0 stays; the rest fade in
+  if k == 0 | 1.0 | smooth(clamp01((sp - 0.1) / 0.6))
+
+// Point 3: the one chart (pane 0 == the incoming bar chart) flexes and splits
+// into 4 panes, each the same data in a different style. Reads `bins_state[0]`
+// at render time so it starts from wherever the point-2 slider was left.
+fun split_demo(~bins_state: bins_state :: Array,
+               ~width: w :: Real = 560.0,
+               ~height: h :: Real = 320.0,
+               ~extent: ext :: Real = 3.0) :: Pict:
+  def off = split_off(w, h)
+  def canvas = blank(~width: w, ~height: h)
+  animate(~extent: ext,
+          fun (nn):
+            def panes = split_panes(bins_state[0])
+            def e = smooth(nn)
+            def s = lerp(1.0, 0.46, e)
+            recur go(k = 0, acc = canvas):
+              if k >= 4
+              | acc
+              | def spec = panes[k]
+                def c = chart(spec[2], ~kind: spec[0], ~width: w, ~height: h, ~color: spec[1])
+                def framed = rectangle(~around: c.scale(s), ~line: "gainsboro", ~line_width: 1.5)
+                go(k + 1, overlay(~horiz: #'center, ~vert: #'center,
+                                  ~dx: off[k][0] * e, ~dy: off[k][1] * e,
+                                  acc, framed.alpha(pane_alpha(k, nn)))))
+
+// A static slider graphic (track + fill + knob), knob at `pos` in 0..1.
+fun slider_graphic(pos :: Real,
+                   ~width: w :: Real = 380.0,
+                   ~color: color = "steelblue") :: Pict:
+  def base = blank(~width: w, ~height: 28.0)
+  def track = rectangle(~width: w, ~height: 6.0, ~fill: "gainsboro")
+  def fill = rectangle(~width: math.max(1.0, clamp01(pos) * w), ~height: 6.0, ~fill: color)
+  def bar = overlay(~horiz: #'left, track, fill)
+  def knob = circle(~size: 22.0, ~fill: "white", ~line: color, ~line_width: 3.0)
+  def with_track = overlay(~horiz: #'left, ~vert: #'center, base, bar)
+  overlay(~horiz: #'left, ~vert: #'center, ~dx: clamp01(pos) * w - 11.0, with_track, knob)
+
+// Draw the whole graph on a dc: one bar chart when `sp`==0, flexing into a 2x2
+// grid of 4 styled panes as `sp` goes 0->1, at `bins` resolution. Opaque bg.
+fun draw_split_on(dc :: draw.DC, W :: Real, H :: Real,
+                  bins :: Int, sp :: Real, base_col :: draw.Color) :: Void:
+  def panes = split_panes(bins, ~base: base_col)
+  def off = split_off(W, H)
+  def e = smooth(sp)
+  def s = lerp(1.0, 0.46, e)
+  dc.pen := draw.Pen.none
+  dc.brush := draw.Brush(~color: "white")
+  dc.rectangle([[0.0, 0.0], [W, H]])
+  for (k in 0..4):
+    def spec = panes[k]
+    def pw = W * s
+    def ph = H * s
+    def ox = W / 2.0 + off[k][0] * e - pw / 2.0
+    def oy = H / 2.0 + off[k][1] * e - ph / 2.0
+    dc.alpha := pane_alpha(k, sp)
+    draw_chart_on(dc, spec[0], spec[2], pw, ph, spec[1], ~ox: ox, ~oy: oy)
+    when e > 0.02
+    | dc.pen := draw.Pen(~color: "gainsboro", ~width: 1.5)
+      dc.brush := draw.Brush.none
+      dc.rectangle([[ox, oy], [pw, ph]])
+    dc.alpha := 1.0
+
+// Point 2: a live canvas with ONE "bars" slider (bin count 3..40). Writes the
+// shared `bins_state` so a later phase can read the count you leave it at.
+fun bars_widget(data :: List,
+                ~bins_state: bins_state :: Array,
+                ~width: w :: Real = 560.0,
+                ~chart_height: ch :: Real = 280.0,
+                ~slider_height: sh :: Real = 34.0,
+                ~min_bins: min_b :: Int = 3,
+                ~max_bins: max_b :: Int = 40,
+                ~color: color = "steelblue") :: Pict:
+  def b0 = data.length()
+  bins_state[0] := b0
+  def fallback = stack(~sep: 16, ~horiz: #'center,
+                       chart(data, ~kind: #'bar, ~width: w, ~height: ch, ~color: color),
+                       slider_graphic(1.0 * (b0 - min_b) / (max_b - min_b), ~width: w * 0.72, ~color: color))
+  interactive(fallback,
+              fun (win):
+                // one chart PICT per bin count, rendered lazily at the canvas size
+                // and cached -- so dragging just picks a pre-rendered pict (crisp,
+                // no per-frame rasterization). No fade: the chart is the same one
+                // continuing from point 1, so it just stays put.
+                def cache = MutableMap{}
+                fun chart_at(b :: Int, cw :: Real, cvh :: Real) :: Pict:
+                  cond
+                  | cache.has_key(b): cache[b]
+                  | ~else:
+                      def p = chart(sample_curve(b), ~kind: #'bar, ~width: cw, ~height: cvh, ~color: color)
+                      cache[b] := p
+                      p
+                fun paint(cv, dc):
+                  def (cw, cvh) = rkt.send cv.#{get-client-size}()
+                  when cw > 0 && cvh > 0
+                  | def b = math.max(min_b, math.min(max_b, bins_state[0]))
+                    def wdc = draw.DC.from_handle(dc)
+                    wdc.pen := draw.Pen.none
+                    wdc.brush := draw.Brush(~color: "white")
+                    wdc.rectangle([[0.0, 0.0], [1.0 * cw, 1.0 * cvh]])
+                    chart_at(b, 1.0 * cw, 1.0 * cvh).draw(wdc)
+                def canvas = rkt.make_object(g.#{canvas%}, win, PairList[], paint)
+                // async refresh: serviced between drag events so it tracks live
+                // (refresh-now is deferred by macOS's modal slider-drag loop)
+                fun on_bars(control, event):
+                  bins_state[0] := rkt.send control.#{get-value}()
+                  rkt.send canvas.refresh()
+                def s1 = rkt.make_object(g.#{slider%}, "bars", min_b, max_b, win, on_bars, b0)
+                // paint once ~60ms after the canvas is shown, so the first drag is warm
+                fun warm(): rkt.send canvas.refresh()
+                def warmer = rkt.make_object(g.#{timer%}, warm, 60, #true)
+                fun (): rkt.send warmer.stop())
+
+// Point 3: a live canvas (NO slider) that, when the slide appears, AUTO-animates
+// the split 0->1 via a GUI timer -- flexing exactly the chart at `bins_state[0]`
+// (whatever the point-2 slider was left at). Print/PDF shows the finished split.
+fun split_widget(~bins_state: bins_state :: Array,
+                 ~width: w :: Real = 560.0,
+                 ~height: h :: Real = 280.0,
+                 ~duration: dur :: Real = 1.4,
+                 ~animate: do_anim = #true,   // #false: show the finished split, no timer
+                 ~color: color = "steelblue") :: Pict:
+  def col = if color is_a draw.Color | color | draw.Color(color)
+  def fallback = split_demo(~bins_state: bins_state, ~width: w, ~height: h).snapshot(0, 1.0)
+  interactive(fallback,
+              fun (win):
+                def sp = Array(if do_anim | 0.0 | 1.0)   // split progress 0..1
+                def tref = Array(#false)                 // holds the timer (for self-stop)
+                fun paint(cv, dc):
+                  def (cw, cvh) = rkt.send cv.#{get-client-size}()
+                  draw_split_on(draw.DC.from_handle(dc), 1.0 * cw, 1.0 * cvh,
+                                bins_state[0], sp[0], col)
+                def canvas = rkt.make_object(g.#{canvas%}, win, PairList[], paint)
+                def steps = math.max(1, math.exact(math.floor(dur / 0.03)))
+                fun tick():
+                  sp[0] := math.min(1.0, sp[0] + 1.0 / steps)
+                  rkt.send canvas.refresh()
+                  when sp[0] >= 1.0 && tref[0]
+                  | rkt.send tref[0].stop()
+                def timer = rkt.make_object(g.#{timer%}, tick)
+                tref[0] := timer
+                when do_anim
+                | rkt.send timer.start(30)
+                fun (): rkt.send timer.stop())

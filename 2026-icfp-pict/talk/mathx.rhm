@@ -1,0 +1,15 @@
+#lang rhombus
+
+// Small math helpers shared across the talk's animation modules.
+export:
+  clamp01
+  lerp
+  smooth
+  frac
+  absr
+
+fun clamp01(x :: Real) :: Real: math.min(1.0, math.max(0.0, x))
+fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
+fun smooth(t :: Real) :: Real: def u = clamp01(t); u * u * (3.0 - 2.0 * u)   // smoothstep
+fun frac(x :: Real) :: Real: x - math.floor(x)
+fun absr(x :: Real) :: Real: if x < 0.0 | -x | x

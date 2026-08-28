@@ -1,0 +1,32 @@
+#lang rhombus
+// `--skip N`: skip the first N slides. Stripped here, before slideshow's parser
+// (imported after this in talk.rhm) sees `--skip` and dies on the unknown switch.
+import:
+  rhombus/cmdline as cmd
+  lib("racket/base.rkt") as rkt_base
+
+export:
+  skip_count
+
+def _skip = Array(0)
+block:
+  def orig = cmd.current_command_line()
+  def kept = Array([])
+  fun nonneg_int(s :: String):
+    try:
+      def v = s.to_number()
+      (v is_a Int) && v >= 0
+      ~catch _: #false
+  fun scan(i):
+    when i < orig.length()
+    | cond
+      | orig[i] == "--skip" && i + 1 < orig.length() && nonneg_int(orig[i + 1]):
+          _skip[0] := orig[i + 1].to_number()
+          scan(i + 2)
+      | ~else:
+          kept[0] := kept[0] ++ [orig[i]]
+          scan(i + 1)
+  scan(0)
+  rkt_base.#{current-command-line-arguments}(Array(& kept[0]))
+
+fun skip_count() :: Int: _skip[0]

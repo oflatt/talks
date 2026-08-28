@@ -1,0 +1,126 @@
+#lang rhombus
+import:
+  slideshow open
+  pict/rhombus open
+
+def ellipse_result:
+  ellipse(~width: 100, ~height: 50, ~fill: "lightblue")
+
+def ellipse_code:
+  rhombusblock(
+    ellipse(~width: 100, ~height: 50, ~fill: "lightblue")
+  )
+
+def inner_triangle_result:
+  triangle(~size: 50, ~fill: "lightblue")
+
+def inner_triangle_code:
+  rhombusblock(
+    triangle(~size: 50, ~fill: "lightblue")
+  )
+
+def triangle_result:
+  inner_triangle_result
+    .rotate(math.pi*1/2)
+
+def triangle_code:
+  rhombusblock(
+    #,(inner_triangle_code)
+      .rotate(math.pi*1/2)
+  )
+
+fun make_overlay(ellipse_code, triangle_code):
+  rhombusblock(
+    overlay(#,(ellipse_code),
+            ~dx: 60,
+            #,(triangle_code))
+  )
+
+slide(
+  animate(fun (n):
+            make_overlay(overlay(ellipse_code.ghost(),
+                                 ellipse_code.rotate(1/10 * math.sin(2 * n * math.pi)).launder())
+                           .refocus(ellipse_code),
+                         triangle_code))
+)
+
+slide(
+  make_overlay(animate(fun (n):
+                         overlay(ellipse_code.ghost(),
+                                 ellipse_code.rotate(1/10 * math.sin(2 * n * math.pi)).launder())
+                           .refocus(ellipse_code)),
+               triangle_code)
+)
+
+fun make_eval_ellipse_overlay(n):
+  make_overlay(overlay(ellipse_code.alpha(1-n),
+                       ellipse_result.alpha(n)),
+               triangle_code)
+
+// explain_anim(animate(make_eval_ellipse_overlay).scale(0.25))
+// slide(animate(make_eval_ellipse_overlay))
+
+fun make_eval_triangle_overlay(n):
+  make_overlay(ellipse_result,
+               overlay(triangle_code.alpha(1-n),
+                       triangle_result.alpha(n)))
+
+slide(switch(
+        animate(make_eval_ellipse_overlay),
+        animate(make_eval_triangle_overlay)
+      ))
+
+let overlaid:
+  rhombusblock(
+    overlay(#,(ellipse_code),
+            ~dx: 60,
+            #,(triangle_code))
+  )
+
+fun morph(from, to):
+  switch(
+    ~join: #'splice,
+    cross_fade(from,
+               from.ghost()),
+    cross_fade(from.ghost(),
+               to)
+  )
+
+#//
+slide(
+  make_overlay(morph(ellipse_code,
+                     ellipse_result),
+               switch(
+                 triangle_code,
+                 morph(triangle_code,
+                       triangle_result)
+               ))
+)
+
+let overlaid:
+  overlaid.replace(ellipse_code,
+                   morph(ellipse_code,
+                         ellipse_result))
+let overlaid1:
+  overlaid.snapshot(overlaid.duration-1, 1)
+
+let overlaid1:
+  overlaid1.replace(inner_triangle_code,
+                    morph(inner_triangle_code,
+                          inner_triangle_result))
+let overlaid2:
+  overlaid1.snapshot(0, 1)
+
+let latest_triangle_code = overlaid2.find_rebuilt(triangle_code)
+
+let overlaid2:
+  overlaid1.replace(latest_triangle_code,
+                    morph(latest_triangle_code,
+                          triangle_result))
+
+#//
+slide(
+  switch(overlaid,
+         overlaid1,
+         overlaid2)
+)

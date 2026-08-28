@@ -1,0 +1,264 @@
+#lang rhombus/and_meta
+import:
+  slideshow open
+  pict/rhombus open        // rhombusblock, for showing code
+  draw
+  "../config.rhm"
+  "eval_tree_ext.rhm" open            // eval_steps + tree_expr + subst_step
+  "small_steps_smooth.rhm" open       // small_steps: wiggle+fade as one step
+  "../stepper/wiggle.rhm" open        // wiggle
+  "staged.rhm" as staged              // staged_slide: talk.rhm's slide registration
+  "slidehelpers.rhm" open             // callout, talk_blue
+
+export:
+  explain_picts_slides                // called from talk.rhm at the right spot
+  fish
+  blue_fish
+  red_fish
+  tank_code                           // reused by the rebuildable slides
+  water
+  // the Pict record and its later shapes, so the slides that morph it share
+  // one pict tree
+  pc_fields
+  pict_class_short
+  pict_class_plain
+  pict_class_time
+  pict_class_to_time
+  pict_class_rebuild
+  pict_class_to_rebuild
+  pict_class_props
+  pc_plain_more
+  meta:
+    tree_expr_meta
+
+// --- the Pict record, in the three shapes the talk shows it in --------------
+// One block with zero-width slots, and one filled-in version per shape. Outside
+// its slots every shape is the same pict, so `magic_move` between two of them
+// slides the shared text into its new place instead of dissolving the block --
+// which is how "in time" and "rebuildable" arrive on later slides.
+
+def pc_rtt = current_rhombus_tt()
+
+def pc_fields = blank(~width: 0, ~height: 0)   // the fields after `draw`
+def pc_w_at = blank(~width: 0, ~height: 0)     // `_at` on each accessor's name
+def pc_h_at = blank(~width: 0, ~height: 0)
+def pc_d_at = blank(~width: 0, ~height: 0)
+def pc_w_time = blank(~width: 0, ~height: 0)   // `Time -> ` on its annotation
+def pc_h_time = blank(~width: 0, ~height: 0)
+def pc_d_time = blank(~width: 0, ~height: 0)
+def pc_body = blank(~width: 0, ~height: 0)     // `:`, once the class has a body
+
+def pict_class_short:
+  @rhombusblock(
+    class Pict(width#,(pc_w_at) :: #,(pc_w_time)Real,
+               height#,(pc_h_at) :: #,(pc_h_time)Real,
+               draw#,(pc_d_at) :: #,(pc_d_time)(Surface, Real, Real) -> Void#,(pc_fields))#,(pc_body)
+  )
+
+// `pc_fields` sits at the end of the `draw` line, so the lines that fill it pull
+// back by that line's width to land under the other fields -- and that width
+// grows once the accessors take a `Time`.
+def pc_shift = pc_rtt("draw :: (Surface, Real, Real) -> Void").width
+def pc_shift_at = pc_rtt("draw_at :: Time -> (Surface, Real, Real) -> Void").width
+
+fun pc_field(shift :: Real, name :: String, annot :: String,
+             comment :: String = "") :: Pict:
+  beside(pc_rtt(name),
+         pc_rtt(" :: ").colorize(current_plain_color()),
+         pc_rtt(annot),
+         pc_rtt(",").colorize(current_paren_color()),
+         if comment == ""
+         | nothing
+         | pc_rtt("   // " +& comment).colorize(current_comment_color()))
+    .pad(~left: -shift)
+
+// `~extra` is a slot for the fields the rebuildable shape adds, so that shape is
+// this one plus two lines rather than a different block: the change stays
+// additive, and a `cross_fade` of the slot cannot shove `....` out of line.
+def pc_extra = blank(~width: 0, ~height: 0)
+
+fun pc_more(shift :: Real, ~extra: extra :: Pict = nothing,
+            field :: Pict, ...) :: Pict:
+  stack.left(pc_rtt(",").colorize(current_paren_color()),
+             field, ...,
+             extra,
+             pc_rtt("....").colorize(current_paren_color()).pad(~left: -shift))
+
+def pc_plain_more:
+  pc_more(pc_shift,
+          pc_field(pc_shift, "ascent", "Real"),
+          pc_field(pc_shift, "descent", "Real"))
+
+// in time, the box and the drawing are functions of a moment, and two fields
+// say how long the pict runs; `ascent`/`descent` go under the `....`
+def pc_time_more:
+  pc_more(pc_shift_at,
+          ~extra: pc_extra,
+          pc_field(pc_shift_at, "duration", "NonnegInt", "epochs: the time box"),
+          pc_field(pc_shift_at, "extent", "Int -> Real", "seconds per epoch"))
+
+// and rebuildable: what a replacement may swap, and how to build again
+def pc_dep_fields:
+  stack.left(pc_field(pc_shift_at, "dependencies", "List.of(Pict)", "the ~deps we listed"),
+             pc_field(pc_shift_at, "rebuild", "List.of(Pict) -> Pict", "the function we wrote"))
+
+def pc_rebuild_more = pc_time_more.replace(pc_extra, pc_dep_fields)
+def pc_time_to_rebuild:
+  pc_time_more.replace(pc_extra, cross_fade(pc_extra, pc_dep_fields))
+
+def pict_class_plain = pict_class_short.replace(pc_fields, pc_plain_more)
+
+fun pc_in_time(more :: Pict) :: Pict:
+  pict_class_short
+    .replace(pc_w_at, pc_rtt("_at"))
+    .replace(pc_h_at, pc_rtt("_at"))
+    .replace(pc_d_at, pc_rtt("_at"))
+    .replace(pc_w_time, pc_rtt("Time -> "))
+    .replace(pc_h_time, pc_rtt("Time -> "))
+    .replace(pc_d_time, pc_rtt("Time -> "))
+    .replace(pc_fields, more)
+    .replace(pc_body, pc_rtt(":").colorize(current_paren_color()))
+
+def pict_class_time = pc_in_time(pc_time_more)
+def pict_class_rebuild = pc_in_time(pc_rebuild_more)
+def pict_class_to_rebuild = pc_in_time(pc_time_to_rebuild)
+
+// The same trip, one slot at a time: every field dissolves where it stands, so
+// nothing fades but the parts that actually change. The annotations reflow to
+// their new places as the beat starts -- a `cross_fade` is as wide as the wider
+// of its two sides from the first frame -- and then `_at`, `Time -> ` and the
+// two new fields come up in place.
+def pict_class_to_time:
+  pict_class_short
+    .replace(pc_w_at, cross_fade(pc_w_at, pc_rtt("_at")))
+    .replace(pc_h_at, cross_fade(pc_h_at, pc_rtt("_at")))
+    .replace(pc_d_at, cross_fade(pc_d_at, pc_rtt("_at")))
+    .replace(pc_w_time, cross_fade(pc_w_time, pc_rtt("Time -> ")))
+    .replace(pc_h_time, cross_fade(pc_h_time, pc_rtt("Time -> ")))
+    .replace(pc_d_time, cross_fade(pc_d_time, pc_rtt("Time -> ")))
+    .replace(pc_fields, cross_fade(pc_plain_more, pc_time_more))
+    .replace(pc_body, cross_fade(pc_body, pc_rtt(":").colorize(current_paren_color())))
+
+// the old `width` and `height` survive as one moment's answer
+def pict_class_props:
+  @rhombusblock(
+    property width: width_at(Time(0, 0))
+    property height: height_at(Time(0, 0))
+  ).pad(~left: pc_rtt("  ").width)
+
+// 1. Static picts: an expression reduces, step by step, into a picture.
+def [fish_code :: Pict, fish_steps :: SmallSteps]:
+  eval_steps:
+    overlay(ellipse(~width: 100, ~height: 50, ~fill: "lightblue"),
+            ~dx: 60, ~dy: 0,
+            triangle(~size: 50, ~fill: "lightblue")
+              .rotate(1/2 * math.pi))
+
+def blue_fish = fish_steps.last.to
+
+// 2. A generic `tank`: grab the pict's width & height, so any-sized fish fits.
+def water = draw.Color(90, 165, 220, 0.4)      // semi-transparent water color
+
+tree_fun fish_func_code fish(color, height):
+  overlay(ellipse(~width: 100, ~height: 50, ~fill: color),
+          ~dx: 60, ~dy: 0,
+          triangle(~size: 50, ~fill: color)
+            .rotate(1/2 * math.pi)).scale(height / 50)
+
+
+// `tank` as a STEPPABLE function: one definition, and `tank(fish)` unfolds live
+tree_fun tank_code tank(p):
+  overlay(rectangle(~width: p.width + 20, ~height: p.height + 20,
+                    ~line: "navy", ~fill: water),
+          p)
+
+def [call_fish_code :: Pict, call_fish_steps :: SmallSteps]:
+  eval_steps:
+    def red_fish = fish("red", 30)
+
+def red_fish = call_fish_steps.last.to
+def green_fish = fish("forestgreen", 50)
+
+def [call_tank_code :: Pict, call_tank_steps :: SmallSteps]:
+  eval_steps:
+    beside(tank(red_fish),
+           tank(green_fish))
+
+
+// ---------------------------------------------------------------------------
+fun explain_picts_slides():
+  // Lead with the artifact: the fish alone motivates the code, then the code
+  // arrives underneath with a one-time note naming the reduction mechanic.
+  staged.staged_slide:
+    ~title: "Static Picts"
+    // `sustain` holds the last frame: `small_steps` does not end on a rest, so
+    // without it the final morph runs straight into the next slide
+    def reduction: small_steps(fish_code, fish_steps).sustain()
+    def goal = blue_fish
+    def code0 = reduction.snapshot(0, 0)          // the code before any step
+    def with_code = stack(~sep: 44, goal, code0)
+    // just the balloon: `callout` returns base+balloon, and fading that whole
+    // thing would take the code with it
+    def note:
+      on_ghost(with_code,
+               fun (g :~ Pict):
+                 callout(~on: g,
+                         ~at: Find.bottom(code0),
+                         ~spike: #'n,             // bubble below, pointing up
+                         ~color: talk_blue,
+                         t("this Rhombus expression becomes the fish, one step at a time")))
+    // three independently fadeable layers over one fixed layout
+    def slot = stack(~sep: 44, goal, code0.ghost())          // fish up, code held
+    def code_layer = stack(~sep: 44, goal.ghost(), code0)    // code in its slot
+    switch(slot,        // `staged_slide` fades this in
+           // code and note arrive together
+           animate(fun (n):
+                     overlay(~vert: #'top, slot, code_layer.alpha(n), note.alpha(n))),
+           // no separate beat epoch: the fade above rests on this picture and the
+           // fade below starts from it, so that press would show nothing
+           // only the note fades; the fish stays as the reference
+           animate(fun (n):
+                     overlay(~vert: #'top, slot, code_layer, note.alpha(1.0 - n))),
+           stack(~sep: 44, goal, reduction))
+        
+  
+  // Cut for time: the tank slide below carries the same idea.
+  /*
+  staged.staged_slide:
+    ~title: "Generic Fish"
+    stack(~sep: 34, ~horiz: #'left,
+          fish_func_code,
+          small_steps(call_fish_code, call_fish_steps))
+  */
+
+  // the tank function alone first, then the call site fades in beneath it
+  staged.staged_slide:
+    ~title: "A Generic Tank Function"
+    def steps = small_steps(call_tank_code, call_tank_steps)
+    fun row(below :: Pict) :: Pict:
+      stack(~sep: 34, ~horiz: #'left, tank_code, below)
+    // fade up during `steps`' own first epoch, which already rests on the
+    // un-stepped call
+    def revealed:
+      animate_map(~deps: [steps],
+                  fun (~deps: [q :~ Pict], epoch, n):
+                    if epoch == 0
+                    | q.alpha(math.min(1.0, n / 0.5))
+                    | q)
+    // `sustain` holds the reduction's last frame: `small_steps` no longer ends on
+    // `magic_move`'s trailing epoch, so without this the final morph runs straight
+    // into the next slide.
+    switch(row(steps.snapshot(0, 0).ghost()),   // just the tank function
+           row(revealed))
+      .sustain()
+
+  // 4. What IS a pict? A record with a bounding box (+ text metadata).
+  #//
+  staged.staged_slide:
+    ~title: "What is a Pict?"
+    switch(pict_class_short,
+           pict_class_short.replace(pc_fields, cross_fade(pc_fields, pc_plain_more))
+             .sustain())
+
+module main:
+  explain_picts_slides()
