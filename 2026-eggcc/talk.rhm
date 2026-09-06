@@ -1216,26 +1216,33 @@ def slide_20:
   // which edge each arrow should leave and land on from where things ended up.
   def stage_2:
     def bubble:
-      make_bubble(~color: talk_blue, ~padding: 12.0,
-                  as_pict(textbox(~width: 336.8, ~height: 48.0, ~anchor: #'center,
+      make_bubble(~color: talk_blue, ~padding: 10.0,
+                  as_pict(textbox(~width: 303.2, ~height: 43.2, ~anchor: #'center,
                                   ~wrap: #false, ~autofit: #'grow,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
                                        run("need side effects!", ~font: "Helvetica Neue",
-                                           ~size: 40.0, ~bold: #true)))))
+                                           ~size: 36.0, ~bold: #true)))))
+    // Each marker is one logo's ink. Two of these images have no alpha channel and
+    // are opaque white to their edges, so the extent has to come from where the
+    // drawing stops being white -- MLIR's artwork is 507pt of its 634pt box, and
+    // aiming at the box would leave the arrowhead short of the logo by 60pt.
     def m_numba = pc.blank(~width: 256.0, ~height: 250.4)
     def m_luminal = pc.blank(~width: 264.6, ~height: 264.6)
-    def m_cranelift = pc.blank(~width: 404.6, ~height: 232.2)
-    def m_mlir = pc.blank(~width: 633.9, ~height: 253.6)
+    def m_cranelift = pc.blank(~width: 404.6, ~height: 232.1)
+    def m_mlir = pc.blank(~width: 507.1, ~height: 169.5)
     fun place(base, p, x, y):
       pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, p)
+    // The bubble goes in the band between the two rows, left of centre: the right of
+    // that band is taken by the "Luminal" note and the left by "(Herbie)", and this
+    // is the clear stretch between them.
     def placed:
       place(place(place(place(place(pc.blank(~width: slide_width, ~height: slide_height),
-                                    bubble, 60.0, 533.5),
+                                    bubble, 420.0, 545.0),
                               m_numba, 702.7, 288.8),
                         m_luminal, 1571.6, 257.5),
-                  m_cranelift, 809.2, 699.0),
-            m_mlir, 1256.3, 698.3)
+                  m_cranelift, 809.2, 699.1),
+            m_mlir, 1319.7, 740.3)
     point_at(~on: placed, ~at: [m_numba, m_luminal, m_cranelift, m_mlir], bubble)
 
   staged(base, [stage_1, stage_2])

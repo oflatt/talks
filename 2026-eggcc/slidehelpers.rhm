@@ -322,27 +322,31 @@ fun point_at(~on: on :: Pict,
              ~arrow_size: arrow_size :: Real = 18,
              bubble :: Pict) :: Pict:
   def line_color = as_color(color)
-  // the edge of `p` that faces (tx, ty), given p's own centre at (cx, cy). Whichever
-  // of the two gaps is larger decides the side, which is the usual rule and is what
-  // keeps an arrow from leaving a corner at a grazing angle.
-  fun facing(p :: Pict, cx :: Real, cy :: Real, tx :: Real, ty :: Real) :: Find:
-    if math.abs(tx - cx) >= math.abs(ty - cy)
-    | (if tx > cx | Find.right(p) | Find.left(p))
-    | (if ty > cy | Find.bottom(p) | Find.top(p))
+  // Where a line from p's centre heading (dx, dy) leaves p's box: scale the
+  // direction until it meets whichever side it reaches first. That is what "point
+  // at the nearest part" means here, and it beats picking a side outright -- an
+  // arrow to something far off to one side and a little below should leave along
+  // the side, but land high on the target's edge rather than at its middle, and
+  // that difference is what keeps it clear of whatever sits between the two.
+  fun edge_toward(p :: Pict, dx :: Real, dy :: Real) :: Find:
+    def sx = if dx == 0 | 1.0e9 | (p.width / 2) / math.abs(dx)
+    def sy = if dy == 0 | 1.0e9 | (p.height / 2) / math.abs(dy)
+    def s = math.min(sx, sy)
+    Find.center(p, ~dx: dx * s, ~dy: dy * s)
   def (bx, by) = Find.center(bubble).in(on)
   // aim off the original, not off each partly-drawn result: adding an arrow does
   // not move anything, but measuring once is clearer than relying on that
   def aims:
-    for List (tg in targets):
+    for List (tg :: Pict in targets):
       def (tx, ty) = Find.center(tg).in(on)
-      [tg, tx, ty]
-  for values(p :~ Pict = on) (aim in aims):
+      [tg, tx - bx, ty - by]
+  for values(acc :~ Pict = on) (aim in aims):
     def tg :~ Pict = aim[0]
-    def tx :~ Real = aim[1]
-    def ty :~ Real = aim[2]
-    connect(~on: p,
-            facing(bubble, bx, by, tx, ty),
-            facing(tg, tx, ty, bx, by),
+    def dx :~ Real = aim[1]
+    def dy :~ Real = aim[2]
+    connect(~on: acc,
+            edge_toward(bubble, dx, dy),
+            edge_toward(tg, -dx, -dy),
             ~style: ConnectStyle.arrow,
             ~line: line_color,
             ~line_width: lw,
