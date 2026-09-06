@@ -642,8 +642,11 @@ fun outline_to_header(items :: List.of(String),
                       outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color))
   // `magic_move`'s epoch 0 *is* the move and its epoch 1 is the settled result --
   // measured, not assumed -- so it is the tail that has to go, not the head.
+  // `~other: #'fade` -- the picts the two layouts do *not* have in common are the
+  // three labels the header drops, and `magic_move`'s default `#'switch` cuts them
+  // out abruptly. Fading them lets them go with the discs they belong to.
   switch(opening,
-         magic_move(full, head, ~extent: extent).time_pad(~after: -1))
+         magic_move(full, head, ~extent: extent, ~other: #'fade).time_pad(~after: -1))
 
 fun section_header(items :: List.of(String),
                    ~at: at :: Int,
