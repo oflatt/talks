@@ -17,6 +17,7 @@ export:
   code_callout
   subst
   multi_callout
+  point_at
   callout_note
   absolute_radius
   brace
@@ -301,6 +302,51 @@ fun multi_callout(~on: on :: Pict,
           ~dy: dy - oy,
           on, bubble)
     .refocus(on)
+
+// Point a bubble at several picts at once, wherever they are.
+//
+// `multi_callout` draws its body and every spike as a single path, which is what
+// makes the outline itself protrude -- but one path means every spike leaves the
+// same edge, so every target has to be on that side of the bubble. This is the
+// other trade: separate arrows, so the targets can sit anywhere around it. Each
+// arrow leaves whichever edge of the bubble faces its target and lands on whichever
+// edge of the target faces back, so none of them has to be aimed by hand.
+//
+// `on` has to contain the bubble and the targets already -- they are found within
+// it, not placed by it -- which is what lets the aiming be worked out from where
+// things actually ended up.
+fun point_at(~on: on :: Pict,
+             ~at: targets :: List.of(Pict),
+             ~color: color :: draw.Color || String = talk_blue,
+             ~line_width: lw :: Real = 5.0,
+             ~arrow_size: arrow_size :: Real = 18,
+             bubble :: Pict) :: Pict:
+  def line_color = as_color(color)
+  // the edge of `p` that faces (tx, ty), given p's own centre at (cx, cy). Whichever
+  // of the two gaps is larger decides the side, which is the usual rule and is what
+  // keeps an arrow from leaving a corner at a grazing angle.
+  fun facing(p :: Pict, cx :: Real, cy :: Real, tx :: Real, ty :: Real) :: Find:
+    if math.abs(tx - cx) >= math.abs(ty - cy)
+    | (if tx > cx | Find.right(p) | Find.left(p))
+    | (if ty > cy | Find.bottom(p) | Find.top(p))
+  def (bx, by) = Find.center(bubble).in(on)
+  // aim off the original, not off each partly-drawn result: adding an arrow does
+  // not move anything, but measuring once is clearer than relying on that
+  def aims:
+    for List (tg in targets):
+      def (tx, ty) = Find.center(tg).in(on)
+      [tg, tx, ty]
+  for values(p :~ Pict = on) (aim in aims):
+    def tg :~ Pict = aim[0]
+    def tx :~ Real = aim[1]
+    def ty :~ Real = aim[2]
+    connect(~on: p,
+            facing(bubble, bx, by, tx, ty),
+            facing(tg, tx, ty, bx, by),
+            ~style: ConnectStyle.arrow,
+            ~line: line_color,
+            ~line_width: lw,
+            ~arrow_size: arrow_size)
 
 fun callout_note(~color: color :: draw.Color || String = talk_blue,
                  ~padding: padding :: maybe(Real) = #false,

@@ -1205,23 +1205,38 @@ def slide_20:
                                              run("None handle side-effects!", ~font: "Helvetica Neue",
                                                  ~size: 50.0, ~bold: #true)))))))
 
+  // The TODO this slide carried: a bubble pointing at the tools that need effects.
+  //
+  // The four are Numba (Python Simulations), Luminal (ML Kernels), Cranelift (WASM)
+  // and MLIR (User DSL Optimizations). The bubble sits in the band between the two
+  // rows, to the left of all four, with an arrow to each.
+  //
+  // Each marker is the size of that logo's *ink*, so an arrow stops on the artwork
+  // rather than out in the transparent padding around it. `point_at` works out
+  // which edge each arrow should leave and land on from where things ended up.
   def stage_2:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(88.231, 630.689, ~tag: "None handle side-effects! (3)",
-                  group_pict(~width: 1694.89, ~height: 306.607,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (2)",
-                                shape_pict(~width: 1694.89, ~height: 137.859,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 13276")]),
-                                           ~fill: hex("FFE599"))),
-                             at(5.36, 20.399,
-                                ~tag: "TODO point at luminal, numba, wasm, and mlir with a bubble for “need side effects!”",
-                                textbox(~width: 1684.169, ~height: 286.207, ~anchor: #'center,
-                                        ~insets: insets(10.0, 10.0, 10.0, 10.0),
-                                        para(~align: #'center,
-                                             run(
-                                                 "TODO point at luminal, numba, wasm, and mlir with a bubble for “need side effects!”",
-                                                 ~font: "Helvetica Neue", ~size: 50.0, ~bold: #true)))))))
+    def bubble:
+      make_bubble(~color: talk_blue, ~padding: 12.0,
+                  as_pict(textbox(~width: 336.8, ~height: 48.0, ~anchor: #'center,
+                                  ~wrap: #false, ~autofit: #'grow,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("need side effects!", ~font: "Helvetica Neue",
+                                           ~size: 40.0, ~bold: #true)))))
+    def m_numba = pc.blank(~width: 256.0, ~height: 250.4)
+    def m_luminal = pc.blank(~width: 264.6, ~height: 264.6)
+    def m_cranelift = pc.blank(~width: 404.6, ~height: 232.2)
+    def m_mlir = pc.blank(~width: 633.9, ~height: 253.6)
+    fun place(base, p, x, y):
+      pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, p)
+    def placed:
+      place(place(place(place(place(pc.blank(~width: slide_width, ~height: slide_height),
+                                    bubble, 60.0, 533.5),
+                              m_numba, 702.7, 288.8),
+                        m_luminal, 1571.6, 257.5),
+                  m_cranelift, 809.2, 699.0),
+            m_mlir, 1256.3, 698.3)
+    point_at(~on: placed, ~at: [m_numba, m_luminal, m_cranelift, m_mlir], bubble)
 
   staged(base, [stage_1, stage_2])
 
