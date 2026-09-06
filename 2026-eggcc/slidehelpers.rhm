@@ -13,6 +13,8 @@ export:
   make_bubble
   make_flash
   make_node
+  arrow
+  arrows
   callout
   code_callout
   subst
@@ -370,6 +372,81 @@ fun callout_note(~color: color :: draw.Color || String = talk_blue,
                ~line: line_color,
                ~line_width: border_width,
                ~& kws)
+
+// ---------------------------------------------------------------------------
+// Arrows between picts that are already placed on `on`.
+//
+// Ported from `autoarrow` in ../2022-explanations-talk/slidehelpers.rkt, with one
+// change: the line runs along the segment between the two centres and stops at
+// each pict's bounding box, instead of leaving from whichever side faces the
+// other pict. A diagonal edge then meets a box where a ruler would put it, which
+// is what Keynote draws for a connector, and a fan of edges out of one node
+// spreads around its border instead of bunching up at one side's midpoint.
+// `~from_at` and `~to_at` override either end, as `#:finder1`/`#:finder2` did.
+//
+// `from` and `to` may be Racket picts, such as the ones glide-pptx's runtime
+// builds, as long as they are the very picts placed on `on`: that is how they
+// are found again.
+
+fun as_pict(q) :: Pict:
+  if q is_a Pict | q | Pict.from_handle(q)
+
+// Where a ray from the centre of a `w` by `h` box in direction (dx, dy) leaves
+// the box, as a multiple of (dx, dy).
+fun border_scale(dx :: Real, dy :: Real, w :: Real, h :: Real) :: Real:
+  def far = 1.0e9  // a ray with no run (or no rise) never reaches that pair of sides
+  def tx = if math.abs(dx) > 1.0e-9 | (w / 2) / math.abs(dx) | far
+  def ty = if math.abs(dy) > 1.0e-9 | (h / 2) / math.abs(dy) | far
+  math.min(tx, ty)
+
+fun arrow(~on: on :: Pict,
+          from_in,
+          to_in,
+          ~style: style :: ConnectStyle = #'arrow,
+          ~color: color :: draw.Color || String = "black",
+          ~line_width: lw :: Real = border_width,
+          // the original's 25 on a 6-wide line; `connect` itself defaults to 16
+          ~arrow_size: arrow_size :: maybe(Real) = #false,
+          ~line_style: line_style :: ConnectLineStyle = #'solid,
+          // clearance between each box and the line
+          ~gap: gap :: Real = 0,
+          ~from_at: from_at :: maybe(Find) = #false,
+          ~to_at: to_at :: maybe(Find) = #false,
+          ~label: label :: maybe(Pict) = #false,
+          ~label_dx: label_dx :: Real = 0,
+          ~label_dy: label_dy :: Real = -10,
+          ~order: order :: OverlayOrder = #'front) :: Pict:
+  def from = as_pict(from_in)
+  def to = as_pict(to_in)
+  def (fx, fy) = Find.center(from).in(on)
+  def (tx, ty) = Find.center(to).in(on)
+  def dx = tx - fx
+  def dy = ty - fy
+  def dist = math.sqrt(dx * dx + dy * dy)
+  cond
+  | dist < 1.0e-9: on   // one on top of the other: nothing to draw
+  | ~else:
+      def ux = dx / dist
+      def uy = dy / dist
+      def tf = border_scale(dx, dy, from.width, from.height)
+      def tt = border_scale(dx, dy, to.width, to.height)
+      connect(~on: on,
+              from_at || Find.center(from, ~dx: dx * tf + ux * gap, ~dy: dy * tf + uy * gap),
+              to_at || Find.center(to, ~dx: -(dx * tt + ux * gap), ~dy: -(dy * tt + uy * gap)),
+              ~style: style,
+              ~line: as_color(color),
+              ~line_width: lw,
+              ~arrow_size: arrow_size || 4 * lw,
+              ~line_style: line_style,
+              ~label: label,
+              ~label_dx: label_dx,
+              ~label_dy: label_dy,
+              ~order: order)
+
+// Several arrows in one style: `edges` is a list of `[from, to]` pairs.
+fun arrows(~on: on :: Pict, edges :: List.of(List), ~& kws) :: Pict:
+  for values(p = on) ([from, to] in edges):
+    arrow(~on: p, from, to, ~& kws)
 
 // ---------------------------------------------------------------------------
 
