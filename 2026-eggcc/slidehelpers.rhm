@@ -463,53 +463,69 @@ fun arrows(~on: on :: Pict, edges :: List.of(List), ~& kws) :: Pict:
     arrow(~on: p, from, to, ~& kws)
 
 // ---------------------------------------------------------------------------
-// Where we are in the talk.
+// Where we are in the talk. This is the ICFP talk's outline: a numbered disc per
+// section down a spine, each disc its own hue, the one we are on lit and haloed
+// and the others dimmed back, with the spine filled in as far as we have got.
 //
-// A numbered list: one disc per section on a spine, the sections already covered
-// filled in, the one being started lit, the rest dim. On a divider slide the
-// labels write themselves out; then the whole thing magic-moves into the top
-// margin, the discs flying from a column into a row and the other sections'
-// labels fading as they go.
-//
-// It is a `magic_move` rather than a cross-fade because both layouts are built
-// from the *same* disc and label picts, so each one drifts to its own new place
-// and scale. Build them twice and the move degrades to a dissolve, which is why
-// everything below takes the pieces rather than making its own.
+// What is new here is the ending: the list then magic-moves into the top margin,
+// the discs flying from a column into a row and the other sections' labels fading
+// out on the way. That only works because the settled discs and labels are built
+// once and handed to both layouts -- `magic_move` matches picts by identity, so a
+// disc rebuilt per frame would match nothing and the move would be a dissolve.
 
 fun clamp01(x :: Real) :: Real: math.min(1.0, math.max(0.0, x))
+fun absr(x :: Real) :: Real: if x < 0.0 | -x | x
 fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
 fun smooth(t :: Real) :: Real:
   def u = clamp01(t)
   u * u * (3.0 - 2.0 * u)
 
-def outline_dim = draw.Color(186, 186, 186)
-def outline_radius = 46.0        // disc radius, full size
-def outline_row = 150.0          // one row of the list
-def outline_gap = 44.0           // disc to label
-def outline_text = 46.0          // label font size, full size
+// A fully saturated rainbow colour for t in 0..1 (HSV hue -> RGB), as in the
+// ICFP talk's `rainbow.rhm`; inlined rather than depending on that whole module.
+fun hue_color(t :: Real) :: draw.Color:
+  def h = clamp01(t) * 6.0
+  fun byte(x :: Real):
+    math.min(255, math.max(0, math.exact(math.floor(clamp01(x) * 255.0))))
+  draw.Color(byte(absr(h - 3.0) - 1.0), byte(2.0 - absr(h - 2.0)), byte(2.0 - absr(h - 4.0)))
 
-// scale a text pict to a wanted height, since `t` follows `current_font`
-fun at_height(p :: Pict, h :: Real) :: Pict: p.scale(h / p.height)
+def outline_r = 54.0             // disc radius
+// The lit disc carries a halo wider than the disc, and `place_center` at x = r
+// would put its left edge past zero -- which grows the row's bounding box to the
+// left and shifts every row placed after it, so the discs stop lining up. The
+// column sits far enough in for the widest halo to fit.
+def outline_left = 44.0
+def outline_glow = 50.0          // halo, added to the disc's diameter
+def outline_row = 172.0          // one row of the list
+def outline_gap = 56.0           // disc to label
+def outline_text = 52.0          // label font size
 
-fun section_disc(i :: Int, ~state: state, ~color: color) :: Pict:
-  def line_color = as_color(color)
-  def fill = if state == #'ahead | outline_dim | line_color
-  def n = at_height(bold("" +& (i + 1)), outline_radius * 0.86)
-  overlay(circle(~size: outline_radius * 2, ~fill: fill, ~line: #false),
-          n.colorize(draw.Color(255, 255, 255)))
+fun hue_of(i :: Int, n :: Int) :: draw.Color:
+  hue_color(1.0 * i / math.max(1.0, 1.0 * (n - 1)) * 0.85)
 
-// The label as a `write_out`, so it can trace itself onto the slide. The settled
-// snapshot is taken once and shared: it is what the header shows and what
-// `magic_move` matches on, and a fresh `snapshot` each frame would be a different
-// pict every time and match nothing.
-fun section_writer(str :: String, ~state: state, ~color: color) :: Pict:
-  def line_color = as_color(color)
-  def ink = if state == #'ahead | outline_dim | line_color
+// `hl` is how lit this one is, 0 to 1.
+fun outline_disc(i :: Int, n :: Int, hl :: Real) :: Pict:
+  def hue = hue_of(i, n)
+  def rr = outline_r * (1.0 + 0.18 * hl)
+  def num:
+    def b = bold("" +& (i + 1))
+    b.scale(outline_r * 0.86 / b.height * (1.0 + 0.12 * hl))
+  def core = overlay(circle(~size: rr * 2, ~fill: hue, ~line: #false),
+                     num.colorize(draw.Color(255, 255, 255)))
+  def glow = circle(~size: rr * 2 + outline_glow, ~fill: hue, ~line: #false).alpha(0.34 * hl)
+  overlay(glow, core.alpha(lerp(0.55, 1.0, hl)))
+
+fun outline_writer(str :: String, ~color: color) :: Pict:
   write.write_out(str, ~font: current_font() with (size = outline_text),
-                  ~color: ink, ~extent: 1.0)
+                  ~color: color, ~extent: 1.0)
 
-fun state_of(i :: Int, at :: Int):
-  if i < at | #'done | (if i == at | #'here | #'ahead)
+// A label at highlight `hl`: the accent when we are on it, ordinary text dimmed
+// back when we are not, and a touch larger when lit.
+//
+// It takes the two colourings rather than one and a `colorize`, because `colorize`
+// only replaces an *inherited* colour and `write_out` draws with an explicit one --
+// so recolouring a written label does nothing and every label comes out black.
+fun outline_label(dim :: Pict, lit :: Pict, hl :: Real) :: Pict:
+  overlay(dim.alpha(lerp(0.62, 0.0, hl)), lit.alpha(hl)).scale(lerp(1.0, 1.08, hl))
 
 fun place_center(base :: Pict, p :: Pict, cx :: Real, cy :: Real) :: Pict:
   overlay(~horiz: #'left, ~vert: #'top,
@@ -517,72 +533,57 @@ fun place_center(base :: Pict, p :: Pict, cx :: Real, cy :: Real) :: Pict:
 fun place_left(base :: Pict, p :: Pict, x :: Real, cy :: Real) :: Pict:
   overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: cy - p.height / 2, base, p)
 
-// The list, full size. `reveal` is how far the write-out has got, 0 to 1 per row;
-// pass all-ones for the settled picture.
 fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
-                   ~at: at :: Int, ~canvas: canvas :: Pict,
+                   ~current: current :: Real, ~canvas: canvas :: Pict,
                    ~color: color = talk_blue,
-                   ~writers: writers :: maybe(List) = #false,
-                   ~reveal: reveal :: maybe(List) = #false) :: Pict:
+                   ~disc_prog: disc_prog :: maybe(List) = #false) :: Pict:
   def line_color = as_color(color)
   def n = discs.length()
   def lab_w = for values(m :~ Real = 0.0) (p :~ Pict in labels): math.max(m, p.width)
-  def w = outline_radius * 2 + outline_gap + lab_w
+  def disc_cx = outline_left + outline_r
+  def w = disc_cx + outline_r + outline_gap + lab_w
   def h = n * outline_row
   def base = blank(~width: w, ~height: h)
   fun row_cy(i :: Real) :: Real: i * outline_row + outline_row / 2
   def y0 = row_cy(0.0)
   def yN = row_cy(1.0 * (n - 1))
-  // the spine, and the part of it already walked
   def spine:
     place_center(base,
-                 rectangle(~width: 9.0, ~height: yN - y0, ~fill: pale(line_color),
-                           ~line: #false, ~rounded: -0.5),
-                 outline_radius, (y0 + yN) / 2)
+                 rectangle(~width: 9.0, ~height: yN - y0,
+                           ~fill: draw.Color(120, 120, 120), ~line: #false,
+                           ~rounded: -0.5).alpha(0.22),
+                 disc_cx, (y0 + yN) / 2)
+  def cc = math.max(0.0, math.min(1.0 * (n - 1), current))
+  def yfill = row_cy(cc)
   def walked:
-    if at > 0
+    if yfill - y0 > 0.5
     | place_center(spine,
-                   rectangle(~width: 9.0, ~height: row_cy(1.0 * at) - y0,
-                             ~fill: line_color, ~line: #false, ~rounded: -0.5),
-                   outline_radius, (y0 + row_cy(1.0 * at)) / 2)
+                   rectangle(~width: 9.0, ~height: yfill - y0, ~fill: line_color,
+                             ~line: #false, ~rounded: -0.5),
+                   disc_cx, (y0 + yfill) / 2)
     | spine
   recur go(i = 0, acc :~ Pict = walked):
     if i >= n
     | overlay(canvas, acc).refocus(canvas)
-    | def rv = (if reveal | (reveal[i] :~ Real) | 1.0)
-      def d = discs[i].scale(smooth(clamp01(rv * 1.6)))
-      def l = labels[i]
-      def acc1 = place_center(acc, d, outline_radius, row_cy(1.0 * i))
-      // the label is clipped in from the left as it writes, so it grows rather
-      // than fades -- the ghost holds the row's width so nothing reflows
-      def shown:
-        overlay(~horiz: #'left, ~vert: #'top,
-                l.ghost(), l.alpha(clamp01((rv - 0.15) / 0.85)))
-      go(i + 1, place_left(acc1, shown, outline_radius * 2 + outline_gap,
-                           row_cy(1.0 * i)))
+    | def dp :~ Real = (if disc_prog | (disc_prog[i] :~ Real) | 1.0)
+      def acc1 = place_center(acc, discs[i].scale(smooth(dp)), disc_cx, row_cy(1.0 * i))
+      go(i + 1, place_left(acc1, labels[i], disc_cx + outline_r + outline_gap, row_cy(1.0 * i)))
 
-// The same pieces, shrunk into the top margin: discs in a row, and the label of
-// the section being started beside them. The other labels are simply absent, so
-// `magic_move` fades them out on the way.
+// The same discs and labels shrunk into the top margin. Only the section we are
+// on keeps its label; the rest are simply absent, so `magic_move` fades them.
 fun header_layout(discs :: List.of(Pict), labels :: List.of(Pict),
                   ~at: at :: Int, ~canvas: canvas :: Pict,
-                  ~disc_scale: ds :: Real = 0.34,
-                  ~text_scale: ts :: Real = 0.42,
-                  ~dx: dx :: Real = 64.0, ~cy: cy :: Real = 34.0) :: Pict:
+                  ~disc_scale: ds :: Real = 0.30,
+                  ~text_scale: ts :: Real = 0.44,
+                  ~dx: dx :: Real = 64.0, ~cy: cy :: Real = 36.0) :: Pict:
   def n = discs.length()
-  def step = outline_radius * 2 * ds + 18.0
-  def after = dx + n * step + 10.0
+  def step = outline_r * 2 * ds + 20.0
   recur go(i = 0, acc :~ Pict = canvas):
     if i >= n
-    | place_left(acc, labels[at].scale(ts), after, cy).refocus(canvas)
+    | place_left(acc, labels[at].scale(ts), dx + n * step + 14.0, cy).refocus(canvas)
     | go(i + 1, place_center(acc, discs[i].scale(ds),
-                             dx + outline_radius * ds + i * step, cy))
+                             dx + outline_r * ds + i * step, cy))
 
-// A divider: the outline, then the move up into the header.
-//
-// `~intro` writes the labels out one after another, for the first time the
-// outline is seen. Later dividers skip it -- the list is already familiar, and
-// what matters is which disc is lit.
 fun outline_to_header(items :: List.of(String),
                       ~at: at :: Int,
                       ~canvas: canvas :: Pict,
@@ -590,33 +591,73 @@ fun outline_to_header(items :: List.of(String),
                       ~intro: intro :: Boolean = #false,
                       ~extent: extent :: Real = 1.2) :: Pict:
   def n = items.length()
-  def discs = for List (i in 0..n): section_disc(i, ~state: state_of(i, at), ~color: color)
-  def writers = for List (i in 0..n): section_writer(items[i], ~state: state_of(i, at), ~color: color)
-  def labels = for List (w :~ Pict in writers): w.snapshot(0, 1.0)
-  def full = outline_layout(discs, labels, ~at: at, ~canvas: canvas, ~color: color)
+  def line_color = as_color(color)
+  def writers = for List (s in items): outline_writer(s, ~color: draw.Color(0, 0, 0))
+  def written = for List (w :~ Pict in writers): w.snapshot(0, 1.0)
+  def written_lit = for List (s in items):
+                      outline_writer(s, ~color: line_color).snapshot(0, 1.0)
+  // the settled pieces, built once: these are what the header shows and what the
+  // move matches on
+  def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
+  def labels = for List (i in 0..n):
+                 outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
+  def full = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: canvas, ~color: color)
   def head = header_layout(discs, labels, ~at: at, ~canvas: canvas)
   def opening:
     if intro
     | block:
+        // each row writes itself out, its disc popping in just ahead of the text
         def step = 0.62 / math.max(1.0, 1.0 * n)
-        animate(~extent: 2.4,
+        animate(~extent: 2.6,
                 fun (p):
-                  def reveal = for List (i in 0..n): clamp01((p - i * step) / 0.36)
-                  outline_layout(discs, labels, ~at: at, ~canvas: canvas,
-                                 ~color: color, ~writers: writers, ~reveal: reveal))
-    | full
-  magic_move(opening, head, ~extent: extent)
+                  if p >= 1.0
+                  | full
+                  | block:
+                      def prog = for List (i in 0..n): clamp01((p - i * step) / 0.36)
+                      def ls = for List (i in 0..n):
+                                 def rv = prog[i]
+                                 def lab = outline_label(written[i], written_lit[i],
+                                                         (if i == at | clamp01((p - 0.84) / 0.16) | 0.0))
+                                 if rv >= 1.0
+                                 | lab
+                                 | overlay(~horiz: #'left, ~vert: #'top,
+                                           lab.ghost(),
+                                           (writers[i] :~ Pict).snapshot(0, clamp01(rv)))
+                      def ds = for List (i in 0..n):
+                                 outline_disc(i, n, (if i == at | clamp01((p - 0.84) / 0.16) | 0.0))
+                      outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
+                                     ~canvas: canvas, ~color: color, ~disc_prog: prog))
+    | block:
+        // the marker walking down from the section just finished to this one
+        animate(~extent: 1.4,
+                fun (p):
+                  if p >= 1.0
+                  | full
+                  | block:
+                      def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
+                      def ds = for List (i in 0..n):
+                                 outline_disc(i, n, clamp01(1.0 - absr(cur - i)))
+                      def ls = for List (i in 0..n):
+                                 outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
+                      outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color))
+  // `magic_move`'s epoch 0 *is* the move and its epoch 1 is the settled result --
+  // measured, not assumed -- so it is the tail that has to go, not the head.
+  switch(opening,
+         magic_move(full, head, ~extent: extent).time_pad(~after: -1))
 
-// The header on its own, to sit above the slides of a section. Built the same way
-// as the divider's, so the move lands exactly where this begins.
 fun section_header(items :: List.of(String),
                    ~at: at :: Int,
                    ~canvas: canvas :: Pict,
                    ~color: color = talk_blue) :: Pict:
   def n = items.length()
-  def discs = for List (i in 0..n): section_disc(i, ~state: state_of(i, at), ~color: color)
+  def line_color = as_color(color)
+  def written = for List (s in items):
+                  outline_writer(s, ~color: draw.Color(0, 0, 0)).snapshot(0, 1.0)
+  def written_lit = for List (s in items):
+                      outline_writer(s, ~color: line_color).snapshot(0, 1.0)
+  def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
   def labels = for List (i in 0..n):
-                 section_writer(items[i], ~state: state_of(i, at), ~color: color).snapshot(0, 1.0)
+                 outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
   header_layout(discs, labels, ~at: at, ~canvas: canvas)
 
 // A horizontal curly brace; `#'down` puts the tip at the bottom.
