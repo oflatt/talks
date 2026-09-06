@@ -13,8 +13,6 @@ import:
   // Prefixed, not `open`: rhombus/pict and the runtime above both export
   // `blank`, and opening both would make that name ambiguous.
   pict as pc
-  // for the font check below
-  draw
 
 export:
   slide_width
@@ -45,56 +43,30 @@ def slide_height = 1080.0
 current_default_font("PT Mono")
 
 // ------------------------------------------------------------------------ fonts
-// racket/draw substitutes silently when a family is missing, and a substitute with
-// different metrics is exactly what goes wrong here: line spacing in this runtime
-// is a percentage of the *font size*, so the leading does not move when the face
-// does -- only the substitute's ink height does. With Noto Sans standing in for
-// Helvetica Neue, the 116pt title's two lines overlapped by 5.6pt and ran together.
+// racket/draw substitutes silently when a family is missing, and a substitute
+// with different metrics is exactly what goes wrong here: line spacing in this
+// runtime is a percentage of the *font size*, so the leading does not move when
+// the face does -- only the substitute's ink height does. With Noto Sans
+// standing in for Helvetica Neue, the 116pt title's two lines overlapped by
+// 5.6pt and ran together.
 //
-// So name every family the deck asks for, and refuse to run on the wrong one. A
-// family may declare a stand-in, for the case where it cannot be installed at all
-// (Helvetica Neue is Apple's). The stand-in must itself be installed, and the
-// system must actually resolve the original name to it -- which has to be
-// measured, because a `Font` reports the face you asked for, not the one you got.
-def font_uses:
-  //  family named in the deck  stand-in, or #false to require the real thing
-  [["PT Mono",               #false],
-   ["Helvetica Neue",        "Nimbus Sans"],   // Helvetica clone, Helvetica metrics
-   ["Helvetica Neue Medium", "Nimbus Sans"],
-   ["Arial",                 "Arimo"],         // metric-compatible with Arial
-   ["Times New Roman",       "Tinos"]]         // metric-compatible with Times
-
-block:
-  def installed = draw.Font.get_names()
-  def probe = draw.Bitmap([1, 1]).make_dc()
-  // long enough that two faces of different widths cannot agree by accident
-  def sample = "Efficient Extraction from Effectful E-Graphs 0123456789"
-  fun width(family :: String) :: Real:
-    probe.font := draw.Font(~name: family, ~size: 64.0)
-    def (w, _, _, _) = probe.text_extent(sample)
-    w
-  fun absent(family :: String, detail :: String):
-    error(~who: #'talk,
-          "required font is not installed" ++ detail,
-          error.text(~label: "font", family))
-  for (use in font_uses):
-    def family = use[0]
-    def stand_in = use[1]
-    unless installed.contains(family)
-    | cond
-      | !stand_in:
-          absent(family, "")
-      | !installed.contains(stand_in):
-          absent(family, "; the stand-in it declares is missing too")
-      | math.abs(width(family) - width(stand_in)) > 0.5:
-          error(~who: #'talk,
-                "font resolves to something other than the stand-in it declares",
-                error.text(~label: "font", family),
-                error.text(~label: "stand-in", stand_in),
-                error.text(~label: "fix", "alias it in fontconfig, e.g."
-                             ++ " ~/.config/fontconfig/conf.d/60-helvetica-neue-alias.conf"))
-      | ~else:
-          #void
+// So name every family the deck asks for and refuse to run on the wrong one. A
+// family may declare a stand-in, for the case where it cannot be installed at
+// all (Helvetica Neue is Apple's); the stand-in has to be installed, and the
+// name has to actually resolve to it, which is checked by measuring -- a font
+// reports the face that was asked for, not the one that was drawn.
+//
+// `fonts` is a folder beside this file. Anything in it is loaded before a
+// single glyph is measured, so a deck can carry the faces it is set in rather
+// than hope for them: `raco glide fonts talk.rhm` puts them there.
+register_fonts("fonts")
+check_fonts(
+  ["PT Mono"],
+  ["Helvetica Neue", "Nimbus Sans"],          // Helvetica clone, Helvetica metrics
+  ["Helvetica Neue Medium", "Nimbus Sans"],
+  ["Arial", "Arimo"],                         // metric-compatible with Arial
+  ["Times New Roman", "Tinos"]                // metric-compatible with Times
+)
 
 // Images sit next to this file, so the program travels as a folder.
 def media = media_lookup("media")
@@ -112,7 +84,7 @@ fun staged(base_canvas, stages):
 
 // -------------------------------------------------------------------------------------
 // slide_1
-def slide_1 = slide_canvas(
+fun slide_1(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // unknown.png (id 88)
@@ -189,7 +161,7 @@ def slide_1 = slide_canvas(
 // exported as `line` shapes carried a placeholder 100x100 instead, and since
 // `~anchor: #'center` centres the text in its box, that sat them 17.7pt lower
 // than their neighbours and pushed them down onto the logos.
-def slide_2:
+fun slide_2():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -365,7 +337,7 @@ def slide_2:
 // element -- so they collapse into a base picture and 5 reveals.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_12:
+fun slide_12():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -612,7 +584,7 @@ def slide_12:
 
 // -------------------------------------------------------------------------------------
 // slide_18: Slide 9
-def slide_18 = slide_canvas(
+fun slide_18(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // Slide Number (id 321)
@@ -869,7 +841,7 @@ def slide_18 = slide_canvas(
 
 // -------------------------------------------------------------------------------------
 // slide_19: Slide 10
-def slide_19 = slide_canvas(
+fun slide_19(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // Equivalence Graph (E-Graph) (id 375)
@@ -1146,7 +1118,7 @@ def slide_19 = slide_canvas(
 // superset of the stage before, so they collapse back into one.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_20:
+fun slide_20():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -1313,7 +1285,7 @@ def slide_20:
 // element -- so they collapse into a base picture and 2 reveals.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_23:
+fun slide_23():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -1497,7 +1469,7 @@ def slide_23:
 //     rather than the animation; it stays 4.0 throughout.
 //   - the shapes inside `Group` are only renumbered ("Shape" -> "Shape (3)") from
 //     slide to slide, which is the exporter naming them afresh. They draw the same.
-def slide_26:
+fun slide_26():
   // everything that is on screen the whole time
   def base_canvas:
     slide_canvas(
@@ -1818,7 +1790,7 @@ def slide_26:
 // element -- so they collapse into a base picture and 1 reveals.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_29:
+fun slide_29():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -2230,7 +2202,7 @@ def slide_29:
 
 // -------------------------------------------------------------------------------------
 // slide_31: Slide 20
-def slide_31 = slide_canvas(
+fun slide_31(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // Redundant Update Elimination (id 765)
@@ -2705,7 +2677,7 @@ def slide_31 = slide_canvas(
 // element -- so they collapse into a base picture and 1 reveals.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_32:
+fun slide_32():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -3246,7 +3218,7 @@ def slide_32:
 // superset of the stage before, so they collapse back into one.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_34:
+fun slide_34():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -3332,7 +3304,7 @@ def slide_34:
 
 // -------------------------------------------------------------------------------------
 // slide_36: Slide 24
-def slide_36 = slide_canvas(
+fun slide_36(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // Fast Effect-safe Extraction in Practice (id 1016)
@@ -3362,7 +3334,7 @@ def slide_36 = slide_canvas(
 
 // -------------------------------------------------------------------------------------
 // slide_37: Slide 25
-def slide_37 = slide_canvas(
+fun slide_37(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // Fast Effect-safe Extraction in Practice (id 1022)
@@ -3398,7 +3370,7 @@ def slide_37 = slide_canvas(
 
 // -------------------------------------------------------------------------------------
 // slide_38: Slide 26
-def slide_38 = slide_canvas(
+fun slide_38(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // Fast Effect-safe Extraction in Practice (id 1029)
@@ -3445,7 +3417,7 @@ def slide_38 = slide_canvas(
 // superset of the stage before, so they collapse back into one.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
-def slide_39:
+fun slide_39():
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
