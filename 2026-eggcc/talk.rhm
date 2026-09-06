@@ -85,6 +85,33 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // to the picture at stage `k`: to the base for `k = 0`, and for each later stage
 // to a ghost of the base under the stage's own elements, so that an edge can join
 // a node the stage adds to one that was there already, and fades in with it.
+// ---------------------------------------------------------------------------
+// The talk's sections.
+//
+// `divider(k)` is the slide between sections: the bar full size in the middle of
+// the slide, which then magic-moves up into the top margin. `in_section(k, ...)`
+// puts that same bar, at that same size and place, above a content slide -- so the
+// move ends exactly where the next slide's header begins and the bar appears to
+// stay put across the cut.
+//
+// The header sits at y 6..60 and the deck's slide titles start at y 64, which is
+// what the 0.45 scale in `section_header` is chosen against. Retitle a slide
+// higher than that and the two will meet.
+def sections = ["Motivate Effectful E-Graphs", "Extraction Problem",
+                "A DP Solution", "It Works!"]
+
+fun section_canvas():
+  as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
+                       ~background: hex("FFFFFF")))
+
+fun divider(k :: Int):
+  fun ():
+    outline_to_header(section_bar(sections, ~at: k), ~canvas: section_canvas())
+
+fun in_section(k :: Int, mk):
+  fun ():
+    section_header(section_bar(sections, ~at: k), ~canvas: as_pict(mk()))
+
 // Every animated slide holds its last frame for one more advance.
 //
 // A slide's final epoch plays as the *outgoing* transition -- the press that runs
@@ -3082,7 +3109,25 @@ fun slide_39():
 
   staged(base_canvas, [stage_1])
 
-def all_slides = [held(slide_1), held(slide_2), held(slide_12), held(slide_18), held(slide_19), held(slide_20), held(slide_23), held(slide_26), held(slide_29), held(slide_31), held(slide_32), held(slide_34), held(slide_36), held(slide_37), held(slide_38), held(slide_39)]
+def all_slides:
+  [held(slide_1),
+   // 1 -- why effects belong in an e-graph at all
+   held(divider(0)),
+   held(in_section(0, slide_2)), held(in_section(0, slide_12)),
+   held(in_section(0, slide_18)), held(in_section(0, slide_19)),
+   held(in_section(0, slide_20)),
+   // 2 -- what makes extraction hard once there are effects
+   held(divider(1)),
+   held(in_section(1, slide_23)), held(in_section(1, slide_26)),
+   held(in_section(1, slide_29)), held(in_section(1, slide_31)),
+   held(in_section(1, slide_32)),
+   // 3 -- the algorithm
+   held(divider(2)),
+   held(in_section(2, slide_34)),
+   // 4 -- the numbers
+   held(divider(3)),
+   held(in_section(3, slide_36)), held(in_section(3, slide_37)),
+   held(in_section(3, slide_38)), held(in_section(3, slide_39))]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the

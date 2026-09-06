@@ -13,6 +13,10 @@ export:
   make_bubble
   make_flash
   make_node
+  section_bar
+  section_outline
+  section_header
+  outline_to_header
   arrow
   arrows
   callout
@@ -455,6 +459,111 @@ fun arrow(~on: on :: Pict,
 fun arrows(~on: on :: Pict, edges :: List.of(List), ~& kws) :: Pict:
   for values(p = on) ([from, to] in edges):
     arrow(~on: p, from, to, ~& kws)
+
+// ---------------------------------------------------------------------------
+// Where we are in the talk.
+//
+// The sections read as a row of chevrons, each pointing into the next: a progress
+// bar you can read the labels off rather than a bare filled rectangle. Sections
+// already covered are pale, the one being started is solid, the rest are grey.
+//
+// `section_outline` is the full-size bar, for a divider slide between sections.
+// `section_header` is the same bar shrunk into the margin above the slides that
+// follow. `outline_to_header` is the move between them, and it is a `magic_move`
+// rather than a cross-fade: both layouts are built from the *same* `section_bar`
+// pict, so `magic_move` finds the chevrons in both and drifts each one to its new
+// place and scale. Build the bar once and hand it to both, or the move has nothing
+// to match and degrades to a fade.
+
+def outline_grey = draw.Color(150, 150, 150)
+def outline_ahead_fill = draw.Color(238, 238, 238)
+
+// One chevron: a rectangle with a point on its right and a notch bitten out of its
+// left, so a row of them interlocks. `state` is #'done, #'here or #'ahead.
+fun chevron(label :: Pict,
+            ~width: w :: Real, ~height: h :: Real, ~notch: notch :: Real,
+            ~state: state :: matching(#'done || #'here || #'ahead),
+            // the leading chevron has a flat back: a bite out of the very start of
+            // the bar reads as damage rather than as interlocking
+            ~first: first :: Boolean = #false,
+            ~color: color :: draw.Color || String = talk_blue) :: Pict:
+  def line_color = as_color(color)
+  def (fill, ink):
+    match state
+    | #'here: values(line_color, draw.Color(255, 255, 255))
+    | #'done: values(pale(line_color), line_color)
+    | ~else: values(outline_ahead_fill, outline_grey)
+  def edge = if state == #'ahead | outline_grey | line_color
+  def path:
+    def pth = draw.Path()
+    pth.move_to([0, 0])
+    pth.line_to([w - notch, 0])
+    pth.line_to([w, h / 2])
+    pth.line_to([w - notch, h])
+    pth.line_to([0, h])
+    unless first
+    | pth.line_to([notch, h / 2])
+    pth.close()
+    pth
+  def shape:
+    dc(fun (d :: draw.DC, dx, dy):
+         d.path(path, ~dx: dx, ~dy: dy),
+       ~width: w, ~height: h,
+       ~fill: fill, ~line: edge, ~line_width: border_width)
+  // the notch eats into the left, so the text sits a little right of centre
+  overlay(~dx: (if first | 0 | notch / 2), shape, label.colorize(ink)).refocus(shape)
+
+// The bar. `at` is the section being started, counting from 0.
+//
+// Chevrons overlap by exactly the notch, so each one's point sits in the next
+// one's bite and the row reads as a single strip. `~width` is the width of that
+// finished strip, not of one chevron.
+fun section_bar(items :: List.of(String),
+                ~at: at :: Int,
+                ~width: w :: Real = 1700,
+                ~height: h :: Real = 120,
+                ~color: color :: draw.Color || String = talk_blue,
+                ~size: size :: Real = 30) :: Pict:
+  def n = items.length()
+  def notch = h * 0.28
+  def cw = (w + notch * (n - 1)) / n
+  def cells:
+    for List (i in 0..n):
+      def state = if i < at | #'done | (if i == at | #'here | #'ahead)
+      def label:
+        def base = t(items[i]).scale(size / t("X").height)
+        // never let a long section name push past its own chevron
+        def room = cw - 2 * notch - 16
+        if base.width > room | base.scale(room / base.width) | base
+      chevron(label, ~width: cw, ~height: h, ~notch: notch,
+              ~state: state, ~first: i == 0, ~color: color)
+  recur go(i = 1, acc :~ Pict = cells[0]):
+    if i >= n
+    | acc
+    | go(i + 1, overlay(~horiz: #'left, ~vert: #'top,
+                        ~dx: i * (cw - notch), ~dy: 0,
+                        acc, cells[i]))
+
+// The divider slide: the bar sitting on its own, centred on `canvas`.
+fun section_outline(bar :: Pict, ~canvas: canvas :: Pict) :: Pict:
+  overlay(canvas, bar).refocus(canvas)
+
+// The same bar in the margin above the slide. `~scale` is deliberately the only
+// size knob: the bar has to stay the same picture for `magic_move` to match it.
+fun section_header(bar :: Pict, ~canvas: canvas :: Pict,
+                   ~scale: s :: Real = 0.45,
+                   ~dx: dx :: Real = 60, ~dy: dy :: Real = 6) :: Pict:
+  overlay(~horiz: #'left, ~vert: #'top, ~dx: dx, ~dy: dy, canvas, bar.scale(s))
+    .refocus(canvas)
+
+// The outline flying up into the header, as one advance.
+fun outline_to_header(bar :: Pict, ~canvas: canvas :: Pict,
+                      ~scale: s :: Real = 0.45,
+                      ~dx: dx :: Real = 60, ~dy: dy :: Real = 6,
+                      ~extent: extent :: Real = 1.2) :: Pict:
+  magic_move(section_outline(bar, ~canvas: canvas),
+             section_header(bar, ~canvas: canvas, ~scale: s, ~dx: dx, ~dy: dy),
+             ~extent: extent)
 
 // ---------------------------------------------------------------------------
 
