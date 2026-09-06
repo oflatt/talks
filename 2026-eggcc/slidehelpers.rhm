@@ -549,7 +549,7 @@ fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
   recur go(i = 0, acc :~ Pict = walked):
     if i >= n
     | overlay(canvas, acc).refocus(canvas)
-    | def rv = if reveal | (reveal[i] :~ Real) | 1.0
+    | def rv = (if reveal | (reveal[i] :~ Real) | 1.0)
       def d = discs[i].scale(smooth(clamp01(rv * 1.6)))
       def l = labels[i]
       def acc1 = place_center(acc, d, outline_radius, row_cy(1.0 * i))

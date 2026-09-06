@@ -1410,30 +1410,21 @@ fun slide_23():
                                               run("4", ~size: 50.0, ~baseline: -0.06),
                                               run(" = update(c, v", ~size: 50.0),
                                               run("2", ~size: 50.0, ~baseline: -0.06),
-                                              run(")", ~size: 50.0))),
-                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                                  ~direction: 90.0))))
+                                              run(")", ~size: 50.0))))))
 
-  // adds 'Write', 'v', 'to address', 'a,', 'return previous value at', 'a'
+  // Keynote's yellow speech bubble, as one of our callouts. The spike lands where
+  // Keynote's pointed, the right edge of the code box beside `update(a, x)`.
   def stage_2:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(802.23, 227.26, ~tag: "Write v to address a, return previous value at a",
-                  shape_pict(~width: 824.969, ~height: 175.125,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(2802, 0)], [#'curve, pair(2671, 0), pair(2566, 465), pair(2547, 1060)], [#'line, pair(0, 6028)], [#'line, pair(2540, 10981)], [#'line, pair(2540, 20363)], [#'curve, pair(2540, 21045), pair(2657, 21600), pair(2802, 21600)], [#'line, pair(21337, 21600)], [#'curve, pair(21482, 21600), pair(21600, 21045), pair(21600, 20363)], [#'line, pair(21600, 1237)], [#'curve, pair(21600, 555), pair(21482, 0), pair(21337, 0)], [#'line, pair(2802, 0)], [#'close]]],
-                                                21600, 21600), ~fill: hex("FFE599"),
-                             ~body: body(~anchor: #'center, ~insets: insets(10.01, 10.01, 10.01, 10.01),
-                                         para(run("Write ", ~font: "Helvetica Neue", ~size: 40.0),
-                                              run("v", ~font: "Helvetica Neue", ~size: 40.0,
-                                                  ~bold: #true),
-                                              run(" to address ", ~font: "Helvetica Neue",
-                                                  ~size: 40.0),
-                                              run("a, ", ~font: "Helvetica Neue", ~size: 40.0,
-                                                  ~bold: #true),
-                                              run("return previous value at ",
-                                                  ~font: "Helvetica Neue", ~size: 40.0),
-                                              run("a", ~font: "Helvetica Neue", ~size: 40.0,
-                                                  ~bold: #true))))))
+    callout(~on: pc.blank(~width: slide_width, ~height: slide_height),
+            ~at: pc.Find.abs(784.662, 276.13), ~spike: #'w,
+            as_pict(textbox(~width: 840.0, ~height: 48.0, ~anchor: #'center, ~wrap: #false,
+                            ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                            para(run("Write ", ~font: "Helvetica Neue", ~size: 40.0),
+                                 run("v", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true),
+                                 run(" to address ", ~font: "Helvetica Neue", ~size: 40.0),
+                                 run("a, ", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true),
+                                 run("return previous value at ", ~font: "Helvetica Neue", ~size: 40.0),
+                                 run("a", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true)))))
 
   staged(base_canvas, [stage_1, stage_2])
 
@@ -1627,16 +1618,7 @@ fun slide_26():
                                                   ~space_before: 45.0,
                                                   run(
                                                     "Rewriting", ~font: "Helvetica Neue",
-                                                    ~size: 25.0, ~bold: #true)))))))),
-      at(1170.801, 363.342, ~tag: "update is idempotent",
-         shape_pict(~width: 510.75, ~height: 81.031,
-                    ~geom: custom_geom(
-                                       [[[#'move, pair(3005, 0)], [#'curve, pair(2866, 0), pair(2753, 714), pair(2753, 1591)], [#'line, pair(2753, 4532)], [#'line, pair(0, 10588)], [#'line, pair(2753, 16652)], [#'line, pair(2753, 20017)], [#'curve, pair(2753, 20894), pair(2866, 21600), pair(3005, 21600)], [#'line, pair(21348, 21600)], [#'curve, pair(21487, 21600), pair(21600, 20894), pair(21600, 20017)], [#'line, pair(21600, 1591)], [#'curve, pair(21600, 714), pair(21487, 0), pair(21348, 0)], [#'line, pair(3005, 0)], [#'close]]],
-                                       21600, 21600), ~fill: hex("FFE599"),
-                    ~body: body(~anchor: #'center, ~insets: insets(10.01, 10.01, 10.01, 10.01),
-                                para(~align: #'center,
-                                     run("update is idempotent", ~font: "Helvetica Neue",
-                                         ~size: 40.0))))))
+                                                    ~size: 25.0, ~bold: #true)))))))))
 
   // adds the second `update` node and its two edges
   def stage_1:
@@ -1673,9 +1655,7 @@ fun slide_26():
                                          para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
                                               run("x = update(a, v)", ~size: 50.0)),
                                          para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("y = update(a, v)", ~size: 50.0))),
-                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                                  ~direction: 90.0))))
+                                              run("y = update(a, v)", ~size: 50.0))))))
 
   // state 2: 'x = update(a, v)', 'y = update(a, v)'
   def code_2:
@@ -1687,9 +1667,7 @@ fun slide_26():
                                          para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
                                               run("x = update(a, v)", ~size: 50.0)),
                                          para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("y = update(a, v)", ~size: 50.0, ~strike: #true))),
-                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                                  ~direction: 90.0))))
+                                              run("y = update(a, v)", ~size: 50.0, ~strike: #true))))))
 
   // state 3: 'x = update(a, v)', 'y=v'
   def code_3:
@@ -1701,9 +1679,7 @@ fun slide_26():
                                          para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
                                               run("x = update(a, v)", ~size: 50.0)),
                                          para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("y=v", ~size: 50.0))),
-                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                                  ~direction: 90.0))))
+                                              run("y=v", ~size: 50.0))))))
 
   // Keynote drew each edge as a connector between two centres and clipped it
   // at the boxes; these are the same edges as `arrow`s, from border to border.
@@ -1724,15 +1700,24 @@ fun slide_26():
 
   // Both tracks are three epochs long, so click k plays the k'th reveal and the
   // k'th rewrite together -- exactly what the three separate slides did.
-  pc.overlay(~horiz: #'left, ~vert: #'top,
-             staged(base_canvas, [stage_1, stage_2], ~wire: wire),
-             pc.switch(as_pict(code_1),
-                       // `cross_fade`, not `fade_through`: the latter holds the two
-                       // apart (`~overlap` 0.15), so at the midpoint both sit at 13%
-                       // alpha and the code box drops out and comes back -- a flash,
-                       // the box being opaque white with a border and a shadow.
-                       pc.cross_fade(as_pict(code_1), as_pict(code_2), ~extent: 1.0),
-                       pc.cross_fade(as_pict(code_2), as_pict(code_3), ~extent: 1.0)))
+  def shown:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               staged(base_canvas, [stage_1, stage_2], ~wire: wire),
+               pc.switch(as_pict(code_1),
+                         // `cross_fade`, not `fade_through`: the latter holds the two
+                         // apart (`~overlap` 0.15), so at the midpoint both sit at 13%
+                         // alpha and the code box drops out and comes back -- a flash,
+                         // the box being opaque white with a border and a shadow.
+                         pc.cross_fade(as_pict(code_1), as_pict(code_2), ~extent: 1.0),
+                         pc.cross_fade(as_pict(code_2), as_pict(code_3), ~extent: 1.0)))
+
+  // Keynote's yellow speech bubble, as one of our callouts. The spike lands where
+  // Keynote's did, on the right edge of the code box.
+  callout(~on: shown, ~at: pc.Find.abs(1216.351, 403.06), ~spike: #'w,
+          as_pict(textbox(~width: 384.0, ~height: 48.0, ~anchor: #'center, ~wrap: #false,
+                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                          para(~align: #'center,
+                               run("update is idempotent", ~font: "Helvetica Neue", ~size: 40.0)))))
 
 // -------------------------------------------------------------------------------------
 // slide_29: Slide 18 through Slide 19, as one animated pict.
@@ -1865,10 +1850,7 @@ fun slide_29():
                                      shape_pict(~width: 106.985, ~height: 66.994,
                                                 ~fill: hex("FFFFFF"),
                                                 ~line: make_stroke(
-                                                         hex("000000"), ~width: 1.0),
-                                                ~shadow: make_shadow(
-                                                           hex("000000"), ~blur: 15.0,
-                                                           ~distance: 1.0, ~direction: 90.0))),
+                                                         hex("000000"), ~width: 1.0))),
                                   at(4.646, 4.397, ~tag: "Rectangle (2)",
                                      shape_pict(~width: 60.549, ~height: 5.15,
                                                 ~fill: hex("929292"))),
@@ -2041,9 +2023,7 @@ fun slide_29():
                                      run("4", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(c, v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(")", ~size: 50.0))),
-                    ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                         ~direction: 90.0))))
+                                     run(")", ~size: 50.0))))))
 
   // adds 'σ', 'a', 'x', 'update', '1', 'v'
   def stage_1:
@@ -2230,10 +2210,7 @@ fun slide_31():
                                    shape_pict(~width: 106.985, ~height: 66.994,
                                               ~fill: hex("FFFFFF"),
                                               ~line: make_stroke(
-                                                       hex("000000"), ~width: 1.0),
-                                              ~shadow: make_shadow(
-                                                         hex("000000"), ~blur: 15.0,
-                                                         ~distance: 1.0, ~direction: 90.0))),
+                                                       hex("000000"), ~width: 1.0))),
                                 at(4.646, 4.397, ~tag: "Rectangle (2)",
                                    shape_pict(~width: 60.549, ~height: 5.15,
                                               ~fill: hex("929292"))),
@@ -2408,9 +2385,7 @@ fun slide_31():
                                    run("4", ~size: 50.0, ~baseline: -0.06),
                                    run(") = update(c, v", ~size: 50.0),
                                    run("2", ~size: 50.0, ~baseline: -0.06),
-                                   run(")", ~size: 50.0))),
-                  ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                       ~direction: 90.0))),
+                                   run(")", ~size: 50.0))))),
     // Group (10) (id 832)
     at(601.203, 587.333, ~tag: "Group (10)",
        group_pict(~width: 602.643, ~height: 454.706,
@@ -2615,10 +2590,7 @@ fun slide_32():
                                      shape_pict(~width: 106.985, ~height: 66.994,
                                                 ~fill: hex("FFFFFF"),
                                                 ~line: make_stroke(
-                                                         hex("000000"), ~width: 1.0),
-                                                ~shadow: make_shadow(
-                                                           hex("000000"), ~blur: 15.0,
-                                                           ~distance: 1.0, ~direction: 90.0))),
+                                                         hex("000000"), ~width: 1.0))),
                                   at(4.646, 4.397, ~tag: "Rectangle (2)",
                                      shape_pict(~width: 60.549, ~height: 5.15,
                                                 ~fill: hex("929292"))),
@@ -2791,9 +2763,7 @@ fun slide_32():
                                      run("4", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(c, v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(")", ~size: 50.0))),
-                    ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                         ~direction: 90.0))),
+                                     run(")", ~size: 50.0))))),
       at(686.415, 978.552, ~tag: "b", n_b),
       at(1139.847, 978.552, ~tag: "σ", n_sigma),
       at(601.203, 978.552, ~tag: "a", n_a),
@@ -2914,21 +2884,17 @@ fun slide_34():
                     ~line: make_stroke(hex("EE230C"), ~width: 6.0,
                                        ~tail: line_end(#'triangle, "med", "med")))))
 
-  // adds 'Extraction is fast'
+  // Keynote's green box, as one of our bubbles, centred where the box was.
   def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(1160.467, 703.664, ~tag: "Extraction is fast",
-                  group_pict(~width: 667.189, ~height: 168.525,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle",
-                                shape_pict(~width: 667.189, ~height: 168.525,
-                                           ~geom: preset_geom("roundRect", [pair("adj", "val 8901")]),
-                                           ~fill: hex("D9EAD3"))),
-                             at(4.393, 38.133, ~tag: "Extraction is fast (2)",
-                                textbox(~width: 658.402, ~height: 92.26, ~anchor: #'center,
-                                        ~autofit: #'grow, ~insets: insets(10.0, 10.0, 10.0, 10.0),
-                                        para(~align: #'center, ~level: 1, ~indent: 36.0,
-                                             run("Extraction is fast", ~font: "Helvetica Neue",
-                                                 ~size: 60.0, ~bold: #true)))))))
+    def bubble:
+      make_bubble(~color: talk_green,
+                  as_pict(textbox(~width: 486.0, ~height: 73.0, ~anchor: #'center, ~wrap: #false,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("Extraction is fast", ~font: "Helvetica Neue", ~size: 60.0, ~bold: #true)))))
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               ~dx: 1494.06 - bubble.width / 2, ~dy: 787.93 - bubble.height / 2,
+               pc.blank(~width: slide_width, ~height: slide_height), bubble)
 
   staged(base_canvas, [stage_1])
 
@@ -3090,24 +3056,19 @@ fun slide_39():
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0)))))
 
-  // adds 'Non-trivial', 'e-graphs!'
+  // Keynote's green box, as one of our bubbles, centred where the box was.
   def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(1160.467, 643.531, ~tag: "Non-trivial…",
-                  group_pict(~width: 715.088, ~height: 228.658,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle",
-                                shape_pict(~width: 715.088, ~height: 228.658,
-                                           ~geom: preset_geom("roundRect", [pair("adj", "val 6560")]),
-                                           ~fill: hex("D9EAD3"))),
-                             at(4.393, 14.417, ~tag: "Non-trivial… (2)",
-                                textbox(~width: 706.302, ~height: 199.825, ~anchor: #'center,
-                                        ~autofit: #'grow, ~insets: insets(10.0, 10.0, 10.0, 10.0),
-                                        para(~align: #'center, ~level: 1, ~indent: 36.0,
-                                             run("Non-trivial", ~font: "Helvetica Neue", ~size: 75.0,
-                                                 ~bold: #true)),
-                                        para(~align: #'center, ~level: 1, ~indent: 36.0,
-                                             run("e-graphs!", ~font: "Helvetica Neue", ~size: 75.0,
-                                                 ~bold: #true)))))))
+    def bubble:
+      make_bubble(~color: talk_green,
+                  as_pict(textbox(~width: 376.0, ~height: 182.0, ~anchor: #'center, ~wrap: #false,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("Non-trivial", ~font: "Helvetica Neue", ~size: 75.0, ~bold: #true)),
+                                  para(~align: #'center,
+                                       run("e-graphs!", ~font: "Helvetica Neue", ~size: 75.0, ~bold: #true)))))
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               ~dx: 1518.01 - bubble.width / 2, ~dy: 757.86 - bubble.height / 2,
+               pc.blank(~width: slide_width, ~height: slide_height), bubble)
 
   staged(base_canvas, [stage_1])
 
