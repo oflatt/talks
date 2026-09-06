@@ -74,7 +74,8 @@ def media = media_lookup("media")
 // The runtime builds Racket picts, but rhombus/pict's animation works on its own
 // `Pict`. `Pict.from_handle` is glide-pptx's own bridge between the two -- its
 // README calls it exactly that.
-fun as_pict(q): pc.Pict.from_handle(q)
+// A Racket pict from the runtime crosses over; a `Pict` is already across.
+fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 
 // A slide that was several: `base_canvas` is what shows before the first click,
 // and each stage fades in over everything already on screen, one click apiece.
@@ -162,6 +163,12 @@ fun slide_1(): slide_canvas(
 // `~anchor: #'center` centres the text in its box, that sat them 17.7pt lower
 // than their neighbours and pushed them down onto the logos.
 fun slide_2():
+  // Labels sit on one line per row. Keynote left each label at its own group's
+  // top, and the groups sit at different heights, so the labels stepped up and
+  // down across the row and every one of them ran into its logo. These offsets
+  // put each row's labels on a common bottom edge, 8pt clear of the highest
+  // logo *ink* in that row -- ink, not bounding box, because the logos carry
+  // very different amounts of transparent padding. The logos have not moved.
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -183,7 +190,7 @@ fun slide_2():
                   group_pict(~width: 558.478, ~height: 292.287,
                              at(0.0, 42.089, ~tag: "pasted-movie.png (5)",
                                 image_pict(media("image17.png"), 558.478, 250.198)),
-                             at(31.222, 0.0, ~tag: "Floating point",
+                             at(31.222, -51.323, ~tag: "Floating point",
                                 textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -201,7 +208,7 @@ fun slide_2():
                   group_pict(~width: 350.833, ~height: 320.995,
                              at(70.107, 40.268, ~tag: "pasted-movie.png",
                                 image_pict(media("image13.png"), 280.727, 280.727)),
-                             at(0.0, 0.0, ~tag: "Python Simulations",
+                             at(0.0, -51.217, ~tag: "Python Simulations",
                                 textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -217,7 +224,7 @@ fun slide_2():
     group_pict(~width: slide_width, ~height: slide_height,
                at(1099.052, 247.464, ~tag: "Group (7)",
                   group_pict(~width: 371.484, ~height: 269.86,
-                             at(7.51, 0.0, ~tag: "RTL Optimization",
+                             at(7.51, -62.537, ~tag: "RTL Optimization",
                                 textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -237,7 +244,7 @@ fun slide_2():
                   group_pict(~width: 264.568, ~height: 437.154,
                              at(0.0, 45.622, ~tag: "pasted-movie.png (6)",
                                 image_pict(media("image18.png"), 264.568, 264.568)),
-                             at(1.976, 0.0, ~tag: "ML Kernels",
+                             at(1.976, -26.986, ~tag: "ML Kernels",
                                 textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -265,7 +272,7 @@ fun slide_2():
                   group_pict(~width: 312.321, ~height: 345.402,
                              at(35.938, 59.801, ~tag: "pasted-movie.png (3)",
                                 image_pict(media("image15.png"), 276.435, 285.65)),
-                             at(0.0, 0.0, ~tag: "SQL",
+                             at(0.0, -12.807, ~tag: "SQL",
                                 textbox(~width: 104.136, ~height: 64.608, ~anchor: #'center,
                                         ~wrap: #false, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -280,7 +287,7 @@ fun slide_2():
                              at(0.0, 40.848, ~tag: "pasted-movie.png (2)",
                                 image_pict(media("image14.png"), 375.394, 295.819,
                                            ~crop: [0.0, 0.0, 0.1, 0.0])),
-                             at(5.164, 0.0, ~tag: "CAD",
+                             at(5.164, -52.457, ~tag: "CAD",
                                 textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -297,7 +304,7 @@ fun slide_2():
                   group_pict(~width: 407.253, ~height: 301.018,
                              at(2.627, 68.882, ~tag: "pasted-movie.png (4)",
                                 image_pict(media("image16.png"), 404.626, 232.136)),
-                             at(0.0, 0.0, ~tag: "WASM",
+                             at(0.0, -19.688, ~tag: "WASM",
                                 textbox(~width: 158.904, ~height: 64.608, ~anchor: #'center,
                                         ~wrap: #false, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -309,7 +316,7 @@ fun slide_2():
     group_pict(~width: slide_width, ~height: slide_height,
                at(1256.336, 640.14, ~tag: "Group (8)",
                   group_pict(~width: 633.867, ~height: 311.723,
-                             at(61.05, 0.0, ~tag: "WASM (2)",
+                             at(61.05, -29.665, ~tag: "WASM (2)",
                                 textbox(~width: 538.008, ~height: 64.608, ~anchor: #'center,
                                         ~wrap: #false, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -1112,135 +1119,51 @@ fun slide_19(): slide_canvas(
 )
 
 // -------------------------------------------------------------------------------------
-// slide_20: Keynote's 3-stage build of Slide 11, as one animated pict.
+// slide_20: slide_2 again, marking which of those tools need effects.
 //
-// The generator gives each build stage its own slide; every object was a
-// superset of the stage before, so they collapse back into one.
-//
-// One `fade_in` per stage, so the deck takes the same number of clicks it did.
+// This *is* slide_2: it starts from slide_2's own settled frame rather than
+// repeating the grid. Editing slide_2 moves this slide with it. The two had been
+// written out separately and had drifted -- to different logo positions and
+// different logo scales -- which is exactly what deriving one from the other stops.
 fun slide_20():
-  // the picture before the first reveal
-  def base_canvas:
-    slide_canvas(
-      ~width: slide_width, ~height: slide_height,
-      ~background: hex("FFFFFF"),
-      at(95.0, 85.0, ~tag: "E-Graphs are Super Useful!",
-         textbox(~width: 1730.0, ~height: 112.848, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("E-Graphs are Super Useful!", ~font: "Helvetica Neue", ~size: 85.0,
-                          ~bold: #true, ~spacing: -2.01)))),
-      at(1885.404, 1044.894, ~tag: "Slide Number",
-         shape_pict(~width: 29.016, ~height: 29.496)),
-      at(689.304, 232.37, ~tag: "Group",
-         group_pict(~width: 437.544, ~height: 398.405,
-                    at(30.923, 70.706, ~tag: "pasted-movie.png",
-                       image_pict(media("image13.png"), 327.698, 327.698)),
-                    at(0.0, 0.0, ~tag: "Python Simulations",
-                       textbox(~width: 437.544, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("Python Simulations", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))))),
-      at(481.5, 627.264, ~tag: "Group (2)",
-         group_pict(~width: 561.573, ~height: 439.29,
-                    at(0.0, 30.236, ~tag: "pasted-movie.png (2)",
-                       image_pict(media("image14.png"), 561.574, 398.405)),
-                    at(53.677, 0.0, ~tag: "CAD",
-                       textbox(~width: 110.328, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("CAD", ~font: "Helvetica Neue Medium", ~size: 48.0)))),
-                    at(25.814, 374.682, ~tag: "(Szalinski)",
-                       textbox(~width: 230.424, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("(Szalinski)", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))))),
-      at(29.692, 627.264, ~tag: "Group (3)",
-         group_pict(~width: 312.373, ~height: 345.451,
-                    at(35.938, 59.801, ~tag: "pasted-movie.png (3)",
-                       image_pict(media("image15.png"), 276.435, 285.65)),
-                    at(0.0, 0.0, ~tag: "SQL",
-                       textbox(~width: 104.136, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("SQL", ~font: "Helvetica Neue Medium", ~size: 48.0)))))),
-      at(1000.878, 716.947, ~tag: "Group (4)",
-         group_pict(~width: 531.233, ~height: 411.607,
-                    at(0.0, 16.637, ~tag: "pasted-movie.png (4)",
-                       image_pict(media("image16.png"), 522.164, 299.568)),
-                    at(21.63, 0.0, ~tag: "WASM",
-                       textbox(~width: 158.904, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("WASM", ~font: "Helvetica Neue Medium", ~size: 48.0)))),
-                    at(308.825, 346.999, ~tag: "(Cranelift)",
-                       textbox(~width: 222.408, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("(Cranelift)", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))))),
-      at(39.685, 203.953, ~tag: "Group (5)",
-         group_pict(~width: 620.22, ~height: 368.306,
-                    at(0.0, 46.405, ~tag: "pasted-movie.png (5)",
-                       image_pict(media("image17.png"), 620.255, 277.874)),
-                    at(27.49, 0.0, ~tag: "Floating point",
-                       textbox(~width: 313.992, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("Floating point", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))),
-                    at(305.49, 303.75, ~tag: "(Herbie)",
-                       textbox(~width: 181.512, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("(Herbie)", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))))),
-      at(1601.61, 239.088, ~tag: "Group (6)",
-         group_pict(~width: 327.413, ~height: 384.968,
-                    at(46.987, 62.054, ~tag: "pasted-movie.png (6)",
-                       image_pict(media("image18.png"), 264.568, 264.569)),
-                    at(0.0, 0.0, ~tag: "ML Kernels",
-                       textbox(~width: 260.616, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("ML Kernels", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))),
-                    at(117.485, 320.361, ~tag: "(Luminal)",
-                       textbox(~width: 209.928, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("(Luminal)", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))))),
-      at(1151.297, 327.881, ~tag: "Group (7)",
-         group_pict(~width: 425.865, ~height: 257.382,
-                    at(33.633, 0.0, ~tag: "RTL Optimization",
-                       textbox(~width: 392.232, ~height: 64.608, ~anchor: #'center,
-                               ~wrap: #false, ~autofit: #'grow,
-                               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                               para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                    run("RTL Optimization", ~font: "Helvetica Neue Medium",
-                                        ~size: 48.0)))),
-                    at(0.0, 11.311, ~tag: "pasted-movie.png (7)",
-                       image_pict(media("image19.png"), 371.484, 246.071)))),
-      at(1625.217, 967.946, ~tag: "…and more!",
-         textbox(~width: 280.2, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
-                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("…and more!", ~font: "Helvetica Neue Medium", ~size: 48.0)))))
+  // slide_2 as it stands once every application has appeared. It is a function
+  // now -- a slide is built when it is shown -- so it is called, once, rather
+  // than named twice.
+  def grid = slide_2()
+  def shown = grid.snapshot(grid.duration - 1, 1.0)
 
-  // adds 'None handle side-effects!'
+  // Which of these need effectful e-graphs. Each sits just under its logo's ink,
+  // the way slide_2's own "Luminal" sits under the ML Kernels logo -- ink rather
+  // than bounding box, because the logos carry very different bottom padding.
+  def notes:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(228.358, 522.666, ~tag: "(Herbie)",
+                  textbox(~width: 181.512, ~height: 64.608, ~anchor: #'center,
+                          ~wrap: #false, ~autofit: #'grow,
+                          ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                               run("(Herbie)", ~font: "Helvetica Neue Medium",
+                                   ~size: 48.0)))),
+               at(905.804, 943.181, ~tag: "(Cranelift)",
+                  textbox(~width: 222.408, ~height: 64.608, ~anchor: #'center,
+                          ~wrap: #false, ~autofit: #'grow,
+                          ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                               run("(Cranelift)", ~font: "Helvetica Neue Medium",
+                                   ~size: 48.0)))),
+               at(489.157, 1011.599, ~tag: "(Szalinski)",
+                  textbox(~width: 230.424, ~height: 64.608, ~anchor: #'center,
+                          ~wrap: #false, ~autofit: #'grow,
+                          ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                               run("(Szalinski)", ~font: "Helvetica Neue Medium",
+                                   ~size: 48.0)))))
+
+  // the notes are part of the picture from the moment the slide arrives, as they
+  // were before; only the two callouts below are revealed on a click
+  def base:
+    pc.overlay(~horiz: #'left, ~vert: #'top, shown, as_pict(notes))
+
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
                at(53.975, 282.375, ~tag: "None handle side-effects!",
@@ -1257,26 +1180,47 @@ fun slide_20():
                                              run("None handle side-effects!", ~font: "Helvetica Neue",
                                                  ~size: 50.0, ~bold: #true)))))))
 
-  // adds 'TODO point at luminal, numba, wasm, and mlir with a bubble for “need side effects!”'
+  // The TODO this slide carried: a bubble pointing at the tools that need effects.
+  //
+  // The four are Numba (Python Simulations), Luminal (ML Kernels), Cranelift (WASM)
+  // and MLIR (User DSL Optimizations). The bubble sits in the band between the two
+  // rows, to the left of all four, with an arrow to each.
+  //
+  // Each marker is the size of that logo's *ink*, so an arrow stops on the artwork
+  // rather than out in the transparent padding around it. `point_at` works out
+  // which edge each arrow should leave and land on from where things ended up.
   def stage_2:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(88.231, 630.689, ~tag: "None handle side-effects! (3)",
-                  group_pict(~width: 1694.89, ~height: 306.607,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (2)",
-                                shape_pict(~width: 1694.89, ~height: 137.859,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 13276")]),
-                                           ~fill: hex("FFE599"))),
-                             at(5.36, 20.399,
-                                ~tag: "TODO point at luminal, numba, wasm, and mlir with a bubble for “need side effects!”",
-                                textbox(~width: 1684.169, ~height: 286.207, ~anchor: #'center,
-                                        ~insets: insets(10.0, 10.0, 10.0, 10.0),
-                                        para(~align: #'center,
-                                             run(
-                                                 "TODO point at luminal, numba, wasm, and mlir with a bubble for “need side effects!”",
-                                                 ~font: "Helvetica Neue", ~size: 50.0, ~bold: #true)))))))
+    def bubble:
+      make_bubble(~color: talk_blue, ~padding: 10.0,
+                  as_pict(textbox(~width: 303.2, ~height: 43.2, ~anchor: #'center,
+                                  ~wrap: #false, ~autofit: #'grow,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("need side effects!", ~font: "Helvetica Neue",
+                                           ~size: 36.0, ~bold: #true)))))
+    // Each marker is one logo's ink. Two of these images have no alpha channel and
+    // are opaque white to their edges, so the extent has to come from where the
+    // drawing stops being white -- MLIR's artwork is 507pt of its 634pt box, and
+    // aiming at the box would leave the arrowhead short of the logo by 60pt.
+    def m_numba = pc.blank(~width: 256.0, ~height: 250.4)
+    def m_luminal = pc.blank(~width: 264.6, ~height: 264.6)
+    def m_cranelift = pc.blank(~width: 404.6, ~height: 232.1)
+    def m_mlir = pc.blank(~width: 507.1, ~height: 169.5)
+    fun place(base, p, x, y):
+      pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, p)
+    // The bubble goes in the band between the two rows, left of centre: the right of
+    // that band is taken by the "Luminal" note and the left by "(Herbie)", and this
+    // is the clear stretch between them.
+    def placed:
+      place(place(place(place(place(pc.blank(~width: slide_width, ~height: slide_height),
+                                    bubble, 420.0, 545.0),
+                              m_numba, 702.7, 288.8),
+                        m_luminal, 1571.6, 257.5),
+                  m_cranelift, 809.2, 699.1),
+            m_mlir, 1319.7, 740.3)
+    point_at(~on: placed, ~at: [m_numba, m_luminal, m_cranelift, m_mlir], bubble)
 
-  staged(base_canvas, [stage_1, stage_2])
+  staged(base, [stage_1, stage_2])
 
 // -------------------------------------------------------------------------------------
 // slide_23: Slide 12 through Slide 14, as one animated pict.
