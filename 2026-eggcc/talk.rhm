@@ -13,6 +13,8 @@ import:
   // Prefixed, not `open`: rhombus/pict and the runtime above both export
   // `blank`, and opening both would make that name ambiguous.
   pict as pc
+  // for the font check below
+  draw
 
 export:
   slide_width
@@ -26,8 +28,6 @@ export:
   slide_20
   slide_23
   slide_26
-  slide_27
-  slide_28
   slide_29
   slide_31
   slide_32
@@ -43,6 +43,58 @@ def slide_height = 1080.0
 // The theme font. Runs that name no typeface use this one, so restyling
 // the whole deck is one edit.
 current_default_font("PT Mono")
+
+// ------------------------------------------------------------------------ fonts
+// racket/draw substitutes silently when a family is missing, and a substitute with
+// different metrics is exactly what goes wrong here: line spacing in this runtime
+// is a percentage of the *font size*, so the leading does not move when the face
+// does -- only the substitute's ink height does. With Noto Sans standing in for
+// Helvetica Neue, the 116pt title's two lines overlapped by 5.6pt and ran together.
+//
+// So name every family the deck asks for, and refuse to run on the wrong one. A
+// family may declare a stand-in, for the case where it cannot be installed at all
+// (Helvetica Neue is Apple's). The stand-in must itself be installed, and the
+// system must actually resolve the original name to it -- which has to be
+// measured, because a `Font` reports the face you asked for, not the one you got.
+def font_uses:
+  //  family named in the deck  stand-in, or #false to require the real thing
+  [["PT Mono",               #false],
+   ["Helvetica Neue",        "Nimbus Sans"],   // Helvetica clone, Helvetica metrics
+   ["Helvetica Neue Medium", "Nimbus Sans"],
+   ["Arial",                 "Arimo"],         // metric-compatible with Arial
+   ["Times New Roman",       "Tinos"]]         // metric-compatible with Times
+
+block:
+  def installed = draw.Font.get_names()
+  def probe = draw.Bitmap([1, 1]).make_dc()
+  // long enough that two faces of different widths cannot agree by accident
+  def sample = "Efficient Extraction from Effectful E-Graphs 0123456789"
+  fun width(family :: String) :: Real:
+    probe.font := draw.Font(~name: family, ~size: 64.0)
+    def (w, _, _, _) = probe.text_extent(sample)
+    w
+  fun absent(family :: String, detail :: String):
+    error(~who: #'talk,
+          "required font is not installed" ++ detail,
+          error.text(~label: "font", family))
+  for (use in font_uses):
+    def family = use[0]
+    def stand_in = use[1]
+    unless installed.contains(family)
+    | cond
+      | !stand_in:
+          absent(family, "")
+      | !installed.contains(stand_in):
+          absent(family, "; the stand-in it declares is missing too")
+      | math.abs(width(family) - width(stand_in)) > 0.5:
+          error(~who: #'talk,
+                "font resolves to something other than the stand-in it declares",
+                error.text(~label: "font", family),
+                error.text(~label: "stand-in", stand_in),
+                error.text(~label: "fix", "alias it in fontconfig, e.g."
+                             ++ " ~/.config/fontconfig/conf.d/60-helvetica-neue-alias.conf"))
+      | ~else:
+          #void
 
 // Images sit next to this file, so the program travels as a folder.
 def media = media_lookup("media")
@@ -130,6 +182,13 @@ def slide_1 = slide_canvas(
 // superset of the stage before, so they collapse back into one.
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
+//
+// The application labels are 64.608 tall, which is what a single line of 48pt
+// Helvetica Neue Medium measures in this deck -- the height Keynote gave the
+// labels it exported as real text boxes (SQL, WASM, …and more!). The ones it
+// exported as `line` shapes carried a placeholder 100x100 instead, and since
+// `~anchor: #'center` centres the text in its box, that sat them 17.7pt lower
+// than their neighbours and pushed them down onto the logos.
 def slide_2:
   // the picture before the first reveal
   def base_canvas:
@@ -153,7 +212,7 @@ def slide_2:
                              at(0.0, 42.089, ~tag: "pasted-movie.png (5)",
                                 image_pict(media("image17.png"), 558.478, 250.198)),
                              at(31.222, 0.0, ~tag: "Floating point",
-                                textbox(~width: 100.0, ~height: 100.0, ~anchor: #'center, ~wrap: #false,
+                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -171,7 +230,7 @@ def slide_2:
                              at(70.107, 40.268, ~tag: "pasted-movie.png",
                                 image_pict(media("image13.png"), 280.727, 280.727)),
                              at(0.0, 0.0, ~tag: "Python Simulations",
-                                textbox(~width: 100.0, ~height: 100.0, ~anchor: #'center, ~wrap: #false,
+                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -187,7 +246,7 @@ def slide_2:
                at(1099.052, 247.464, ~tag: "Group (7)",
                   group_pict(~width: 371.484, ~height: 269.86,
                              at(7.51, 0.0, ~tag: "RTL Optimization",
-                                textbox(~width: 100.0, ~height: 100.0, ~anchor: #'center, ~wrap: #false,
+                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -207,7 +266,7 @@ def slide_2:
                              at(0.0, 45.622, ~tag: "pasted-movie.png (6)",
                                 image_pict(media("image18.png"), 264.568, 264.568)),
                              at(1.976, 0.0, ~tag: "ML Kernels",
-                                textbox(~width: 100.0, ~height: 100.0, ~anchor: #'center, ~wrap: #false,
+                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -217,7 +276,7 @@ def slide_2:
                                                ~font: "Helvetica Neue Medium",
                                                ~size: 48.0)))),
                              at(40.664, 337.154, ~tag: "(Luminal)",
-                                textbox(~width: 100.0, ~height: 100.0, ~anchor: #'center, ~wrap: #false,
+                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -250,7 +309,7 @@ def slide_2:
                                 image_pict(media("image14.png"), 375.394, 295.819,
                                            ~crop: [0.0, 0.0, 0.1, 0.0])),
                              at(5.164, 0.0, ~tag: "CAD",
-                                textbox(~width: 100.0, ~height: 100.0, ~anchor: #'center, ~wrap: #false,
+                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -1424,849 +1483,333 @@ def slide_23:
   staged(base_canvas, [stage_1, stage_2])
 
 // -------------------------------------------------------------------------------------
-// slide_26: Slide 15
-def slide_26 = slide_canvas(
-  ~width: slide_width, ~height: slide_height,
-  ~background: hex("FFFFFF"),
-  // Redundant Update Elimination (id 526)
-  at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("Redundant Update Elimination", ~font: "Helvetica Neue",
-                      ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-  // Slide Number (id 527)
-  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-  // update (id 528)
-  at(338.516, 704.223, ~tag: "update",
-     shape_pict(~width: 135.0, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("update", ~size: 30.0))))),
-  // a (id 529)
-  at(211.26, 808.407, ~tag: "a",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("a", ~size: 30.0))))),
-  // v (id 530)
-  at(326.361, 808.407, ~tag: "v",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("v", ~size: 30.0))))),
-  // σ (id 531)
-  at(423.091, 808.407, ~tag: "σ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0))))),
-  // x (id 532)
-  at(326.361, 600.04, ~tag: "x",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("x", ~size: 30.0))))),
-  // σʹ (id 533)
-  at(423.091, 600.04, ~tag: "σʹ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0),
-                                 run("ʹ", ~font: "Times New Roman", ~size: 30.0))))),
-  // Connection Line (id 534)
-  at(357.401, 630.83, ~tag: "Connection Line",
-     shape_pict(~width: 48.615, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (2) (id 535)
-  at(406.016, 630.83, ~tag: "Connection Line (2)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (3) (id 536)
-  at(242.249, 735.024, ~tag: "Connection Line (3)",
-     shape_pict(~width: 163.716, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (4) (id 537)
-  at(357.401, 735.014, ~tag: "Connection Line (4)",
-     shape_pict(~width: 48.615, ~height: 104.184, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'arrow, "med", "med")))),
-  // Connection Line (5) (id 538)
-  at(406.016, 735.014, ~tag: "Connection Line (5)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // update (2) (id 539)
-  at(338.516, 495.856, ~tag: "update (2)",
-     shape_pict(~width: 135.0, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("update", ~size: 30.0))))),
-  // y (id 540)
-  at(326.361, 391.672, ~tag: "y",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("y", ~size: 30.0))))),
-  // σʹʹ (id 541)
-  at(423.091, 391.672, ~tag: "σʹʹ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0),
-                                 run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))),
-  // Connection Line (6) (id 542)
-  at(357.401, 422.463, ~tag: "Connection Line (6)",
-     shape_pict(~width: 48.615, ~height: 104.184, ~flip_h: #true, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'arrow, "med", "med")))),
-  // Connection Line (7) (id 543)
-  at(406.016, 422.463, ~tag: "Connection Line (7)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (8) (id 544)
-  at(406.016, 526.647, ~tag: "Connection Line (8)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (9) (id 545)
-  at(242.249, 526.649, ~tag: "Connection Line (9)",
-     shape_pict(~width: 163.716, ~height: 312.551, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (10) (id 546)
-  at(357.401, 526.647, ~tag: "Connection Line (10)",
-     shape_pict(~width: 48.615, ~height: 312.551, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Group (id 562)
-  at(-27.0, 4.226, ~tag: "Group",
-     group_pict(~width: 1312.695, ~height: 51.502,
-                at(778.271, 0.774, ~tag: "Group (2)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("017100"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(28.093, 5.452, ~tag: "Effectful E-Graphs",
-                                 textbox(~width: 229.229, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful E-Graphs",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true, ~color: hex("FFFFFF"))))))),
-                at(1037.695, 0.0, ~tag: "Group (3)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (2)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("D9EAD3"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(22.392, 5.191, ~tag: "Effectful Extraction",
-                                 textbox(~width: 240.63, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful Extraction",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true)))))),
-                at(259.424, 0.774, ~tag: "Group (4)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (3)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(73.609, 5.452, ~tag: "E-Graphs",
-                                 textbox(~width: 128.197, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "E-Graphs", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(518.848, 0.774, ~tag: "Group (5)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (4)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(62.233, 5.452, ~tag: "Extraction",
-                                 textbox(~width: 150.949, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Extraction", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(0.0, 0.774, ~tag: "Group (6)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (5)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(67.116, 5.452, ~tag: "Rewriting",
-                                 textbox(~width: 141.182, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Rewriting", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))))),
-  // x = update(a, v)… (id 563)
-  at(703.648, 298.572, ~tag: "x = update(a, v)…",
-     shape_pict(~width: 512.703, ~height: 210.571, ~fill: hex("FFFFFF"),
-                ~line: make_stroke(hex("000000"), ~width: 1.0),
-                ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                            para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                 run("x = update(a, v)", ~size: 50.0)),
-                            para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                 run("y = update(a, v)", ~size: 50.0))),
-                ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                     ~direction: 90.0))),
-  // update is idempotent (id 564)
-  at(1170.801, 363.342, ~tag: "update is idempotent",
-     shape_pict(~width: 510.75, ~height: 81.031,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(3005, 0)], [#'curve, pair(2866, 0), pair(2753, 714), pair(2753, 1591)], [#'line, pair(2753, 4532)], [#'line, pair(0, 10588)], [#'line, pair(2753, 16652)], [#'line, pair(2753, 20017)], [#'curve, pair(2753, 20894), pair(2866, 21600), pair(3005, 21600)], [#'line, pair(21348, 21600)], [#'curve, pair(21487, 21600), pair(21600, 20894), pair(21600, 20017)], [#'line, pair(21600, 1591)], [#'curve, pair(21600, 714), pair(21487, 0), pair(21348, 0)], [#'line, pair(3005, 0)], [#'close]]],
-                                   21600, 21600), ~fill: hex("FFE599"),
-                ~body: body(~anchor: #'center, ~insets: insets(10.01, 10.01, 10.01, 10.01),
-                            para(~align: #'center,
-                                 run("update is idempotent", ~font: "Helvetica Neue",
-                                     ~size: 40.0)))))
-)
+// slide_26: Slides 15 through 17, as one animated pict.
+//
+// Not purely additive, so this is two tracks overlaid rather than one `staged`
+// chain. The e-graph nodes fade in additively, but the code block on the left is
+// *rewritten* twice -- `y = update(a, v)`, then struck through, then `y=v` -- and a
+// reveal can only add, never replace. So the code gets a track of its own that
+// cross-fades between its three states, concurrent with the reveals.
+//
+// Two exporter artifacts are dropped rather than animated:
+//   - `Connection Line (3)` is 4.0pt on Slide 15 but 2.0pt on 16 and 17. Every
+//     other black connector in the deck is 4.0, so the thinning is a stray edit
+//     rather than the animation; it stays 4.0 throughout.
+//   - the shapes inside `Group` are only renumbered ("Shape" -> "Shape (3)") from
+//     slide to slide, which is the exporter naming them afresh. They draw the same.
+def slide_26:
+  // everything that is on screen the whole time
+  def base_canvas:
+    slide_canvas(
+      ~width: slide_width, ~height: slide_height,
+      ~background: hex("FFFFFF"),
+      at(95.0, 85.0, ~tag: "Redundant Update Elimination",
+         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.8),
+                      run("Redundant Update Elimination", ~font: "Helvetica Neue",
+                          ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
+      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+      at(338.516, 704.223, ~tag: "update",
+         shape_pict(~width: 135.0, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("update", ~size: 30.0))))),
+      at(211.26, 808.407, ~tag: "a",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("a", ~size: 30.0))))),
+      at(326.361, 808.407, ~tag: "v",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("v", ~size: 30.0))))),
+      at(423.091, 808.407, ~tag: "σ",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("σ", ~size: 30.0))))),
+      at(326.361, 600.04, ~tag: "x",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("x", ~size: 30.0))))),
+      at(423.091, 600.04, ~tag: "σʹ",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("σ", ~size: 30.0),
+                                     run("ʹ", ~font: "Times New Roman", ~size: 30.0))))),
+      at(357.401, 630.83, ~tag: "Connection Line",
+         shape_pict(~width: 48.615, ~height: 104.184, ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("000000"), ~width: 4.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(406.016, 630.83, ~tag: "Connection Line (2)",
+         shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(242.249, 735.024, ~tag: "Connection Line (3)",
+         shape_pict(~width: 163.716, ~height: 104.184, ~flip_h: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("000000"), ~width: 4.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(357.401, 735.014, ~tag: "Connection Line (4)",
+         shape_pict(~width: 48.615, ~height: 104.184, ~flip_v: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("000000"), ~width: 4.0,
+                                       ~head: line_end(#'arrow, "med", "med")))),
+      at(406.016, 735.014, ~tag: "Connection Line (5)",
+         shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(338.516, 495.856, ~tag: "update (2)",
+         shape_pict(~width: 135.0, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("update", ~size: 30.0))))),
+      at(326.361, 391.672, ~tag: "y",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("y", ~size: 30.0))))),
+      at(423.091, 391.672, ~tag: "σʹʹ",
+         shape_pict(~width: 62.079, ~height: 61.581,
+                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                para(~align: #'center, run("σ", ~size: 30.0),
+                                     run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))),
+      at(357.401, 422.463, ~tag: "Connection Line (6)",
+         shape_pict(~width: 48.615, ~height: 104.184, ~flip_h: #true, ~flip_v: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("000000"), ~width: 4.0,
+                                       ~head: line_end(#'arrow, "med", "med")))),
+      at(406.016, 422.463, ~tag: "Connection Line (7)",
+         shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(406.016, 526.647, ~tag: "Connection Line (8)",
+         shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(242.249, 526.649, ~tag: "Connection Line (9)",
+         shape_pict(~width: 163.716, ~height: 312.551, ~flip_h: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("000000"), ~width: 4.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(357.401, 526.647, ~tag: "Connection Line (10)",
+         shape_pict(~width: 48.615, ~height: 312.551, ~flip_h: #true,
+                    ~shape: "straightConnector1",
+                    ~line: make_stroke(hex("000000"), ~width: 4.0,
+                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(-27.0, 4.226, ~tag: "Group",
+         group_pict(~width: 1312.695, ~height: 51.502,
+                    at(778.271, 0.774, ~tag: "Group (2)",
+                       group_pict(~width: 275.0, ~height: 50.728,
+                                  at(0.0, 0.0, ~tag: "Shape",
+                                     shape_pict(~width: 275.0, ~height: 50.728,
+                                                ~geom: custom_geom(
+                                                         
+                                                         [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                         21600, 21600), ~fill: hex("017100"),
+                                                ~line: make_stroke(
+                                                         hex("017100"), ~width: 2.0))),
+                                  at(28.093, 5.452, ~tag: "Effectful E-Graphs",
+                                     textbox(~width: 229.229, ~height: 39.823,
+                                             ~anchor: #'center,
+                                             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                             para(~align: #'center,
+                                                  ~line_spacing: pair(#'percent, 0.9),
+                                                  ~space_before: 45.0,
+                                                  run(
+                                                    "Effectful E-Graphs",
+                                                    ~font: "Helvetica Neue", ~size: 25.0,
+                                                    ~bold: #true, ~color: hex("FFFFFF"))))))),
+                    at(1037.695, 0.0, ~tag: "Group (3)",
+                       group_pict(~width: 275.0, ~height: 50.728,
+                                  at(0.0, 0.0, ~tag: "Shape (2)",
+                                     shape_pict(~width: 275.0, ~height: 50.728,
+                                                ~geom: custom_geom(
+                                                         
+                                                         [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                         21600, 21600), ~fill: hex("D9EAD3"),
+                                                ~line: make_stroke(
+                                                         hex("017100"), ~width: 2.0))),
+                                  at(22.392, 5.191, ~tag: "Effectful Extraction",
+                                     textbox(~width: 240.63, ~height: 39.823,
+                                             ~anchor: #'center,
+                                             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                             para(~align: #'center,
+                                                  ~line_spacing: pair(#'percent, 0.9),
+                                                  ~space_before: 45.0,
+                                                  run(
+                                                    "Effectful Extraction",
+                                                    ~font: "Helvetica Neue", ~size: 25.0,
+                                                    ~bold: #true)))))),
+                    at(259.424, 0.774, ~tag: "Group (4)",
+                       group_pict(~width: 275.0, ~height: 50.728,
+                                  at(0.0, 0.0, ~tag: "Shape (3)",
+                                     shape_pict(~width: 275.0, ~height: 50.728,
+                                                ~geom: custom_geom(
+                                                         
+                                                         [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                         21600, 21600), ~fill: hex("EBEBEB"),
+                                                ~line: make_stroke(
+                                                         hex("000000"), ~width: 2.0))),
+                                  at(73.609, 5.452, ~tag: "E-Graphs",
+                                     textbox(~width: 128.197, ~height: 39.823,
+                                             ~anchor: #'center,
+                                             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                             para(~align: #'center,
+                                                  ~line_spacing: pair(#'percent, 0.9),
+                                                  ~space_before: 45.0,
+                                                  run(
+                                                    "E-Graphs", ~font: "Helvetica Neue",
+                                                    ~size: 25.0, ~bold: #true)))))),
+                    at(518.848, 0.774, ~tag: "Group (5)",
+                       group_pict(~width: 275.0, ~height: 50.728,
+                                  at(0.0, 0.0, ~tag: "Shape (4)",
+                                     shape_pict(~width: 275.0, ~height: 50.728,
+                                                ~geom: custom_geom(
+                                                         
+                                                         [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                         21600, 21600), ~fill: hex("EBEBEB"),
+                                                ~line: make_stroke(
+                                                         hex("000000"), ~width: 2.0))),
+                                  at(62.233, 5.452, ~tag: "Extraction",
+                                     textbox(~width: 150.949, ~height: 39.823,
+                                             ~anchor: #'center,
+                                             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                             para(~align: #'center,
+                                                  ~line_spacing: pair(#'percent, 0.9),
+                                                  ~space_before: 45.0,
+                                                  run(
+                                                    "Extraction", ~font: "Helvetica Neue",
+                                                    ~size: 25.0, ~bold: #true)))))),
+                    at(0.0, 0.774, ~tag: "Group (6)",
+                       group_pict(~width: 275.0, ~height: 50.728,
+                                  at(0.0, 0.0, ~tag: "Shape (5)",
+                                     shape_pict(~width: 275.0, ~height: 50.728,
+                                                ~geom: custom_geom(
+                                                         
+                                                         [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                         21600, 21600), ~fill: hex("EBEBEB"),
+                                                ~line: make_stroke(
+                                                         hex("000000"), ~width: 2.0))),
+                                  at(67.116, 5.452, ~tag: "Rewriting",
+                                     textbox(~width: 141.182, ~height: 39.823,
+                                             ~anchor: #'center,
+                                             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                             para(~align: #'center,
+                                                  ~line_spacing: pair(#'percent, 0.9),
+                                                  ~space_before: 45.0,
+                                                  run(
+                                                    "Rewriting", ~font: "Helvetica Neue",
+                                                    ~size: 25.0, ~bold: #true)))))))),
+      at(1170.801, 363.342, ~tag: "update is idempotent",
+         shape_pict(~width: 510.75, ~height: 81.031,
+                    ~geom: custom_geom(
+                                       [[[#'move, pair(3005, 0)], [#'curve, pair(2866, 0), pair(2753, 714), pair(2753, 1591)], [#'line, pair(2753, 4532)], [#'line, pair(0, 10588)], [#'line, pair(2753, 16652)], [#'line, pair(2753, 20017)], [#'curve, pair(2753, 20894), pair(2866, 21600), pair(3005, 21600)], [#'line, pair(21348, 21600)], [#'curve, pair(21487, 21600), pair(21600, 20894), pair(21600, 20017)], [#'line, pair(21600, 1591)], [#'curve, pair(21600, 714), pair(21487, 0), pair(21348, 0)], [#'line, pair(3005, 0)], [#'close]]],
+                                       21600, 21600), ~fill: hex("FFE599"),
+                    ~body: body(~anchor: #'center, ~insets: insets(10.01, 10.01, 10.01, 10.01),
+                                para(~align: #'center,
+                                     run("update is idempotent", ~font: "Helvetica Neue",
+                                         ~size: 40.0))))))
 
-// -------------------------------------------------------------------------------------
-// slide_27: Slide 16
-def slide_27 = slide_canvas(
-  ~width: slide_width, ~height: slide_height,
-  ~background: hex("FFFFFF"),
-  // Shape (id 566)
-  at(243.099, 377.773, ~tag: "Shape",
-     shape_pict(~width: 162.263, ~height: 506.564, ~flip_h: #true,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(941, 2072)], [#'curve, pair(991, 2770), pair(1849, 3375), pair(3711, 3645)], [#'curve, pair(5530, 3908), pair(7816, 3696), pair(9530, 4050)], [#'curve, pair(11330, 4421), pair(11609, 5177), pair(12096, 5850)], [#'curve, pair(13191, 7363), pair(15847, 8811), pair(15997, 10409)], [#'curve, pair(16173, 12275), pair(13047, 13933), pair(11664, 15607)], [#'curve, pair(11080, 16314), pair(10600, 17025), pair(8532, 17388)], [#'curve, pair(6852, 17683), pair(4783, 17516), pair(3014, 17739)], [#'curve, pair(1355, 17948), pair(251, 18461), pair(47, 19017)], [#'curve, pair(-293, 19942), pair(1248, 20745), pair(3853, 21070)], [#'curve, pair(6603, 21413), pair(9739, 21106), pair(11787, 20361)], [#'curve, pair(13999, 19557), pair(14481, 18509), pair(15205, 17474)], [#'curve, pair(16572, 15522), pair(19121, 13605), pair(20299, 11570)], [#'curve, pair(21307, 9829), pair(21252, 8010), pair(19067, 6397)], [#'curve, pair(17376, 5149), pair(14421, 4070), pair(13183, 2780)], [#'curve, pair(12463, 2029), pair(12282, 1215), pair(10632, 614)], [#'curve, pair(8820, -47), pair(5890, -187), pair(3675, 258)], [#'curve, pair(1793, 635), pair(890, 1346), pair(941, 2072)], [#'close]]],
-                                   20930, 21209), ~fill: hex("929292", ~alpha: 0.4))),
-  // Shape (2) (id 567)
-  at(407.265, 375.236, ~tag: "Shape (2)",
-     shape_pict(~width: 126.68, ~height: 300.004,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(80, 3510)], [#'curve, pair(302, 4815), pair(2062, 5815), pair(4912, 6141)], [#'curve, pair(7366, 6422), pair(10144, 6041), pair(12337, 6597)], [#'curve, pair(15681, 7443), pair(15529, 9183), pair(15161, 10687)], [#'curve, pair(14820, 12077), pair(14397, 13739), pair(10894, 14508)], [#'curve, pair(8739, 14980), pair(6110, 14723), pair(3852, 15089)], [#'curve, pair(1735, 15433), pair(336, 16291), pair(66, 17205)], [#'curve, pair(-390, 18751), pair(1555, 20096), pair(4923, 20605)], [#'curve, pair(8131, 21089), pair(12103, 20671), pair(15048, 19431)], [#'curve, pair(20600, 17094), pair(20662, 13704), pair(20798, 10655)], [#'curve, pair(20934, 7594), pair(21210, 4191), pair(15993, 1694)], [#'curve, pair(12600, 70), pair(7429, -511), pair(3569, 504)], [#'curve, pair(1152, 1140), pair(-126, 2301), pair(80, 3510)], [#'close]]],
-                                   20852, 20801), ~fill: hex("929292", ~alpha: 0.4))),
-  // Redundant Update Elimination (id 568)
-  at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("Redundant Update Elimination", ~font: "Helvetica Neue",
-                      ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-  // Slide Number (id 569)
-  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-  // update (id 570)
-  at(338.516, 704.223, ~tag: "update",
-     shape_pict(~width: 135.0, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("update", ~size: 30.0))))),
-  // a (id 571)
-  at(211.26, 808.407, ~tag: "a",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("a", ~size: 30.0))))),
-  // v (id 572)
-  at(326.361, 808.407, ~tag: "v",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("v", ~size: 30.0))))),
-  // σ (id 573)
-  at(423.091, 808.407, ~tag: "σ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0))))),
-  // x (id 574)
-  at(326.361, 600.04, ~tag: "x",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("x", ~size: 30.0))))),
-  // σʹ (id 575)
-  at(423.091, 600.04, ~tag: "σʹ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0),
-                                 run("ʹ", ~font: "Times New Roman", ~size: 30.0))))),
-  // Connection Line (id 576)
-  at(357.401, 630.83, ~tag: "Connection Line",
-     shape_pict(~width: 48.615, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (2) (id 577)
-  at(406.016, 630.83, ~tag: "Connection Line (2)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (3) (id 578)
-  at(242.249, 735.024, ~tag: "Connection Line (3)",
-     shape_pict(~width: 163.716, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 2.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (4) (id 579)
-  at(357.401, 735.014, ~tag: "Connection Line (4)",
-     shape_pict(~width: 48.615, ~height: 104.184, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'arrow, "med", "med")))),
-  // Connection Line (5) (id 580)
-  at(406.016, 735.014, ~tag: "Connection Line (5)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // update (2) (id 581)
-  at(338.516, 495.856, ~tag: "update (2)",
-     shape_pict(~width: 135.0, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("update", ~size: 30.0))))),
-  // y (id 582)
-  at(326.361, 391.672, ~tag: "y",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("y", ~size: 30.0))))),
-  // σʹʹ (id 583)
-  at(423.091, 391.672, ~tag: "σʹʹ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0),
-                                 run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))),
-  // Connection Line (6) (id 584)
-  at(357.401, 422.463, ~tag: "Connection Line (6)",
-     shape_pict(~width: 48.615, ~height: 104.184, ~flip_h: #true, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'arrow, "med", "med")))),
-  // Connection Line (7) (id 585)
-  at(406.016, 422.463, ~tag: "Connection Line (7)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (8) (id 586)
-  at(406.016, 526.647, ~tag: "Connection Line (8)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (9) (id 587)
-  at(242.249, 526.649, ~tag: "Connection Line (9)",
-     shape_pict(~width: 163.716, ~height: 312.551, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (10) (id 588)
-  at(357.401, 526.647, ~tag: "Connection Line (10)",
-     shape_pict(~width: 48.615, ~height: 312.551, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (11) (id 589)
-  at(454.13, 422.463, ~tag: "Connection Line (11)",
-     shape_pict(~width: 0.0, ~height: 208.367, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Connection Line (12) (id 590)
-  at(357.401, 422.463, ~tag: "Connection Line (12)",
-     shape_pict(~width: 0.0, ~height: 416.735, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Group (id 606)
-  at(-27.0, 4.226, ~tag: "Group",
-     group_pict(~width: 1312.695, ~height: 51.502,
-                at(778.271, 0.774, ~tag: "Group (2)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (3)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("017100"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(28.093, 5.452, ~tag: "Effectful E-Graphs",
-                                 textbox(~width: 229.229, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful E-Graphs",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true, ~color: hex("FFFFFF"))))))),
-                at(1037.695, 0.0, ~tag: "Group (3)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (4)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("D9EAD3"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(22.392, 5.191, ~tag: "Effectful Extraction",
-                                 textbox(~width: 240.63, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful Extraction",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true)))))),
-                at(259.424, 0.774, ~tag: "Group (4)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (5)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(73.609, 5.452, ~tag: "E-Graphs",
-                                 textbox(~width: 128.197, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "E-Graphs", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(518.848, 0.774, ~tag: "Group (5)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (6)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(62.233, 5.452, ~tag: "Extraction",
-                                 textbox(~width: 150.949, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Extraction", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(0.0, 0.774, ~tag: "Group (6)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (7)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(67.116, 5.452, ~tag: "Rewriting",
-                                 textbox(~width: 141.182, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Rewriting", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))))),
-  // x = update(a, v)… (id 607)
-  at(703.648, 298.572, ~tag: "x = update(a, v)…",
-     shape_pict(~width: 512.703, ~height: 210.571, ~fill: hex("FFFFFF"),
-                ~line: make_stroke(hex("000000"), ~width: 1.0),
-                ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                            para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                 run("x = update(a, v)", ~size: 50.0)),
-                            para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                 run("y = update(a, v)", ~size: 50.0, ~strike: #true))),
-                ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                     ~direction: 90.0))),
-  // update is idempotent (id 608)
-  at(1170.801, 363.342, ~tag: "update is idempotent",
-     shape_pict(~width: 510.75, ~height: 81.031,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(3005, 0)], [#'curve, pair(2866, 0), pair(2753, 714), pair(2753, 1591)], [#'line, pair(2753, 4532)], [#'line, pair(0, 10588)], [#'line, pair(2753, 16652)], [#'line, pair(2753, 20017)], [#'curve, pair(2753, 20894), pair(2866, 21600), pair(3005, 21600)], [#'line, pair(21348, 21600)], [#'curve, pair(21487, 21600), pair(21600, 20894), pair(21600, 20017)], [#'line, pair(21600, 1591)], [#'curve, pair(21600, 714), pair(21487, 0), pair(21348, 0)], [#'line, pair(3005, 0)], [#'close]]],
-                                   21600, 21600), ~fill: hex("FFE599"),
-                ~body: body(~anchor: #'center, ~insets: insets(10.01, 10.01, 10.01, 10.01),
-                            para(~align: #'center,
-                                 run("update is idempotent", ~font: "Helvetica Neue",
-                                     ~size: 40.0)))))
-)
+  // adds the second `update` node and its two edges
+  def stage_1:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(243.099, 377.773, ~tag: "Shape",
+                  shape_pict(~width: 162.263, ~height: 506.564, ~flip_h: #true,
+                             ~geom: custom_geom(
+                                                [[[#'move, pair(941, 2072)], [#'curve, pair(991, 2770), pair(1849, 3375), pair(3711, 3645)], [#'curve, pair(5530, 3908), pair(7816, 3696), pair(9530, 4050)], [#'curve, pair(11330, 4421), pair(11609, 5177), pair(12096, 5850)], [#'curve, pair(13191, 7363), pair(15847, 8811), pair(15997, 10409)], [#'curve, pair(16173, 12275), pair(13047, 13933), pair(11664, 15607)], [#'curve, pair(11080, 16314), pair(10600, 17025), pair(8532, 17388)], [#'curve, pair(6852, 17683), pair(4783, 17516), pair(3014, 17739)], [#'curve, pair(1355, 17948), pair(251, 18461), pair(47, 19017)], [#'curve, pair(-293, 19942), pair(1248, 20745), pair(3853, 21070)], [#'curve, pair(6603, 21413), pair(9739, 21106), pair(11787, 20361)], [#'curve, pair(13999, 19557), pair(14481, 18509), pair(15205, 17474)], [#'curve, pair(16572, 15522), pair(19121, 13605), pair(20299, 11570)], [#'curve, pair(21307, 9829), pair(21252, 8010), pair(19067, 6397)], [#'curve, pair(17376, 5149), pair(14421, 4070), pair(13183, 2780)], [#'curve, pair(12463, 2029), pair(12282, 1215), pair(10632, 614)], [#'curve, pair(8820, -47), pair(5890, -187), pair(3675, 258)], [#'curve, pair(1793, 635), pair(890, 1346), pair(941, 2072)], [#'close]]],
+                                                20930, 21209), ~fill: hex("929292", ~alpha: 0.4))),
+               at(407.265, 375.236, ~tag: "Shape (2)",
+                  shape_pict(~width: 126.68, ~height: 300.004,
+                             ~geom: custom_geom(
+                                                [[[#'move, pair(80, 3510)], [#'curve, pair(302, 4815), pair(2062, 5815), pair(4912, 6141)], [#'curve, pair(7366, 6422), pair(10144, 6041), pair(12337, 6597)], [#'curve, pair(15681, 7443), pair(15529, 9183), pair(15161, 10687)], [#'curve, pair(14820, 12077), pair(14397, 13739), pair(10894, 14508)], [#'curve, pair(8739, 14980), pair(6110, 14723), pair(3852, 15089)], [#'curve, pair(1735, 15433), pair(336, 16291), pair(66, 17205)], [#'curve, pair(-390, 18751), pair(1555, 20096), pair(4923, 20605)], [#'curve, pair(8131, 21089), pair(12103, 20671), pair(15048, 19431)], [#'curve, pair(20600, 17094), pair(20662, 13704), pair(20798, 10655)], [#'curve, pair(20934, 7594), pair(21210, 4191), pair(15993, 1694)], [#'curve, pair(12600, 70), pair(7429, -511), pair(3569, 504)], [#'curve, pair(1152, 1140), pair(-126, 2301), pair(80, 3510)], [#'close]]],
+                                                20852, 20801), ~fill: hex("929292", ~alpha: 0.4))),
+               at(454.13, 422.463, ~tag: "Connection Line (11)",
+                  shape_pict(~width: 0.0, ~height: 208.367, ~flip_v: #true,
+                             ~shape: "straightConnector1",
+                             ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
+                                                ~dash_pattern: [pair(200.0, 200.0)]))),
+               at(357.401, 422.463, ~tag: "Connection Line (12)",
+                  shape_pict(~width: 0.0, ~height: 416.735, ~shape: "straightConnector1",
+                             ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
+                                                ~dash_pattern: [pair(200.0, 200.0)]))))
 
-// -------------------------------------------------------------------------------------
-// slide_28: Slide 17
-def slide_28 = slide_canvas(
-  ~width: slide_width, ~height: slide_height,
-  ~background: hex("FFFFFF"),
-  // Shape (id 610)
-  at(243.099, 377.773, ~tag: "Shape",
-     shape_pict(~width: 162.263, ~height: 506.564, ~flip_h: #true,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(941, 2072)], [#'curve, pair(991, 2770), pair(1849, 3375), pair(3711, 3645)], [#'curve, pair(5530, 3908), pair(7816, 3696), pair(9530, 4050)], [#'curve, pair(11330, 4421), pair(11609, 5177), pair(12096, 5850)], [#'curve, pair(13191, 7363), pair(15847, 8811), pair(15997, 10409)], [#'curve, pair(16173, 12275), pair(13047, 13933), pair(11664, 15607)], [#'curve, pair(11080, 16314), pair(10600, 17025), pair(8532, 17388)], [#'curve, pair(6852, 17683), pair(4783, 17516), pair(3014, 17739)], [#'curve, pair(1355, 17948), pair(251, 18461), pair(47, 19017)], [#'curve, pair(-293, 19942), pair(1248, 20745), pair(3853, 21070)], [#'curve, pair(6603, 21413), pair(9739, 21106), pair(11787, 20361)], [#'curve, pair(13999, 19557), pair(14481, 18509), pair(15205, 17474)], [#'curve, pair(16572, 15522), pair(19121, 13605), pair(20299, 11570)], [#'curve, pair(21307, 9829), pair(21252, 8010), pair(19067, 6397)], [#'curve, pair(17376, 5149), pair(14421, 4070), pair(13183, 2780)], [#'curve, pair(12463, 2029), pair(12282, 1215), pair(10632, 614)], [#'curve, pair(8820, -47), pair(5890, -187), pair(3675, 258)], [#'curve, pair(1793, 635), pair(890, 1346), pair(941, 2072)], [#'close]]],
-                                   20930, 21209), ~fill: hex("929292", ~alpha: 0.4))),
-  // Shape (2) (id 611)
-  at(407.265, 375.236, ~tag: "Shape (2)",
-     shape_pict(~width: 126.68, ~height: 300.004,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(80, 3510)], [#'curve, pair(302, 4815), pair(2062, 5815), pair(4912, 6141)], [#'curve, pair(7366, 6422), pair(10144, 6041), pair(12337, 6597)], [#'curve, pair(15681, 7443), pair(15529, 9183), pair(15161, 10687)], [#'curve, pair(14820, 12077), pair(14397, 13739), pair(10894, 14508)], [#'curve, pair(8739, 14980), pair(6110, 14723), pair(3852, 15089)], [#'curve, pair(1735, 15433), pair(336, 16291), pair(66, 17205)], [#'curve, pair(-390, 18751), pair(1555, 20096), pair(4923, 20605)], [#'curve, pair(8131, 21089), pair(12103, 20671), pair(15048, 19431)], [#'curve, pair(20600, 17094), pair(20662, 13704), pair(20798, 10655)], [#'curve, pair(20934, 7594), pair(21210, 4191), pair(15993, 1694)], [#'curve, pair(12600, 70), pair(7429, -511), pair(3569, 504)], [#'curve, pair(1152, 1140), pair(-126, 2301), pair(80, 3510)], [#'close]]],
-                                   20852, 20801), ~fill: hex("929292", ~alpha: 0.4))),
-  // Redundant Update Elimination (id 612)
-  at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("Redundant Update Elimination", ~font: "Helvetica Neue",
-                      ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-  // Slide Number (id 613)
-  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-  // update (id 614)
-  at(338.516, 704.223, ~tag: "update",
-     shape_pict(~width: 135.0, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("update", ~size: 30.0))))),
-  // a (id 615)
-  at(211.26, 808.407, ~tag: "a",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("a", ~size: 30.0))))),
-  // v (id 616)
-  at(326.361, 808.407, ~tag: "v",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("v", ~size: 30.0))))),
-  // σ (id 617)
-  at(423.091, 808.407, ~tag: "σ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0))))),
-  // x (id 618)
-  at(326.361, 600.04, ~tag: "x",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("x", ~size: 30.0))))),
-  // σʹ (id 619)
-  at(423.091, 600.04, ~tag: "σʹ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0),
-                                 run("ʹ", ~font: "Times New Roman", ~size: 30.0))))),
-  // Connection Line (id 620)
-  at(357.401, 630.83, ~tag: "Connection Line",
-     shape_pict(~width: 48.615, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (2) (id 621)
-  at(406.016, 630.83, ~tag: "Connection Line (2)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (3) (id 622)
-  at(242.249, 735.024, ~tag: "Connection Line (3)",
-     shape_pict(~width: 163.716, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 2.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (4) (id 623)
-  at(357.401, 735.014, ~tag: "Connection Line (4)",
-     shape_pict(~width: 48.615, ~height: 104.184, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'arrow, "med", "med")))),
-  // Connection Line (5) (id 624)
-  at(406.016, 735.014, ~tag: "Connection Line (5)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // update (2) (id 625)
-  at(338.516, 495.856, ~tag: "update (2)",
-     shape_pict(~width: 135.0, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("update", ~size: 30.0))))),
-  // y (id 626)
-  at(326.361, 391.672, ~tag: "y",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("y", ~size: 30.0))))),
-  // σʹʹ (id 627)
-  at(423.091, 391.672, ~tag: "σʹʹ",
-     shape_pict(~width: 62.079, ~height: 61.581,
-                ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(~align: #'center, run("σ", ~size: 30.0),
-                                 run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))),
-  // Connection Line (6) (id 628)
-  at(357.401, 422.463, ~tag: "Connection Line (6)",
-     shape_pict(~width: 48.615, ~height: 104.184, ~flip_h: #true, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'arrow, "med", "med")))),
-  // Connection Line (7) (id 629)
-  at(406.016, 422.463, ~tag: "Connection Line (7)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (8) (id 630)
-  at(406.016, 526.647, ~tag: "Connection Line (8)",
-     shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (9) (id 631)
-  at(242.249, 526.649, ~tag: "Connection Line (9)",
-     shape_pict(~width: 163.716, ~height: 312.551, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (10) (id 632)
-  at(357.401, 526.647, ~tag: "Connection Line (10)",
-     shape_pict(~width: 48.615, ~height: 312.551, ~flip_h: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'arrow, "med", "med")))),
-  // Connection Line (11) (id 633)
-  at(454.13, 422.463, ~tag: "Connection Line (11)",
-     shape_pict(~width: 0.0, ~height: 208.367, ~flip_v: #true,
-                ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Connection Line (12) (id 634)
-  at(357.401, 422.463, ~tag: "Connection Line (12)",
-     shape_pict(~width: 0.0, ~height: 416.735, ~shape: "straightConnector1",
-                ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Is this optimization safe? (id 635)
-  at(751.007, 652.254, ~tag: "Is this optimization safe?",
-     textbox(~width: 900.225, ~height: 96.825, ~anchor: #'center, ~wrap: #false,
-             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("Is this optimization safe?", ~font: "Helvetica Neue", ~size: 75.0,
-                      ~bold: #true)))),
-  // Group (id 651)
-  at(-27.0, 4.226, ~tag: "Group",
-     group_pict(~width: 1312.695, ~height: 51.502,
-                at(778.271, 0.774, ~tag: "Group (2)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (3)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("017100"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(28.093, 5.452, ~tag: "Effectful E-Graphs",
-                                 textbox(~width: 229.229, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful E-Graphs",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true, ~color: hex("FFFFFF"))))))),
-                at(1037.695, 0.0, ~tag: "Group (3)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (4)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("D9EAD3"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(22.392, 5.191, ~tag: "Effectful Extraction",
-                                 textbox(~width: 240.63, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful Extraction",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true)))))),
-                at(259.424, 0.774, ~tag: "Group (4)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (5)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(73.609, 5.452, ~tag: "E-Graphs",
-                                 textbox(~width: 128.197, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "E-Graphs", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(518.848, 0.774, ~tag: "Group (5)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (6)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(62.233, 5.452, ~tag: "Extraction",
-                                 textbox(~width: 150.949, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Extraction", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(0.0, 0.774, ~tag: "Group (6)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (7)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(67.116, 5.452, ~tag: "Rewriting",
-                                 textbox(~width: 141.182, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Rewriting", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))))),
-  // x = update(a, v)… (id 652)
-  at(703.648, 298.572, ~tag: "x = update(a, v)…",
-     shape_pict(~width: 512.703, ~height: 210.571, ~fill: hex("FFFFFF"),
-                ~line: make_stroke(hex("000000"), ~width: 1.0),
-                ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                            para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                 run("x = update(a, v)", ~size: 50.0)),
-                            para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                 run("y=v", ~size: 50.0))),
-                ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                     ~direction: 90.0))),
-  // update is idempotent (id 653)
-  at(1170.801, 363.342, ~tag: "update is idempotent",
-     shape_pict(~width: 510.75, ~height: 81.031,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(3005, 0)], [#'curve, pair(2866, 0), pair(2753, 714), pair(2753, 1591)], [#'line, pair(2753, 4532)], [#'line, pair(0, 10588)], [#'line, pair(2753, 16652)], [#'line, pair(2753, 20017)], [#'curve, pair(2753, 20894), pair(2866, 21600), pair(3005, 21600)], [#'line, pair(21348, 21600)], [#'curve, pair(21487, 21600), pair(21600, 20894), pair(21600, 20017)], [#'line, pair(21600, 1591)], [#'curve, pair(21600, 714), pair(21487, 0), pair(21348, 0)], [#'line, pair(3005, 0)], [#'close]]],
-                                   21600, 21600), ~fill: hex("FFE599"),
-                ~body: body(~anchor: #'center, ~insets: insets(10.01, 10.01, 10.01, 10.01),
-                            para(~align: #'center,
-                                 run("update is idempotent", ~font: "Helvetica Neue",
-                                     ~size: 40.0)))))
-)
+  // adds 'Is this optimization safe?'
+  def stage_2:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(751.007, 652.254, ~tag: "Is this optimization safe?",
+                  textbox(~width: 900.225, ~height: 96.825, ~anchor: #'center, ~wrap: #false,
+                          ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                               run("Is this optimization safe?", ~font: "Helvetica Neue", ~size: 75.0,
+                                   ~bold: #true)))))
+
+  // The code block, in the three states it is rewritten through.
+  // state 1: 'x = update(a, v)', 'y = update(a, v)'
+  def code_1:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(703.648, 298.572, ~tag: "x = update(a, v)…",
+                  shape_pict(~width: 512.703, ~height: 210.571, ~fill: hex("FFFFFF"),
+                             ~line: make_stroke(hex("000000"), ~width: 1.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
+                                              run("x = update(a, v)", ~size: 50.0)),
+                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
+                                              run("y = update(a, v)", ~size: 50.0))),
+                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
+                                                  ~direction: 90.0))))
+
+  // state 2: 'x = update(a, v)', 'y = update(a, v)'
+  def code_2:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(703.648, 298.572, ~tag: "x = update(a, v)…",
+                  shape_pict(~width: 512.703, ~height: 210.571, ~fill: hex("FFFFFF"),
+                             ~line: make_stroke(hex("000000"), ~width: 1.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
+                                              run("x = update(a, v)", ~size: 50.0)),
+                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
+                                              run("y = update(a, v)", ~size: 50.0, ~strike: #true))),
+                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
+                                                  ~direction: 90.0))))
+
+  // state 3: 'x = update(a, v)', 'y=v'
+  def code_3:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(703.648, 298.572, ~tag: "x = update(a, v)…",
+                  shape_pict(~width: 512.703, ~height: 210.571, ~fill: hex("FFFFFF"),
+                             ~line: make_stroke(hex("000000"), ~width: 1.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
+                                              run("x = update(a, v)", ~size: 50.0)),
+                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
+                                              run("y=v", ~size: 50.0))),
+                             ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
+                                                  ~direction: 90.0))))
+
+  // Both tracks are three epochs long, so click k plays the k'th reveal and the
+  // k'th rewrite together -- exactly what the three separate slides did.
+  pc.overlay(~horiz: #'left, ~vert: #'top,
+             staged(base_canvas, [stage_1, stage_2]),
+             pc.switch(as_pict(code_1),
+                       fade_through(as_pict(code_1), as_pict(code_2)),
+                       fade_through(as_pict(code_2), as_pict(code_3))))
 
 // -------------------------------------------------------------------------------------
 // slide_29: Slide 18 through Slide 19, as one animated pict.
@@ -3966,7 +3509,7 @@ def slide_39:
 
   staged(base_canvas, [stage_1])
 
-def all_slides = [slide_1, slide_2, slide_12, slide_18, slide_19, slide_20, slide_23, slide_26, slide_27, slide_28, slide_29, slide_31, slide_32, slide_34, slide_36, slide_37, slide_38, slide_39]
+def all_slides = [slide_1, slide_2, slide_12, slide_18, slide_19, slide_20, slide_23, slide_26, slide_29, slide_31, slide_32, slide_34, slide_36, slide_37, slide_38, slide_39]
 
 module main:
   // glide-pptx's own `show_slides` calls `Pict.from_handle` on every slide, which
