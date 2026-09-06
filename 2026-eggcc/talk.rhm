@@ -406,7 +406,45 @@ fun slide_2():
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
 fun slide_12():
-  // the picture before the first reveal
+  // A node of the e-graph. Keynote drew each as a rounded box with a text box
+  // inside; building them from one description keeps the seven of them agreeing,
+  // and gives each a pict the `arrow` helper can find and aim at.
+  fun node(label :: String, ~color: color :: String = "000000"):
+    group_pict(~width: 100.0, ~height: 100.0,
+               at(0.0, 0.0, ~tag: "box",
+                  shape_pict(~width: 100.0, ~height: 100.0,
+                             ~geom: preset_geom("roundRect", [pair("adj", "val 30640")]),
+                             ~fill: hex("FFFFFF"),
+                             ~line: make_stroke(hex(color), ~width: 4.0))),
+               at(10.974, 10.974, ~tag: "label",
+                  textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
+                          ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                          para(~align: #'center,
+                               run(label, ~font: "Times New Roman", ~size: 69.75)))))
+
+  def n_a = node("a")
+  def n_one = node("1")
+  def n_plus = node("+")
+  def n_minus = node("−")
+  def n_plus_r = node("+", ~color: "0433FF")
+  def n_minus_r = node("−", ~color: "0433FF")
+  def n_zero = node("0", ~color: "FF9300")
+  // Racket picts, not `pc.blank`: these are placed with the runtime's `at`, which
+  // takes the runtime's picts, and `arrow` finds an endpoint by the very pict that
+  // was placed. `blank` here is the runtime's, so it takes positional sizes.
+  def m_flow_top = blank(1.0, 1.0)
+  def m_flow_bot = blank(1.0, 1.0)
+
+  // Inputs on top, the result underneath, so every edge points the way the data
+  // goes. Keynote had it the other way up, with the root above its operands.
+  def row_in = 485.051
+  def row_mid = 676.242
+  def row_out = 867.432
+  def col_l = 806.429
+  def col_r = 1029.766
+  def col_far = 1190.919
+  def flow_x = 700.0
+
   def base_canvas:
     slide_canvas(
       ~width: slide_width, ~height: slide_height,
@@ -465,190 +503,80 @@ fun slide_12():
                                                  ~color: hex("4F8F00"))))))))
 
   // adds '+', 'a', '1', '−'
+  // adds the leaves and the term's own two operators
   def stage_2:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(806.429, 676.242, ~tag: "+",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "+ (2)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("+", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(806.429, 867.432, ~tag: "a",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (2)",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "a (2)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("a", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(1029.766, 867.432, ~tag: "1",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (3)",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "1 (2)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("1", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(806.429, 485.051, ~tag: "−",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (4)",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "− (2)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("−", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(885.873, 585.464, ~tag: "Connection Line",
-                  shape_pict(~width: 164.448, ~height: 281.556,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(21600, 21600)], [#'line, pair(0, 0)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~head: line_end(#'triangle, "med", "med")))),
-               at(856.429, 587.051, ~tag: "Connection Line (2)",
-                  shape_pict(~width: 0.0, ~height: 87.19,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(21600, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(21600, 0)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~head: line_end(#'triangle, "med", "med")))),
-               at(856.429, 778.242, ~tag: "Connection Line (3)",
-                  shape_pict(~width: 0.0, ~height: 87.19,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(21600, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(21600, 0)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~head: line_end(#'triangle, "med", "med")))),
-               at(901.908, 765.175, ~tag: "Connection Line (4)",
-                  shape_pict(~width: 132.379, ~height: 113.325,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(21600, 21600)], [#'line, pair(0, 0)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~head: line_end(#'triangle, "med", "med")))))
+               at(col_l, row_in, ~tag: "a", n_a),
+               at(col_r, row_in, ~tag: "1", n_one),
+               at(col_l, row_mid, ~tag: "+", n_plus),
+               at(col_l, row_out, ~tag: "−", n_minus),
+               at(flow_x, row_in + 14.0, ~tag: "data flow from", m_flow_top),
+               at(flow_x, row_out + 86.0, ~tag: "data flow to", m_flow_bot))
 
-  // adds '+', '−'
+  // adds the rewritten term, sharing the same two leaves
   def stage_3:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1029.766, 485.051, ~tag: "+ (3)",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (5)",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("0433FF"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "+ (4)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("+", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(1029.766, 676.242, ~tag: "− (3)",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (6)",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("0433FF"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "− (4)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("−", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(1079.766, 778.242, ~tag: "Connection Line (5)",
-                  shape_pict(~width: 0.0, ~height: 87.19,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(0, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(0, 0)]]],
-                                                0, 21600),
-                             ~line: make_stroke(hex("0433FF"), ~width: 4.0,
-                                                ~head: line_end(#'triangle, "med", "med")))),
-               at(1079.766, 778.242, ~tag: "Connection Line (6)",
-                  shape_pict(~width: 0.0, ~height: 87.19,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(0, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(0, 0)]]],
-                                                0, 21600),
-                             ~line: make_stroke(hex("0433FF"), ~width: 4.0,
-                                                ~head: line_end(#'triangle, "med", "med")))),
-               at(885.874, 585.464, ~tag: "Connection Line (7)",
-                  shape_pict(~width: 164.448, ~height: 281.556,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(21600, 0)], [#'line, pair(0, 21600)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("0433FF"), ~width: 4.0,
-                                                ~tail: line_end(#'triangle, "med", "med")))),
-               at(1079.766, 587.051, ~tag: "Connection Line (8)",
-                  shape_pict(~width: 0.0, ~height: 87.19,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(0, 0)], [#'curve, pair(21600, 7200), pair(21600, 14400), pair(0, 21600)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("0433FF"), ~width: 4.0,
-                                                ~tail: line_end(#'triangle, "med", "med")))),
-               at(908.429, 535.051, ~tag: "Connection Line (9)",
-                  shape_pict(~width: 119.337, ~height: 0.0,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(21600, 10800)], [#'curve, pair(14400, 0), pair(7200, 0), pair(0, 21600)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("0433FF"), ~width: 6.0, ~dash: #'#{short-dash},
-                                                ~dash_pattern: [pair(200.0, 200.0)]))))
+               at(col_r, row_out, ~tag: "+ (3)", n_plus_r),
+               at(col_r, row_mid, ~tag: "− (3)", n_minus_r))
 
-  // adds '0'
   def stage_4:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1190.918, 676.242, ~tag: "0",
-                  group_pict(~width: 100.0, ~height: 100.0,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle (7)",
-                                shape_pict(~width: 100.0, ~height: 100.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 30640")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("FF9300"), ~width: 4.0))),
-                             at(10.974, 10.974, ~tag: "0 (2)",
-                                textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                                        ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("0", ~font: "Times New Roman", ~size: 69.75)))))),
-               at(1131.766, 726.242, ~tag: "Connection Line (10)",
-                  shape_pict(~width: 57.153, ~height: 0.0,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(0, 0)], [#'curve, pair(7200, 0), pair(14400, 0), pair(21600, 0)]]],
-                                                21600, 0),
-                             ~line: make_stroke(hex("FF9300"), ~width: 6.0, ~dash: #'#{short-dash},
-                                                ~dash_pattern: [pair(200.0, 200.0)]))))
+               at(col_far, row_mid, ~tag: "0", n_zero))
 
-  // adds 1 shape
+  // nothing new to draw: the last step is the equivalence `wire` adds at k = 4
   def stage_5:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(872.349, 579.377, ~tag: "Connection Line (11)",
-                  shape_pict(~width: 167.035, ~height: 286.054,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(0, 21600)], [#'curve, pair(4530, 13899), pair(11730, 6699), pair(21600, 0)]]],
-                                                21600, 21600),
-                             ~line: make_stroke(hex("4F8F00"), ~width: 6.0, ~dash: #'#{short-dash},
-                                                ~dash_pattern: [pair(200.0, 200.0)]))))
+    group_pict(~width: slide_width, ~height: slide_height, at(0.0, 0.0, ~tag: "nothing", blank()))
 
-  staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5])
+  // The edges, as `arrow`s from border to border rather than Keynote connectors.
+  // Stage `k` brings the edges of the nodes it adds. Solid arrows are operands
+  // feeding an operator; a dashed line with no head is an e-class, saying two
+  // nodes are the same value rather than that anything flows between them.
+  fun eq(p, x, y, col):
+    arrow(~on: p, x, y, ~style: #'line, ~line_style: #'short_dash,
+          ~color: col, ~line_width: 4)
+
+  // `staged` hands `wire` the new stage over a *ghost of the base*, so nodes added
+  // by an earlier stage are not in the picture it gets and `Find` cannot reach
+  // them. Ghosting those stages back in restores them for finding without drawing
+  // anything twice -- a ghost keeps its children findable, which is the whole
+  // reason `staged` can use one for the base in the first place.
+  fun seen(q, sts):
+    for values(acc :~ pc.Pict = q) (st in sts):
+      pc.overlay(~horiz: #'left, ~vert: #'top, acc, as_pict(st).ghost())
+
+  // Stage `k` brings the edges of the nodes it adds; `staged` counts stages from
+  // 1, and stage 1 here is the rules, so the graph starts at 2. Solid arrows are
+  // operands feeding an operator, and they all point down because the inputs are
+  // on top. A dashed line with no head is an e-class: those two nodes are the
+  // same value, not a flow between them.
+  fun wire(p, k):
+    match k
+    | 2:
+        // the long diagonals thread the gap between the two middle nodes, which
+        // is why the columns sit where they do
+        let p = arrows(~on: p, [[n_a, n_plus], [n_one, n_plus],
+                                [n_plus, n_minus], [n_one, n_minus]],
+                       ~line_width: 4, ~gap: 4)
+        arrow(~on: p, m_flow_top, m_flow_bot, ~line_width: 4,
+              ~color: draw.Color(150, 150, 150),
+              // `t` is slideshow's; this file has the runtime's textbox instead
+              ~label: as_pict(textbox(~width: 220.0, ~height: 52.0, ~anchor: #'center,
+                                      ~wrap: #false, ~autofit: #'grow,
+                                      ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                      para(~align: #'center,
+                                           run("data flow", ~font: "Helvetica Neue",
+                                               ~size: 40.0, ~color: hex("787878"))))),
+              ~label_dx: -80, ~label_dy: 0)
+    | 3:
+        let q = seen(p, [stage_2])
+        let q = arrows(~on: q, [[n_a, n_plus_r], [n_minus_r, n_plus_r], [n_one, n_minus_r]],
+                       ~line_width: 4, ~gap: 4, ~color: keynote_blue)
+        eq(q, n_minus, n_plus_r, keynote_blue)
+    | 4: eq(seen(p, [stage_2, stage_3]), n_minus_r, n_zero, draw.Color(255, 147, 0))
+    | 5: eq(seen(p, [stage_2, stage_3, stage_4]), n_plus_r, n_a, draw.Color(0, 143, 0))
+    | ~else: p
+
+  staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5], ~wire: wire)
 
 // -------------------------------------------------------------------------------------
 // slide_18: Slide 9

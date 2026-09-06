@@ -514,6 +514,13 @@ fun outline_disc(i :: Int, n :: Int, hl :: Real) :: Pict:
   def glow = circle(~size: rr * 2 + outline_glow, ~fill: hue, ~line: #false).alpha(0.34 * hl)
   overlay(glow, core.alpha(lerp(0.55, 1.0, hl)))
 
+// The settled label is plain text, not the writer's last frame: `write_out` leaves
+// its final glyph heavier than the rest, and that frame is what the header would
+// otherwise carry for the whole section. The ICFP talk swaps the same way.
+fun outline_plain(str :: String) :: Pict:
+  parameterize { current_font: current_font() with (size = outline_text) }:
+    t(str)
+
 fun outline_writer(str :: String, ~color: color) :: Pict:
   write.write_out(str, ~font: current_font() with (size = outline_text),
                   ~color: color, ~extent: 1.0)
@@ -593,9 +600,9 @@ fun outline_to_header(items :: List.of(String),
   def n = items.length()
   def line_color = as_color(color)
   def writers = for List (s in items): outline_writer(s, ~color: draw.Color(0, 0, 0))
-  def written = for List (w :~ Pict in writers): w.snapshot(0, 1.0)
-  def written_lit = for List (s in items):
-                      outline_writer(s, ~color: line_color).snapshot(0, 1.0)
+  def plain = for List (s in items): outline_plain(s)
+  def written = for List (q :~ Pict in plain): q.colorize(draw.Color(0, 0, 0))
+  def written_lit = for List (q :~ Pict in plain): q.colorize(line_color)
   // the settled pieces, built once: these are what the header shows and what the
   // move matches on
   def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
@@ -654,10 +661,9 @@ fun section_header(items :: List.of(String),
                    ~color: color = talk_blue) :: Pict:
   def n = items.length()
   def line_color = as_color(color)
-  def written = for List (s in items):
-                  outline_writer(s, ~color: draw.Color(0, 0, 0)).snapshot(0, 1.0)
-  def written_lit = for List (s in items):
-                      outline_writer(s, ~color: line_color).snapshot(0, 1.0)
+  def plain = for List (s in items): outline_plain(s)
+  def written = for List (q :~ Pict in plain): q.colorize(draw.Color(0, 0, 0))
+  def written_lit = for List (q :~ Pict in plain): q.colorize(line_color)
   def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
   def labels = for List (i in 0..n):
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))

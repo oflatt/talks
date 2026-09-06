@@ -137,6 +137,20 @@ fun write_out(str :: String,
     dc.restore()
 
   fun frame(t :: Real) :: Pict:
+    // The finished word, filled and nothing else. The schedule puts the last
+    // glyph's `local` at exactly 1.0 when `t` is 1, so in exact arithmetic it
+    // would already fall through to the filled band -- but it lands a hair under
+    // in floating point, leaving that glyph in its fill phase for the frame the
+    // slide comes to rest on. This settles it by construction rather than by
+    // hoping the arithmetic is kind.
+    if t >= 1.0
+    | block:
+        def obm = draw.Bitmap([w, h])
+        def dc = obm.make_dc()
+        fill_band(dc, 0.0, 1.0 * w, base_color)
+        bitmap(obm).scale(1.0 / os)
+    | frame_at(t)
+  fun frame_at(t :: Real) :: Pict:
     def obm = draw.Bitmap([w, h])
     def dc = obm.make_dc()
     // glyphs finish left-to-right in order, so the done ones are a prefix.
@@ -159,10 +173,16 @@ fun write_out(str :: String,
         | dc.brush := draw.Brush.none
           dc.pen := draw.Pen(~color: base_color, ~width: lw)
           stroke_contours(dc, conts, math.exact(math.floor(local * 2.0 * g[3])))
-        | dc.brush := draw.Brush.none
-          dc.pen := draw.Pen(~color: base_color, ~width: lw)
+        | // Fill phase. The traced outline fades out as the fill comes in: drawn at
+          // full strength it sits on top of the fill and the glyph reads a stroke
+          // heavier than one that was merely filled, which is what left the last
+          // letter looking bold once the write had finished.
+          def fill_in = (local - 0.5) * 2.0
+          dc.brush := draw.Brush.none
+          dc.pen := draw.Pen(~color: base_color with (alpha = 1.0 - fill_in),
+                             ~width: lw)
           stroke_contours(dc, conts, g[3])
-          fill_band(dc, g[1], g[2], base_color with (alpha = (local - 0.5) * 2.0))
+          fill_band(dc, g[1], g[2], base_color with (alpha = fill_in))
     bitmap(obm).scale(1.0 / os)
   def anim = animate(fun (n): frame(n), ~extent: extent, ~bend: bend)
   if return_letters
