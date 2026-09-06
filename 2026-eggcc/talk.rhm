@@ -1191,36 +1191,12 @@ fun slide_20():
                                run("(Szalinski)", ~font: "Helvetica Neue Medium",
                                    ~size: 48.0)))))
 
-  // the notes are part of the picture from the moment the slide arrives, as they
-  // were before; only the two callouts below are revealed on a click
+  // the notes are part of the picture from the moment the slide arrives; the
+  // bubble is the one thing revealed on a click
   def base:
     pc.overlay(~horiz: #'left, ~vert: #'top, shown, as_pict(notes))
 
   def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(53.975, 282.375, ~tag: "None handle side-effects!",
-                  group_pict(~width: 1416.624, ~height: 115.225,
-                             at(0.0, 0.0, ~tag: "Rounded Rectangle",
-                                shape_pict(~width: 1416.624, ~height: 115.226,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 13276")]),
-                                           ~fill: hex("FFE599"))),
-                             at(4.48, 17.05, ~tag: "None handle side-effects! (2)",
-                                textbox(~width: 1407.663, ~height: 81.125, ~anchor: #'center,
-                                        ~insets: insets(10.0, 10.0, 10.0, 10.0),
-                                        para(~align: #'center,
-                                             run("None handle side-effects!", ~font: "Helvetica Neue",
-                                                 ~size: 50.0, ~bold: #true)))))))
-
-  // The TODO this slide carried: a bubble pointing at the tools that need effects.
-  //
-  // The four are Numba (Python Simulations), Luminal (ML Kernels), Cranelift (WASM)
-  // and MLIR (User DSL Optimizations). The bubble sits in the band between the two
-  // rows, to the left of all four, with an arrow to each.
-  //
-  // `multi_callout` draws the body and all four spikes as one outline, so the
-  // bubble itself protrudes towards each of them rather than growing arrows.
-  def stage_2:
     // The body goes in the band between the two rows, right of centre: the left of
     // that band is taken by "(Herbie)" and the right by the "Luminal" note, and this
     // is the clear stretch between them. Sitting between the rows it points into is
@@ -1239,22 +1215,22 @@ fun slide_20():
       pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, p)
     def placed:
       place(place(place(place(place(pc.blank(~width: slide_width, ~height: slide_height),
-                                    slot, 1100.0, 537.0),
+                                    slot, 950.0, 530.0),
                               m_numba, 702.7, 288.8),
                         m_luminal, 1571.6, 257.5),
                   m_cranelift, 809.2, 699.1),
             m_mlir, 1319.7, 740.3)
     multi_callout(~on: placed, ~place: slot,
                   ~at: [m_numba, m_luminal, m_cranelift, m_mlir],
-                  ~color: talk_blue,
-                  as_pict(textbox(~width: 303.2, ~height: 43.2, ~anchor: #'center,
+                  ~color: talk_red, ~padding: 10.0,
+                  as_pict(textbox(~width: 404.2, ~height: 57.6, ~anchor: #'center,
                                   ~wrap: #false, ~autofit: #'grow,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
                                        run("need side effects!", ~font: "Helvetica Neue",
-                                           ~size: 36.0, ~bold: #true)))))
+                                           ~size: 48.0, ~bold: #true)))))
 
-  staged(base, [stage_1, stage_2])
+  staged(base, [stage_1])
 
 // -------------------------------------------------------------------------------------
 // slide_23: Slide 12 through Slide 14, as one animated pict.
