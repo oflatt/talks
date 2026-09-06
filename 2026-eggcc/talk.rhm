@@ -94,9 +94,9 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // move ends exactly where the next slide's header begins and the bar appears to
 // stay put across the cut.
 //
-// The header sits at y 6..60 and the deck's slide titles start at y 64, which is
-// what the 0.45 scale in `section_header` is chosen against. Retitle a slide
-// higher than that and the two will meet.
+// The header's discs sit around y 18..50 and the deck's slide titles start at
+// y 64, which is what the disc and text scales in `header_layout` are chosen
+// against. Retitle a slide higher than that and the two will meet.
 def sections = ["Motivate Effectful E-Graphs", "Extraction Problem",
                 "A DP Solution", "It Works!"]
 
@@ -106,11 +106,13 @@ fun section_canvas():
 
 fun divider(k :: Int):
   fun ():
-    outline_to_header(section_bar(sections, ~at: k), ~canvas: section_canvas())
+    // only the first divider writes the list out; after that the list is familiar
+    // and what matters is which disc is lit
+    outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0)
 
 fun in_section(k :: Int, mk):
   fun ():
-    section_header(section_bar(sections, ~at: k), ~canvas: as_pict(mk()))
+    section_header(sections, ~at: k, ~canvas: as_pict(mk()))
 
 // Every animated slide holds its last frame for one more advance.
 //

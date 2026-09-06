@@ -1,0 +1,173 @@
+#lang rhombus
+import:
+  slideshow open   // re-exports pict + pict/text
+  draw
+
+export:
+  write_out
+  write_outline
+
+// `write_out`'s glyph outlines, drawn once and left unfilled.
+fun write_outline(str :: String,
+                  ~font: font :: draw.Font = current_font(),
+                  ~color: color = "black",
+                  ~line_width: lw :: Real = 2.0) :: Pict:
+  def path = draw.Path()
+  path.text_outline(str, ~font: font)
+  def r = path.bounding_box()
+  // `text_outline` lays the glyphs out from the origin, so shift by the
+  // bounding box to sit flush inside the pict
+  dc(fun (target :: draw.DC, dx, dy):
+       target.path(path, ~dx: dx - r.x, ~dy: dy - r.y),
+     ~width: r.width,
+     ~height: r.height,
+     ~line: color,
+     ~line_width: lw)
+
+// 3Blue1Brown-style "Write": glyphs are traced outline-first then filled, with
+fun write_out(str :: String,
+              ~font: font0 :: draw.Font = current_font(),
+              ~color: color = "black",
+              ~oversample: os :: Int = 2,
+              ~line_width: lw :: Real = 3.0,
+              ~extent: ext_arg = #false,   // #false => auto-scale by length
+              ~bend: bend = fun (x): x,
+              // when #true, return `values(anim, letters)`: `letters` is a per-char
+              // list of `t(char)` picts (with identity) for use in `magic_move`.
+              ~return_letters: return_letters = #false):
+  def font = if os == 1 | font0 | font0 with (size = font0.size * os)
+  def base_color = if color is_a draw.Color | color | draw.Color(color)
+  def mdc = draw.Bitmap([1, 1]).make_dc()
+  mdc.font := font
+  def (tw, th, _, _) = mdc.text_extent(str)
+  def w = math.max(1, math.exact(math.ceiling(tw)))
+  def h = math.max(1, math.exact(math.ceiling(th)))
+  // glyph outline path (for fills, holes correct) + filled raster (for tracing)
+  def path = draw.Path()
+  path.text_outline(str, ~font: font)
+  def bm = draw.Bitmap([w, h])
+  block:
+    def dc = bm.make_dc()
+    dc.pen := draw.Pen.none
+    dc.brush := draw.Brush(~color: "black")
+    dc.path(path)
+  def src = bm.argb_pixels()
+  fun ink(x, y):
+    x >= 0 && x < w && y >= 0 && y < h && src[(y*w + x)*4] > 128
+  fun boundary(x, y):
+    ink(x, y) && !(ink(x-1,y) && ink(x+1,y) && ink(x,y-1) && ink(x,y+1))
+  // Moore-neighbor contour tracing (8-dir clockwise: E SE S SW W NW N NE)
+  def DX = [1, 1, 0, -1, -1, -1, 0, 1]
+  def DY = [0, 1, 1, 1, 0, -1, -1, -1]
+  fun trace1(sx, sy, seen):
+    recur loop(cx = sx, cy = sy, from_dir = 4, acc = [[sx, sy]], steps = 0):
+      if steps > 4 * w * h
+      | acc
+      | recur find(k = 0):
+          if k > 7
+          | acc
+          | def d = (from_dir + 1 + k) mod 8
+            def nx = cx + DX[d]
+            def ny = cy + DY[d]
+            if ink(nx, ny)
+            | if nx == sx && ny == sy && steps > 1
+              | acc
+              | seen[[nx, ny]] := #true
+                loop(nx, ny, (d + 4) mod 8, acc ++ [[nx, ny]], steps + 1)
+            | find(k + 1)
+  def seen = MutableMap{}
+  def contours:
+    for values(acc = []) (y in 0..h):
+      for values(acc2 = acc) (x in 0..w):
+        if boundary(x, y) && !seen.has_key([x, y])
+        | seen[[x, y]] := #true
+          acc2 ++ [trace1(x, y, seen)]
+        | acc2
+  fun minx(c): for values(m = 1.0 * w) (p in c): math.min(m, 1.0 * p[0])
+  fun maxx(c): for values(m = 0.0) (p in c): math.max(m, 1.0 * p[0])
+  // sort left-to-right; reverse each contour so the pen traces the left side first
+  def sorted:
+    def pairs = for List (c in contours): [minx(c), c]
+    for List (pr in pairs.sort(fun (a, b): a[0] < b[0])): pr[1].reverse()
+  // group contours into glyphs: a contour joins the current glyph if its left
+  def glyphs:
+    def groups:
+      recur go(cs = sorted, cur = [], cmax = -1.0, acc = []):
+        cond
+        | cs.length() == 0:
+            if cur.length() == 0 | acc | acc ++ [cur]
+        | cur.length() == 0 || minx(cs[0]) <= cmax:
+            go(cs.sublist(1, cs.length()), cur ++ [cs[0]], math.max(cmax, maxx(cs[0])), acc)
+        | ~else:
+            go(cs.sublist(1, cs.length()), [cs[0]], maxx(cs[0]), acc ++ [cur])
+    for List (g in groups):
+      def gmin = for values(m = 1.0 * w) (c in g): math.min(m, minx(c))
+      def gmax = for values(m = 0.0) (c in g): math.max(m, maxx(c))
+      def gn = math.max(1, for values(s = 0) (c in g): s + c.length())
+      [g, gmin, gmax, gn]
+  def G = math.max(1, glyphs.length())
+  // staggered, overlapping schedule (manim's lag_ratio)
+  def lag = math.min(4.0 / (G + 1.0), 0.2)
+  def tt = (G - 1) * lag + 1.0
+  def dur = 1.0 / tt
+  def extent = if ext_arg | ext_arg | math.max(1.5, str.length() * 0.2)
+
+  // draw the first `budget` points of a glyph's contours as a pen stroke
+  fun stroke_contours(dc, conts, budget):
+    recur go(cs = conts, left = budget):
+      when cs.length() > 0 && left > 0
+      | def c = cs[0]
+        def take = math.min(left, c.length())
+        when take >= 2
+        | def pth = draw.Path()
+          pth.move_to([1.0 * c[0][0], 1.0 * c[0][1]])
+          for (i in 1..take):
+            pth.line_to([1.0 * c[i][0], 1.0 * c[i][1]])
+          dc.path(pth)
+        go(cs.sublist(1, cs.length()), left - take)
+
+  fun fill_band(dc, x0, x1, col):
+    dc.save()
+    def r = draw.Region()
+    r.rectangle([[x0, 0], [math.max(0.0, x1 - x0), 1.0 * h]])
+    dc.clipping_region := r
+    dc.pen := draw.Pen.none
+    dc.brush := draw.Brush(~color: col)
+    dc.path(path)
+    dc.restore()
+
+  fun frame(t :: Real) :: Pict:
+    def obm = draw.Bitmap([w, h])
+    def dc = obm.make_dc()
+    // glyphs finish left-to-right in order, so the done ones are a prefix.
+    // done_x = left edge of the first not-yet-finished glyph.
+    def done_x:
+      recur go(gi = 0):
+        cond
+        | gi >= G: 1.0 * w
+        | t >= gi * lag / tt + dur: go(gi + 1)
+        | ~else: glyphs[gi][1]
+    when done_x > 0.0
+    | fill_band(dc, 0.0, done_x, base_color)
+    // in-flight glyphs: border phase (trace) then fill phase (full outline + fading fill)
+    for (gi in 0..G):
+      def local = (t - gi * lag / tt) / dur
+      when local > 0.0 && local < 1.0
+      | def g = glyphs[gi]
+        def conts = g[0]
+        if local < 0.5
+        | dc.brush := draw.Brush.none
+          dc.pen := draw.Pen(~color: base_color, ~width: lw)
+          stroke_contours(dc, conts, math.exact(math.floor(local * 2.0 * g[3])))
+        | dc.brush := draw.Brush.none
+          dc.pen := draw.Pen(~color: base_color, ~width: lw)
+          stroke_contours(dc, conts, g[3])
+          fill_band(dc, g[1], g[2], base_color with (alpha = (local - 0.5) * 2.0))
+    bitmap(obm).scale(1.0 / os)
+  def anim = animate(fun (n): frame(n), ~extent: extent, ~bend: bend)
+  if return_letters
+  | // one `t(char)` pict per character (same font/size as the write), each with
+    // its own identity so it can be found by `magic_move`.
+    def letters = for List (i in 0..str.length()): t(str.substring(i, i+1), ~font: font0)
+    values(anim, letters)
+  | anim
