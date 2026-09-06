@@ -3512,33 +3512,17 @@ def slide_39:
 def all_slides = [slide_1, slide_2, slide_12, slide_18, slide_19, slide_20, slide_23, slide_26, slide_29, slide_31, slide_32, slide_34, slide_36, slide_37, slide_38, slide_39]
 
 module main:
-  // glide-pptx's own `show_slides` calls `Pict.from_handle` on every slide, which
-  // an already-animated `Pict` is not. This is that function, with the one extra
-  // case. (`shown_slides` is skipped because no slide here sets `~hidden:`.)
-  import:
-    slideshow open
-    lib("slideshow/main.rkt") as ss
-  def page = blank_client()
-  def m = ss.margin
-  // A deck's aspect ratio and slideshow's are close but not equal, so the slide
-  // fits rather than being cropped.
-  def zoom = math.min((page.width + 2 * m) / slide_width,
-                      (page.height + 2 * m) / slide_height)
-  for (s in all_slides):
-    def p :: Pict = if s is_a Pict | s | Pict.from_handle(s)
-    slide(~layout: #'center, p.scale(zoom).pad(-m))
+  // `show_slides` shows each slide through `staged_slide`, the same one the
+  // ICFP talk uses: a slide number in the corner for `--skip`, a reveal that
+  // fades the slide up, and a pan to the next one. `set_reveal`, `set_transitions`,
+  // `set_start_from` and the rest come through here too.
+  import: lib("glide-pptx/show.rhm") open
+  show_slides(all_slides, ~width: slide_width, ~height: slide_height)
 
 // The backup PDF, without opening a window:
 //   racket -l racket/base -e '(require (submod (file "talk.rhm") pdf))'
 module pdf:
-  import: pict as pc
-  // `deck_to_pdf` draws Racket picts. An animated slide is many frames, so it
-  // contributes one page per advance -- which is exactly the slides it was made
-  // from, so the page count is unchanged.
-  fun pages(s):
-    match s
-    | q :: pc.Pict: for List (i in 0..q.duration): q.snapshot(i, 1.0).handle
-    | ~else: [s]
-  deck_to_pdf(List.append(& for List (s in all_slides): pages(s)),
-              "talk.pdf", ~width: slide_width, ~height: slide_height)
+  // An animated slide is one page per advance, which is the slides it was made
+  // from -- `deck_to_pdf` does that itself now.
+  deck_to_pdf(all_slides, "talk.pdf", ~width: slide_width, ~height: slide_height)
   println("wrote " +& "talk.pdf")
