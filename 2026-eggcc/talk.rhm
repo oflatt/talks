@@ -85,6 +85,23 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // to the picture at stage `k`: to the base for `k = 0`, and for each later stage
 // to a ghost of the base under the stage's own elements, so that an edge can join
 // a node the stage adds to one that was there already, and fades in with it.
+// Every animated slide holds its last frame for one more advance.
+//
+// A slide's final epoch plays as the *outgoing* transition -- the press that runs
+// it is the same press that moves on -- so whatever that epoch adds is never seen
+// at rest. Sustaining gives the transition a duplicate frame to consume instead,
+// which is why the extra epoch is not a wasted press even though `dead_beats`
+// reports it as one. A static slide has no closing animation to lose, so it is
+// left alone rather than spending a press on a frame nobody needs.
+//
+// Wrapped around the thunks in `all_slides` rather than written into each slide,
+// so it cannot be forgotten on the next one, and so `show_slides` still builds a
+// slide only when it is about to show it.
+fun held(mk):
+  fun ():
+    def p = as_pict(mk())
+    if p.duration > 1 | p.sustain() | p
+
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
   for values(p = base) (st in stages, k in 1..):
@@ -802,8 +819,8 @@ fun slide_18(): slide_canvas(
                 ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
                                    ~dash_pattern: [pair(200.0, 200.0)]))),
   // Connection Line (11) (id 373)
-  at(874.398, 579.552, ~tag: "Connection Line (11)",
-     shape_pict(~width: 165.446, ~height: 285.879,
+  at(872.349, 579.377, ~tag: "Connection Line (11)",
+     shape_pict(~width: 167.035, ~height: 286.054,
                 ~geom: custom_geom(
                                    [[[#'move, pair(0, 21600)], [#'curve, pair(5165, 13518), pair(12365, 6318), pair(21600, 0)]]],
                                    21600, 21600),
@@ -1066,8 +1083,8 @@ fun slide_19(): slide_canvas(
                 ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
                                    ~dash_pattern: [pair(200.0, 200.0)]))),
   // Connection Line (11) (id 429)
-  at(875.692, 580.638, ~tag: "Connection Line (11)",
-     shape_pict(~width: 165.536, ~height: 284.794,
+  at(872.349, 579.377, ~tag: "Connection Line (11)",
+     shape_pict(~width: 167.035, ~height: 286.054,
                 ~geom: custom_geom(
                                    [[[#'move, pair(0, 21600)], [#'curve, pair(5315, 13753), pair(12515, 6553), pair(21600, 0)]]],
                                    21600, 21600),
@@ -1201,39 +1218,41 @@ fun slide_20():
   // and MLIR (User DSL Optimizations). The bubble sits in the band between the two
   // rows, to the left of all four, with an arrow to each.
   //
-  // Each marker is the size of that logo's *ink*, so an arrow stops on the artwork
-  // rather than out in the transparent padding around it. `point_at` works out
-  // which edge each arrow should leave and land on from where things ended up.
+  // `multi_callout` draws the body and all four spikes as one outline, so the
+  // bubble itself protrudes towards each of them rather than growing arrows.
   def stage_2:
-    def bubble:
-      make_bubble(~color: talk_blue, ~padding: 10.0,
-                  as_pict(textbox(~width: 303.2, ~height: 43.2, ~anchor: #'center,
-                                  ~wrap: #false, ~autofit: #'grow,
-                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                  para(~align: #'center,
-                                       run("need side effects!", ~font: "Helvetica Neue",
-                                           ~size: 36.0, ~bold: #true)))))
+    // The body goes in the band between the two rows, right of centre: the left of
+    // that band is taken by "(Herbie)" and the right by the "Luminal" note, and this
+    // is the clear stretch between them. Sitting between the rows it points into is
+    // what lets two spikes leave upwards and two downwards, rather than four of them
+    // crossing the picture from one side.
+    def slot = pc.blank(~width: 1.0, ~height: 1.0)
     // Each marker is one logo's ink. Two of these images have no alpha channel and
     // are opaque white to their edges, so the extent has to come from where the
     // drawing stops being white -- MLIR's artwork is 507pt of its 634pt box, and
-    // aiming at the box would leave the arrowhead short of the logo by 60pt.
+    // aiming at the box would leave the spike short of the logo by 60pt.
     def m_numba = pc.blank(~width: 256.0, ~height: 250.4)
     def m_luminal = pc.blank(~width: 264.6, ~height: 264.6)
     def m_cranelift = pc.blank(~width: 404.6, ~height: 232.1)
     def m_mlir = pc.blank(~width: 507.1, ~height: 169.5)
     fun place(base, p, x, y):
       pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, p)
-    // The bubble goes in the band between the two rows, left of centre: the right of
-    // that band is taken by the "Luminal" note and the left by "(Herbie)", and this
-    // is the clear stretch between them.
     def placed:
       place(place(place(place(place(pc.blank(~width: slide_width, ~height: slide_height),
-                                    bubble, 420.0, 545.0),
+                                    slot, 1100.0, 537.0),
                               m_numba, 702.7, 288.8),
                         m_luminal, 1571.6, 257.5),
                   m_cranelift, 809.2, 699.1),
             m_mlir, 1319.7, 740.3)
-    point_at(~on: placed, ~at: [m_numba, m_luminal, m_cranelift, m_mlir], bubble)
+    multi_callout(~on: placed, ~place: slot,
+                  ~at: [m_numba, m_luminal, m_cranelift, m_mlir],
+                  ~color: talk_blue,
+                  as_pict(textbox(~width: 303.2, ~height: 43.2, ~anchor: #'center,
+                                  ~wrap: #false, ~autofit: #'grow,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("need side effects!", ~font: "Helvetica Neue",
+                                           ~size: 36.0, ~bold: #true)))))
 
   staged(base, [stage_1, stage_2])
 
@@ -1703,8 +1722,12 @@ fun slide_26():
   pc.overlay(~horiz: #'left, ~vert: #'top,
              staged(base_canvas, [stage_1, stage_2], ~wire: wire),
              pc.switch(as_pict(code_1),
-                       fade_through(as_pict(code_1), as_pict(code_2)),
-                       fade_through(as_pict(code_2), as_pict(code_3))))
+                       // `cross_fade`, not `fade_through`: the latter holds the two
+                       // apart (`~overlap` 0.15), so at the midpoint both sit at 13%
+                       // alpha and the code box drops out and comes back -- a flash,
+                       // the box being opaque white with a border and a shadow.
+                       pc.cross_fade(as_pict(code_1), as_pict(code_2), ~extent: 1.0),
+                       pc.cross_fade(as_pict(code_2), as_pict(code_3), ~extent: 1.0)))
 
 // -------------------------------------------------------------------------------------
 // slide_29: Slide 18 through Slide 19, as one animated pict.
@@ -3083,7 +3106,7 @@ fun slide_39():
 
   staged(base_canvas, [stage_1])
 
-def all_slides = [slide_1, slide_2, slide_12, slide_18, slide_19, slide_20, slide_23, slide_26, slide_29, slide_31, slide_32, slide_34, slide_36, slide_37, slide_38, slide_39]
+def all_slides = [held(slide_1), held(slide_2), held(slide_12), held(slide_18), held(slide_19), held(slide_20), held(slide_23), held(slide_26), held(slide_29), held(slide_31), held(slide_32), held(slide_34), held(slide_36), held(slide_37), held(slide_38), held(slide_39)]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the

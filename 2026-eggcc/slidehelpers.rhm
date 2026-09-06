@@ -19,7 +19,6 @@ export:
   code_callout
   subst
   multi_callout
-  point_at
   callout_note
   absolute_radius
   brace
@@ -178,13 +177,25 @@ fun subst(p :: Pict, from :: Pict, to :: Pict) :: Pict:
 // as one label -- so this draws the body and every spike as one path, which is what
 // makes the outline itself protrude the way the deck's other bubbles do.
 //
-// The spikes leave the side the bubble is placed off, so every target has to be on
-// that side. Each spike's base straddles its target's own height along that edge,
-// clamped inside the rounded corners, and the tip is the target's near edge.
-// `~gap` is the clearance between `on` and the bubble, so the caller doesn't have
-// to guess the bubble's width to push it clear.
+// Every target is met from whichever edge of the body faces it, worked out from
+// where things ended up rather than chosen by the caller: the ray from the body's
+// centre towards a target leaves the body by one of its four sides, and that is the
+// side its spike grows from. The tip is where that same ray, travelling back,
+// leaves the target -- so a spike lands on the target's near edge rather than
+// aiming at its middle, which is what keeps it clear of whatever sits between.
+//
+// Spikes on an edge are spread along it in their targets' own order and never
+// closer than `~base` allows, and the body grows if an edge is asked for more
+// spikes than it has room for. Two spikes whose bases overlap make the outline
+// cross itself, and a self-crossing path strokes those inner edges too -- which is
+// what draws a line across the middle of a spike.
+//
+// The body sits just off `on`'s edge by default (`~horiz`/`~vert`/`~gap`). Give
+// `~place` a pict already inside `on` to put the body's top-left corner there
+// instead, for when the bubble has to land in a particular gap in the picture.
 fun multi_callout(~on: on :: Pict,
                   ~at: targets :: List.of(Pict),
+                  ~place: place :: maybe(Pict) = #false,
                   ~horiz: horiz :: HorizAlignment = #'right,
                   ~vert: vert :: VertAlignment = #'top,
                   ~gap: gap :: Real = 24,
@@ -196,88 +207,137 @@ fun multi_callout(~on: on :: Pict,
                   child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
   def content = stack.left(~sep: 6, child, ...)
-  def w = content.width + padding * 2
-  def n = targets.length()
-  // Tall enough for every spike to get its own stretch of the edge. Two spikes
-  // whose bases overlap make the outline cross itself, and a self-crossing path
-  // strokes those inner edges too -- which is what draws a line across the middle
-  // of a spike. Disjoint bases are what keep the union of the shapes an outline.
+  // The radius comes from the body the content asks for, not the larger body the
+  // spikes may force: a negative `~corner_radius` is a fraction of the smaller side,
+  // so measuring it against the grown size would round the corners off in proportion
+  // to how many spikes there are, and fatter corners eat the straight edge they need.
+  def nat_w = content.width + 2 * padding
+  def nat_h = content.height + 2 * padding
+  def r = absolute_radius(cr, nat_w, nat_h)
   def pitch = 2 * half_base + 6
-  // The radius comes from the body the content asks for, not from the taller body
-  // the spikes force. A negative `~corner_radius` is a fraction of the smaller side,
-  // so measuring it against the grown height would round the corners off in
-  // proportion to how many spikes there are -- and those fatter corners then eat
-  // into the run of straight edge the spikes need.
-  def natural_h = content.height + padding * 2
-  def r = absolute_radius(cr, w, natural_h)
-  // The straight part of the edge is what a base can sit on: it runs from `r` to
-  // `h - r`, and a base needs `half_base` either side of its centre plus a little
-  // clearance, so that a spike's edge does not leave the outline right where the
-  // corner starts to curve away from it.
-  def corner_clear = 5
-  def end_room = r + half_base + corner_clear
-  def min_h = n * pitch + 2 * end_room
-  def h = math.max(natural_h, min_h)
-  def dx = if horiz == #'right | w + gap | -(w + gap)
-  // an empty body, placed first, so the targets can be measured against it
-  def slot = blank(~width: w, ~height: h)
-  def probe = overlay(~horiz: horiz, ~vert: vert, ~dx: dx, ~dy: dy, on, slot)
-  def (bx, by) = Find.top_left(slot).in(probe)
-  def tips :~ List:
-    def raw:
-      for List (tg in targets):
-        def (tx, ty) = (if horiz == #'right | Find.right(tg) | Find.left(tg)).in(probe)
-        [tx - bx, ty - by]
-    // the edge is walked upwards, so the lowest spike is drawn first
-    raw.sort(fun (a :~ List, b :~ List): (a[1] :~ Real) > (b[1] :~ Real))
-  // Each spike wants its base level with its own target, but they have to stay in
-  // order and stay clear of each other. One sweep downwards pushes each base below
-  // the one before it, then one sweep upwards pulls the whole run back inside the
-  // bottom -- the standard way to place labels along an axis. Bases in the same
-  // order as the tips is also what guarantees no two spikes cross: their edges
-  // never get the chance to swap sides.
-  def base_ys :~ List:
-    def lo = end_room
-    def hi = h - end_room
-    // `tips` runs bottom-to-top, so sweep from the bottom edge upwards
-    def up_pass :~ List:
-      for values(acc :~ List = []) (p :~ List in tips):
-        def ceiling :~ Real = if acc == [] | hi + pitch | (acc.last :~ Real)
-        acc ++ [math.min(p[1] :~ Real, ceiling - pitch)]
-    // ...then back down from the top, in case that ran past the top edge
-    def down_pass :~ List:
-      for values(acc :~ List = []) (y :~ Real in up_pass.reverse()):
-        def floor :~ Real = if acc == [] | lo - pitch | (acc.last :~ Real)
-        acc ++ [math.max(y, floor + pitch)]
-    down_pass.reverse()
+  def end_room = r + half_base + 5
+
+  // How far a ray from a box's centre heading (dx, dy) travels before it leaves the
+  // box of half-extent (hw, hh), and which pair of sides it leaves by.
+  fun exit_scale(hw :: Real, hh :: Real, dx :: Real, dy :: Real) :: Real:
+    def sx = if dx == 0 | 1.0e9 | hw / math.abs(dx)
+    def sy = if dy == 0 | 1.0e9 | hh / math.abs(dy)
+    math.min(sx, sy)
+  fun leaves_sideways(hw :: Real, hh :: Real, dx :: Real, dy :: Real) :: Boolean:
+    def sx = if dx == 0 | 1.0e9 | hw / math.abs(dx)
+    def sy = if dy == 0 | 1.0e9 | hh / math.abs(dy)
+    sx <= sy
+
+  fun origin_for(bw :: Real, bh :: Real):
+    if place
+    | Find.top_left(place).in(on)
+    | block:
+        def slot = blank(~width: bw, ~height: bh)
+        def sdx = if horiz == #'right | bw + gap | -(bw + gap)
+        def probe = overlay(~horiz: horiz, ~vert: vert, ~dx: sdx, ~dy: dy, on, slot)
+        Find.top_left(slot).in(probe)
+
+  // A provisional body at its natural size is enough to say which edge each target
+  // belongs to; growing the body afterwards never moves a target across a side.
+  def (px, py) = origin_for(nat_w, nat_h)
+  def pcx = px + nat_w / 2
+  def pcy = py + nat_h / 2
+  def marked:
+    for List (tg :: Pict in targets):
+      def (tx, ty) = Find.center(tg).in(on)
+      def side:
+        if leaves_sideways(nat_w / 2, nat_h / 2, tx - pcx, ty - pcy)
+        | (if tx > pcx | #'right | #'left)
+        | (if ty > pcy | #'bottom | #'top)
+      [tg, tx, ty, side]
+  fun on_side(s, along :: Int) :: List:
+    def picked:
+      for List (t in marked):
+        skip_when t[3] != s
+        t
+    picked.sort(fun (a :~ List, b :~ List): (a[along] :~ Real) < (b[along] :~ Real))
+  def tops = on_side(#'top, 1)
+  def bots = on_side(#'bottom, 1)
+  def lefts = on_side(#'left, 2)
+  def rights = on_side(#'right, 2)
+
+  fun room_for(n :: Int) :: Real: n * pitch + 2 * end_room
+  def w = math.max(nat_w, room_for(math.max(tops.length(), bots.length())))
+  def h = math.max(nat_h, room_for(math.max(lefts.length(), rights.length())))
+  def (bx, by) = origin_for(w, h)
+  def cx = bx + w / 2
+  def cy = by + h / 2
+
+  // Bases in their targets' own order, pushed apart to `pitch` and kept inside the
+  // corners: one sweep forwards, then one back, the usual way of placing labels
+  // along an axis. Keeping the order is also what stops two spikes crossing.
+  fun spread(vals :: List, lo :: Real, hi :: Real) :: List:
+    def up:
+      for values(acc :~ List = []) (v :~ Real in vals):
+        def floor = if acc == [] | lo | (acc.last :~ Real) + pitch
+        acc ++ [math.max(v, floor)]
+    def down:
+      for values(acc :~ List = []) (v :~ Real in up.reverse()):
+        def ceiling = if acc == [] | hi | (acc.last :~ Real) - pitch
+        acc ++ [math.min(v, ceiling)]
+    down.reverse()
+
+  fun tip_of(t :~ List) :: List:
+    def tg :~ Pict = t[0]
+    def tx :~ Real = t[1]
+    def ty :~ Real = t[2]
+    def s = exit_scale(tg.width / 2, tg.height / 2, cx - tx, cy - ty)
+    [tx + (cx - tx) * s - bx, ty + (cy - ty) * s - by]
+
+  def top_xs = for List (t :~ List in tops): (t[1] :~ Real) - bx
+  def bot_xs = for List (t :~ List in bots): (t[1] :~ Real) - bx
+  def left_ys = for List (t :~ List in lefts): (t[2] :~ Real) - by
+  def right_ys = for List (t :~ List in rights): (t[2] :~ Real) - by
+  def top_bases = spread(top_xs, end_room, w - end_room)
+  def bot_bases = spread(bot_xs, end_room, w - end_room)
+  def left_bases = spread(left_ys, end_room, h - end_room)
+  def right_bases = spread(right_ys, end_room, h - end_room)
+
   // the drawing surface has to cover the body and every tip
-  fun span(sel :: Int, lo :: Real, hi :: Real):
-    for values(a :~ Real = lo, b :~ Real = hi) (p :~ List in tips):
-      values(math.min(a, p[sel] :~ Real), math.max(b, p[sel] :~ Real))
-  def (min_x, max_x) = span(0, 0.0, w)
-  def (min_y, max_y) = span(1, 0.0, h)
+  def all_tips = for List (t in marked): tip_of(t)
+  def (min_x, max_x):
+    for values(a :~ Real = 0.0, b :~ Real = w) (p :~ List in all_tips):
+      values(math.min(a, p[0] :~ Real), math.max(b, p[0] :~ Real))
+  def (min_y, max_y):
+    for values(a :~ Real = 0.0, b :~ Real = h) (p :~ List in all_tips):
+      values(math.min(a, p[1] :~ Real), math.max(b, p[1] :~ Real))
   def ox = -min_x
   def oy = -min_y
   def k = r * 0.55                     // circle-ish bezier handle, as in `brace`
+
   def path:
     def pth = draw.Path()
     fun at(x :: Real, y :: Real): [x + ox, y + oy]
-    // clockwise from the top-left corner, with the spiked edge walked last
-    pth.move_to(at(r, 0))
-    pth.line_to(at(w - r, 0))
-    pth.curve_to(at(w - k, 0), at(w, k), at(w, r))
-    pth.line_to(at(w, h - r))
-    pth.curve_to(at(w, h - k), at(w - k, h), at(w - r, h))
-    pth.line_to(at(r, h))
-    pth.curve_to(at(k, h), at(0, h - k), at(0, h - r))
     // out to the tip and back, so the base is never drawn: the outline itself is
     // what protrudes, exactly as a balloon's spike does
-    for (i in 0 .. tips.length()):
-      def p :~ List = tips[i]
-      def cy :~ Real = base_ys[i]
-      pth.line_to(at(0, cy + half_base))
-      pth.line_to(at(p[0] :~ Real, p[1] :~ Real))
-      pth.line_to(at(0, cy - half_base))
+    fun spikes(items :: List, bases :: List, in_edge, out_edge):
+      for (i in 0 .. items.length()):
+        def tp :~ List = tip_of(items[i])
+        def b :~ Real = bases[i]
+        pth.line_to(in_edge(b))
+        pth.line_to(at(tp[0] :~ Real, tp[1] :~ Real))
+        pth.line_to(out_edge(b))
+    // clockwise from the top-left corner
+    pth.move_to(at(r, 0))
+    spikes(tops, top_bases,
+           fun (b): at(b - half_base, 0), fun (b): at(b + half_base, 0))
+    pth.line_to(at(w - r, 0))
+    pth.curve_to(at(w - k, 0), at(w, k), at(w, r))
+    spikes(rights, right_bases,
+           fun (b): at(w, b - half_base), fun (b): at(w, b + half_base))
+    pth.line_to(at(w, h - r))
+    pth.curve_to(at(w, h - k), at(w - k, h), at(w - r, h))
+    spikes(bots.reverse(), bot_bases.reverse(),
+           fun (b): at(b + half_base, h), fun (b): at(b - half_base, h))
+    pth.line_to(at(r, h))
+    pth.curve_to(at(k, h), at(0, h - k), at(0, h - r))
+    spikes(lefts.reverse(), left_bases.reverse(),
+           fun (b): at(0, b + half_base), fun (b): at(0, b - half_base))
     pth.line_to(at(0, r))
     pth.curve_to(at(0, k), at(k, 0), at(r, 0))
     pth.close()
@@ -290,69 +350,17 @@ fun multi_callout(~on: on :: Pict,
        ~fill: pale(line_color),
        ~line: line_color,
        ~line_width: border_width)
-  // Centred in the body, not pinned to its top: the body is often taller than the
+  // Centred in the body, not pinned to its top: the body is often larger than the
   // text asked for, because the spikes need a run of edge to leave from, and
   // top-aligning the text puts all of that slack underneath it as a blank patch.
   def bubble:
     overlay(~horiz: #'left, ~vert: #'top,
-            ~dx: ox + padding, ~dy: oy + (h - content.height) / 2,
+            ~dx: ox + (w - content.width) / 2, ~dy: oy + (h - content.height) / 2,
             shape, content)
   // the body sits at (ox, oy) inside `bubble`, so undo that to land it where the
-  // probe put `slot`; only a tip reaching past the body's own edges shifts it
-  overlay(~horiz: horiz, ~vert: vert,
-          ~dx: dx + (if horiz == #'right | max_x - w | -ox),
-          ~dy: dy - oy,
-          on, bubble)
+  // body was reckoned to go
+  overlay(~horiz: #'left, ~vert: #'top, ~dx: bx - ox, ~dy: by - oy, on, bubble)
     .refocus(on)
-
-// Point a bubble at several picts at once, wherever they are.
-//
-// `multi_callout` draws its body and every spike as a single path, which is what
-// makes the outline itself protrude -- but one path means every spike leaves the
-// same edge, so every target has to be on that side of the bubble. This is the
-// other trade: separate arrows, so the targets can sit anywhere around it. Each
-// arrow leaves whichever edge of the bubble faces its target and lands on whichever
-// edge of the target faces back, so none of them has to be aimed by hand.
-//
-// `on` has to contain the bubble and the targets already -- they are found within
-// it, not placed by it -- which is what lets the aiming be worked out from where
-// things actually ended up.
-fun point_at(~on: on :: Pict,
-             ~at: targets :: List.of(Pict),
-             ~color: color :: draw.Color || String = talk_blue,
-             ~line_width: lw :: Real = 5.0,
-             ~arrow_size: arrow_size :: Real = 18,
-             bubble :: Pict) :: Pict:
-  def line_color = as_color(color)
-  // Where a line from p's centre heading (dx, dy) leaves p's box: scale the
-  // direction until it meets whichever side it reaches first. That is what "point
-  // at the nearest part" means here, and it beats picking a side outright -- an
-  // arrow to something far off to one side and a little below should leave along
-  // the side, but land high on the target's edge rather than at its middle, and
-  // that difference is what keeps it clear of whatever sits between the two.
-  fun edge_toward(p :: Pict, dx :: Real, dy :: Real) :: Find:
-    def sx = if dx == 0 | 1.0e9 | (p.width / 2) / math.abs(dx)
-    def sy = if dy == 0 | 1.0e9 | (p.height / 2) / math.abs(dy)
-    def s = math.min(sx, sy)
-    Find.center(p, ~dx: dx * s, ~dy: dy * s)
-  def (bx, by) = Find.center(bubble).in(on)
-  // aim off the original, not off each partly-drawn result: adding an arrow does
-  // not move anything, but measuring once is clearer than relying on that
-  def aims:
-    for List (tg :: Pict in targets):
-      def (tx, ty) = Find.center(tg).in(on)
-      [tg, tx - bx, ty - by]
-  for values(acc :~ Pict = on) (aim in aims):
-    def tg :~ Pict = aim[0]
-    def dx :~ Real = aim[1]
-    def dy :~ Real = aim[2]
-    connect(~on: acc,
-            edge_toward(bubble, dx, dy),
-            edge_toward(tg, -dx, -dy),
-            ~style: ConnectStyle.arrow,
-            ~line: line_color,
-            ~line_width: lw,
-            ~arrow_size: arrow_size)
 
 fun callout_note(~color: color :: draw.Color || String = talk_blue,
                  ~padding: padding :: maybe(Real) = #false,
