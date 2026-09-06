@@ -107,9 +107,23 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 
 // A slide that was several: `base_canvas` is what shows before the first click,
 // and each stage fades in over everything already on screen, one click apiece.
-fun staged(base_canvas, stages):
-  for values(p = as_pict(base_canvas)) (st in stages):
-    fade_in(p, as_pict(st), ~horiz: #'left, ~vert: #'top)
+//
+// `wire(p, k)` adds what is drawn *between* elements -- the edges of a graph --
+// to the picture at stage `k`: to the base for `k = 0`, and for each later stage
+// to a ghost of the base under the stage's own elements, so that an edge can join
+// a node the stage adds to one that was there already, and fades in with it.
+fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
+  def base = wire(as_pict(base_canvas), 0)
+  for values(p = base) (st in stages, k in 1..):
+    def extra = wire(pc.overlay(~horiz: #'left, ~vert: #'top, base.ghost(), as_pict(st)), k)
+    fade_in(p, extra, ~horiz: #'left, ~vert: #'top)
+
+// The two kinds of edge in the effectful e-graph pictures, in the weights and
+// colours Keynote gave them: value edges thin and black, state edges thick and
+// in its blue.
+def keynote_blue = draw.Color(4, 51, 255)
+fun value_edges(p, edges): arrows(~on: p, edges, ~line_width: 4)
+fun state_edges(p, edges): arrows(~on: p, edges, ~line_width: 6, ~color: keynote_blue)
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -1439,6 +1453,56 @@ def slide_23:
 //   - the shapes inside `Group` are only renumbered ("Shape" -> "Shape (3)") from
 //     slide to slide, which is the exporter naming them afresh. They draw the same.
 def slide_26:
+  // The nodes of the e-graph, bound by name so that the edges can be drawn
+  // between them below; the canvas and the stages only place them.
+  def n_update = shape_pict(~width: 135.0, ~height: 61.581,
+                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("update", ~size: 30.0))))
+  def n_a = shape_pict(~width: 62.079, ~height: 61.581,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("a", ~size: 30.0))))
+  def n_v = shape_pict(~width: 62.079, ~height: 61.581,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("v", ~size: 30.0))))
+  def n_sigma = shape_pict(~width: 62.079, ~height: 61.581,
+                           ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                           ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                           ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                       para(~align: #'center, run("σ", ~size: 30.0))))
+  def n_x = shape_pict(~width: 62.079, ~height: 61.581,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("x", ~size: 30.0))))
+  def n_sigma_p = shape_pict(~width: 62.079, ~height: 61.581,
+                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                         para(~align: #'center, run("σ", ~size: 30.0),
+                                              run("ʹ", ~font: "Times New Roman", ~size: 30.0))))
+  def n_update2 = shape_pict(~width: 135.0, ~height: 61.581,
+                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                         para(~align: #'center, run("update", ~size: 30.0))))
+  def n_y = shape_pict(~width: 62.079, ~height: 61.581,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("y", ~size: 30.0))))
+  def n_sigma_pp = shape_pict(~width: 62.079, ~height: 61.581,
+                              ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                          para(~align: #'center, run("σ", ~size: 30.0),
+                                               run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))
+
   // everything that is on screen the whole time
   def base_canvas:
     slide_canvas(
@@ -1451,109 +1515,15 @@ def slide_26:
                       run("Redundant Update Elimination", ~font: "Helvetica Neue",
                           ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-      at(338.516, 704.223, ~tag: "update",
-         shape_pict(~width: 135.0, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("update", ~size: 30.0))))),
-      at(211.26, 808.407, ~tag: "a",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("a", ~size: 30.0))))),
-      at(326.361, 808.407, ~tag: "v",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("v", ~size: 30.0))))),
-      at(423.091, 808.407, ~tag: "σ",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 30.0))))),
-      at(326.361, 600.04, ~tag: "x",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("x", ~size: 30.0))))),
-      at(423.091, 600.04, ~tag: "σʹ",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 30.0),
-                                     run("ʹ", ~font: "Times New Roman", ~size: 30.0))))),
-      at(357.401, 630.83, ~tag: "Connection Line",
-         shape_pict(~width: 48.615, ~height: 104.184, ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(406.016, 630.83, ~tag: "Connection Line (2)",
-         shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(242.249, 735.024, ~tag: "Connection Line (3)",
-         shape_pict(~width: 163.716, ~height: 104.184, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(357.401, 735.014, ~tag: "Connection Line (4)",
-         shape_pict(~width: 48.615, ~height: 104.184, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(406.016, 735.014, ~tag: "Connection Line (5)",
-         shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(338.516, 495.856, ~tag: "update (2)",
-         shape_pict(~width: 135.0, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("update", ~size: 30.0))))),
-      at(326.361, 391.672, ~tag: "y",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("y", ~size: 30.0))))),
-      at(423.091, 391.672, ~tag: "σʹʹ",
-         shape_pict(~width: 62.079, ~height: 61.581,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 30.0),
-                                     run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))),
-      at(357.401, 422.463, ~tag: "Connection Line (6)",
-         shape_pict(~width: 48.615, ~height: 104.184, ~flip_h: #true, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(406.016, 422.463, ~tag: "Connection Line (7)",
-         shape_pict(~width: 48.115, ~height: 104.184, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(406.016, 526.647, ~tag: "Connection Line (8)",
-         shape_pict(~width: 48.115, ~height: 104.184, ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(242.249, 526.649, ~tag: "Connection Line (9)",
-         shape_pict(~width: 163.716, ~height: 312.551, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(357.401, 526.647, ~tag: "Connection Line (10)",
-         shape_pict(~width: 48.615, ~height: 312.551, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
+      at(338.516, 704.223, ~tag: "update", n_update),
+      at(211.26, 808.407, ~tag: "a", n_a),
+      at(326.361, 808.407, ~tag: "v", n_v),
+      at(423.091, 808.407, ~tag: "σ", n_sigma),
+      at(326.361, 600.04, ~tag: "x", n_x),
+      at(423.091, 600.04, ~tag: "σʹ", n_sigma_p),
+      at(338.516, 495.856, ~tag: "update (2)", n_update2),
+      at(326.361, 391.672, ~tag: "y", n_y),
+      at(423.091, 391.672, ~tag: "σʹʹ", n_sigma_pp),
       at(-27.0, 4.226, ~tag: "Group",
          group_pict(~width: 1312.695, ~height: 51.502,
                     at(778.271, 0.774, ~tag: "Group (2)",
@@ -1680,16 +1650,7 @@ def slide_26:
                   shape_pict(~width: 126.68, ~height: 300.004,
                              ~geom: custom_geom(
                                                 [[[#'move, pair(80, 3510)], [#'curve, pair(302, 4815), pair(2062, 5815), pair(4912, 6141)], [#'curve, pair(7366, 6422), pair(10144, 6041), pair(12337, 6597)], [#'curve, pair(15681, 7443), pair(15529, 9183), pair(15161, 10687)], [#'curve, pair(14820, 12077), pair(14397, 13739), pair(10894, 14508)], [#'curve, pair(8739, 14980), pair(6110, 14723), pair(3852, 15089)], [#'curve, pair(1735, 15433), pair(336, 16291), pair(66, 17205)], [#'curve, pair(-390, 18751), pair(1555, 20096), pair(4923, 20605)], [#'curve, pair(8131, 21089), pair(12103, 20671), pair(15048, 19431)], [#'curve, pair(20600, 17094), pair(20662, 13704), pair(20798, 10655)], [#'curve, pair(20934, 7594), pair(21210, 4191), pair(15993, 1694)], [#'curve, pair(12600, 70), pair(7429, -511), pair(3569, 504)], [#'curve, pair(1152, 1140), pair(-126, 2301), pair(80, 3510)], [#'close]]],
-                                                20852, 20801), ~fill: hex("929292", ~alpha: 0.4))),
-               at(454.13, 422.463, ~tag: "Connection Line (11)",
-                  shape_pict(~width: 0.0, ~height: 208.367, ~flip_v: #true,
-                             ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
-                                                ~dash_pattern: [pair(200.0, 200.0)]))),
-               at(357.401, 422.463, ~tag: "Connection Line (12)",
-                  shape_pict(~width: 0.0, ~height: 416.735, ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("000000"), ~width: 4.0, ~dash: #'#{short-dash},
-                                                ~dash_pattern: [pair(200.0, 200.0)]))))
+                                                20852, 20801), ~fill: hex("929292", ~alpha: 0.4))))
 
   // adds 'Is this optimization safe?'
   def stage_2:
@@ -1744,10 +1705,27 @@ def slide_26:
                              ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
                                                   ~direction: 90.0))))
 
+  // Keynote drew each edge as a connector between two centres and clipped it
+  // at the boxes; these are the same edges as `arrow`s, from border to border.
+  // Stage `k` brings the edges of the nodes it adds; stage 0 is `base_canvas`.
+  fun wire(p, k):
+    match k
+    | 0:
+        let p = value_edges(p, [[n_x, n_update], [n_update, n_a], [n_update, n_v],
+                                [n_y, n_update2], [n_update2, n_a], [n_update2, n_v]])
+        let p = state_edges(p, [[n_sigma_p, n_update], [n_update, n_sigma],
+                                [n_sigma_pp, n_update2], [n_update2, n_sigma_p]])
+        p
+    | 1:
+        let p = arrows(~on: p, [[n_sigma_p, n_sigma_pp], [n_y, n_v]],
+                       ~style: #'line, ~line_style: #'short_dash, ~line_width: 4)
+        p
+    | ~else: p
+
   // Both tracks are three epochs long, so click k plays the k'th reveal and the
   // k'th rewrite together -- exactly what the three separate slides did.
   pc.overlay(~horiz: #'left, ~vert: #'top,
-             staged(base_canvas, [stage_1, stage_2]),
+             staged(base_canvas, [stage_1, stage_2], ~wire: wire),
              pc.switch(as_pict(code_1),
                        fade_through(as_pict(code_1), as_pict(code_2)),
                        fade_through(as_pict(code_2), as_pict(code_3))))
@@ -1760,6 +1738,109 @@ def slide_26:
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
 def slide_29:
+  // The nodes of the e-graph, bound by name so that the edges can be drawn
+  // between them below; the canvas and the stages only place them.
+  def n_box1 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box2 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box3 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box4 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box5 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box6 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box7 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
+                           ~geom: preset_geom(
+                                    "roundRect", [pair("adj", "val 33878")]),
+                           ~fill: hex("FFFFFF"),
+                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                           ~body: body(~anchor: #'center,
+                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                       para(~align: #'center, run("σ", ~size: 40.0))))
+  def n_a = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom(
+                                "roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"),
+                       ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center,
+                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("a", ~size: 40.0))))
+  def n_x = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom(
+                                "roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"),
+                       ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center,
+                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("x", ~size: 40.0))))
+  def n_update = shape_pict(~width: 180.242, ~height: 64.0,
+                            ~geom: preset_geom(
+                                     "roundRect", [pair("adj", "val 33349")]),
+                            ~fill: hex("FFFFFF"),
+                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center,
+                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center,
+                                             run("update", ~size: 40.0))))
+  def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom(
+                                     "roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"),
+                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center,
+                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("1", ~size: 40.0, ~baseline: -0.06))))
+  def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom(
+                                 "roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"),
+                        ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center,
+                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("1", ~size: 40.0, ~baseline: -0.06))))
+
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -1810,127 +1891,13 @@ def slide_29:
                                                 ~fill: hex("929292"))))),
                     at(193.792, 0.0, ~tag: "Group (3)",
                        group_pict(~width: 133.891, ~height: 182.827,
-                                  at(110.363, 159.299, ~tag: "Rounded Rectangle",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(82.772, 107.433, ~tag: "Rounded Rectangle (2)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(55.182, 159.299, ~tag: "Rounded Rectangle (3)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(55.182, 53.717, ~tag: "Rounded Rectangle (4)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(32.239, 107.433, ~tag: "Rounded Rectangle (5)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(0.0, 159.299, ~tag: "Rounded Rectangle (6)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(94.536, 119.197, ~tag: "Connection Line",
-                                     shape_pict(~width: 27.591, ~height: 51.866,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(66.945, 119.197, ~tag: "Connection Line (2)",
-                                     shape_pict(~width: 27.591, ~height: 51.866,
-                                                ~flip_h: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(44.002, 119.197, ~tag: "Connection Line (3)",
-                                     shape_pict(~width: 22.943, ~height: 51.866,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(11.764, 119.197, ~tag: "Connection Line (4)",
-                                     shape_pict(~width: 32.239, ~height: 51.866,
-                                                ~flip_h: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(11.764, 119.197, ~tag: "Connection Line (5)",
-                                     shape_pict(~width: 32.239, ~height: 51.866,
-                                                ~flip_h: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(55.182, 0.0, ~tag: "Rounded Rectangle (7)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(66.945, 11.764, ~tag: "Connection Line (6)",
-                                     shape_pict(~width: 0.0, ~height: 53.717,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(66.945, 65.481, ~tag: "Connection Line (7)",
-                                     shape_pict(~width: 55.182, ~height: 105.583,
-                                                ~flip_h: #true, ~flip_v: #true,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~head: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(66.945, 65.481, ~tag: "Connection Line (8)",
-                                     shape_pict(~width: 27.591, ~height: 53.717,
-                                                ~flip_h: #true, ~flip_v: #true,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~head: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(44.002, 65.481, ~tag: "Connection Line (9)",
-                                     shape_pict(~width: 22.943, ~height: 53.717,
-                                                ~flip_v: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~head: line_end(
-                                                                  #'arrow, "med", "med")))))),
+                                  at(110.363, 159.299, ~tag: "Rounded Rectangle", n_box1),
+                                  at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", n_box2),
+                                  at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", n_box3),
+                                  at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", n_box4),
+                                  at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", n_box5),
+                                  at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", n_box6),
+                                  at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", n_box7))),
                     at(150.474, 85.484, ~tag: "Arrow",
                        shape_pict(~width: 37.732, ~height: 21.764,
                                   ~geom: preset_geom(
@@ -2079,565 +2046,392 @@ def slide_29:
     group_pict(~width: slide_width, ~height: slide_height,
                at(601.203, 775.192, ~tag: "Group (10)",
                   group_pict(~width: 602.643, ~height: 266.846,
-                             at(538.643, 203.36, ~tag: "σ",
-                                shape_pict(~width: 64.0, ~height: 63.486,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 33878")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                                           ~body: body(~anchor: #'center,
-                                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                                       para(~align: #'center, run("σ", ~size: 40.0))))),
-                             at(0.0, 203.36, ~tag: "a",
-                                shape_pict(~width: 64.0, ~height: 63.486,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 33878")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 3.0),
-                                           ~body: body(~anchor: #'center,
-                                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                                       para(~align: #'center, run("a", ~size: 40.0))))),
-                             at(255.635, 203.36, ~tag: "x",
-                                shape_pict(~width: 64.0, ~height: 63.486,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 33878")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 3.0),
-                                           ~body: body(~anchor: #'center,
-                                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                                       para(~align: #'center, run("x", ~size: 40.0))))),
-                             at(406.471, 105.798, ~tag: "update",
-                                shape_pict(~width: 180.242, ~height: 64.0,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 33349")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                                           ~body: body(~anchor: #'center,
-                                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                                       para(~align: #'center,
-                                                            run("update", ~size: 40.0))))),
-                             at(538.643, 8.75, ~tag: "σ1",
-                                shape_pict(~width: 64.0, ~height: 63.486,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 33878")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                                           ~body: body(~anchor: #'center,
-                                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                                       para(~align: #'center, run("σ", ~size: 40.0),
-                                                            run("1", ~size: 40.0, ~baseline: -0.06))))),
-                             at(384.554, 0.0, ~tag: "v1",
-                                shape_pict(~width: 64.0, ~height: 63.486,
-                                           ~geom: preset_geom(
-                                                    "roundRect", [pair("adj", "val 33878")]),
-                                           ~fill: hex("FFFFFF"),
-                                           ~line: make_stroke(hex("000000"), ~width: 3.0),
-                                           ~body: body(~anchor: #'center,
-                                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                                       para(~align: #'center, run("v", ~size: 40.0),
-                                                            run("1", ~size: 40.0, ~baseline: -0.06))))),
-                             at(496.592, 137.798, ~tag: "Connection Line (10)",
-                                shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                                           ~flip_v: #true, ~shape: "straightConnector1",
-                                           ~line: make_stroke(
-                                                    hex("0433FF"), ~width: 6.0,
-                                                    ~head: line_end(#'arrow, "med", "med")))),
-                             at(496.592, 40.493, ~tag: "Connection Line (11)",
-                                shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                                           ~shape: "straightConnector1",
-                                           ~line: make_stroke(
-                                                    hex("0433FF"), ~width: 6.0,
-                                                    ~tail: line_end(#'arrow, "med", "med")))),
-                             at(287.635, 137.798, ~tag: "Connection Line (12)",
-                                shape_pict(~width: 208.957, ~height: 97.305, ~flip_v: #true,
-                                           ~shape: "straightConnector1",
-                                           ~line: make_stroke(
-                                                    hex("000000"), ~width: 4.0,
-                                                    ~head: line_end(#'arrow, "med", "med")))),
-                             at(32.0, 137.798, ~tag: "Connection Line (13)",
-                                shape_pict(~width: 464.592, ~height: 97.305, ~flip_v: #true,
-                                           ~shape: "straightConnector1",
-                                           ~line: make_stroke(
-                                                    hex("000000"), ~width: 4.0,
-                                                    ~head: line_end(#'arrow, "med", "med")))),
-                             at(416.554, 31.743, ~tag: "Connection Line (14)",
-                                shape_pict(~width: 80.038, ~height: 106.055,
-                                           ~shape: "straightConnector1",
-                                           ~line: make_stroke(
-                                                    hex("000000"), ~width: 4.0,
-                                                    ~tail: line_end(#'arrow, "med", "med")))))))
+                             at(538.643, 203.36, ~tag: "σ", n_sigma),
+                             at(0.0, 203.36, ~tag: "a", n_a),
+                             at(255.635, 203.36, ~tag: "x", n_x),
+                             at(406.471, 105.798, ~tag: "update", n_update),
+                             at(538.643, 8.75, ~tag: "σ1", n_sigma1),
+                             at(384.554, 0.0, ~tag: "v1", n_v1))))
 
-  staged(base_canvas, [stage_1])
+  // Keynote drew each edge as a connector between two centres and clipped it
+  // at the boxes; these are the same edges as `arrow`s, from border to border.
+  // Stage `k` brings the edges of the nodes it adds; stage 0 is `base_canvas`.
+  fun wire(p, k):
+    match k
+    | 0:
+        let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
+                                [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
+                                [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
+        p
+    | 1:
+        let p = state_edges(p, [[n_update, n_sigma], [n_sigma1, n_update]])
+        let p = value_edges(p, [[n_update, n_x], [n_update, n_a], [n_v1, n_update]])
+        p
+    | ~else: p
+
+  staged(base_canvas, [stage_1], ~wire: wire)
 
 // -------------------------------------------------------------------------------------
 // slide_31: Slide 20
-def slide_31 = slide_canvas(
-  ~width: slide_width, ~height: slide_height,
-  ~background: hex("FFFFFF"),
-  // Redundant Update Elimination (id 765)
-  at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("Redundant Update Elimination", ~font: "Helvetica Neue",
-                      ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-  // Slide Number (id 766)
-  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-  // Group (id 795)
-  at(1476.341, 50.118, ~tag: "Group",
-     group_pict(~width: 327.683, ~height: 182.827,
-                at(0.0, 62.869, ~tag: "Group (2)",
-                   group_pict(~width: 106.985, ~height: 66.994,
-                              at(0.0, 0.0, ~tag: "Rectangle",
-                                 shape_pict(~width: 106.985, ~height: 66.994,
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 1.0),
-                                            ~shadow: make_shadow(
-                                                       hex("000000"), ~blur: 15.0,
-                                                       ~distance: 1.0, ~direction: 90.0))),
-                              at(4.646, 4.397, ~tag: "Rectangle (2)",
-                                 shape_pict(~width: 60.549, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(11.612, 11.976, ~tag: "Rectangle (3)",
-                                 shape_pict(~width: 64.295, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(11.612, 19.555, ~tag: "Rectangle (4)",
-                                 shape_pict(~width: 79.846, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(19.007, 27.133, ~tag: "Rectangle (5)",
-                                 shape_pict(~width: 34.404, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(11.612, 34.712, ~tag: "Rectangle (6)",
-                                 shape_pict(~width: 49.795, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(19.007, 42.29, ~tag: "Rectangle (7)",
-                                 shape_pict(~width: 56.852, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(11.612, 49.869, ~tag: "Rectangle (8)",
-                                 shape_pict(~width: 47.325, ~height: 5.15,
-                                            ~fill: hex("929292"))),
-                              at(11.612, 57.447, ~tag: "Rectangle (9)",
-                                 shape_pict(~width: 90.727, ~height: 5.15,
-                                            ~fill: hex("929292"))))),
-                at(193.792, 0.0, ~tag: "Group (3)",
-                   group_pict(~width: 133.891, ~height: 182.827,
-                              at(110.363, 159.299, ~tag: "Rounded Rectangle",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(82.772, 107.433, ~tag: "Rounded Rectangle (2)",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(55.182, 159.299, ~tag: "Rounded Rectangle (3)",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(55.182, 53.717, ~tag: "Rounded Rectangle (4)",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(32.239, 107.433, ~tag: "Rounded Rectangle (5)",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(0.0, 159.299, ~tag: "Rounded Rectangle (6)",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(94.536, 119.197, ~tag: "Connection Line",
-                                 shape_pict(~width: 27.591, ~height: 51.866,
-                                            ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~tail: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(66.945, 119.197, ~tag: "Connection Line (2)",
-                                 shape_pict(~width: 27.591, ~height: 51.866,
-                                            ~flip_h: #true, ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~tail: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(44.002, 119.197, ~tag: "Connection Line (3)",
-                                 shape_pict(~width: 22.943, ~height: 51.866,
-                                            ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~tail: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(11.764, 119.197, ~tag: "Connection Line (4)",
-                                 shape_pict(~width: 32.239, ~height: 51.866,
-                                            ~flip_h: #true, ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~tail: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(11.764, 119.197, ~tag: "Connection Line (5)",
-                                 shape_pict(~width: 32.239, ~height: 51.866,
-                                            ~flip_h: #true, ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~tail: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(55.182, 0.0, ~tag: "Rounded Rectangle (7)",
-                                 shape_pict(~width: 23.528, ~height: 23.528,
-                                            ~geom: preset_geom(
-                                                     "roundRect",
-                                                     [pair("adj", "val 30640")]),
-                                            ~fill: hex("FFFFFF"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 3.0))),
-                              at(66.945, 11.764, ~tag: "Connection Line (6)",
-                                 shape_pict(~width: 0.0, ~height: 53.717,
-                                            ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~tail: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(66.945, 65.481, ~tag: "Connection Line (7)",
-                                 shape_pict(~width: 55.182, ~height: 105.583,
-                                            ~flip_h: #true, ~flip_v: #true,
-                                            ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~head: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(66.945, 65.481, ~tag: "Connection Line (8)",
-                                 shape_pict(~width: 27.591, ~height: 53.717,
-                                            ~flip_h: #true, ~flip_v: #true,
-                                            ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~head: line_end(
-                                                              #'arrow, "med", "med")))),
-                              at(44.002, 65.481, ~tag: "Connection Line (9)",
-                                 shape_pict(~width: 22.943, ~height: 53.717,
-                                            ~flip_v: #true, ~shape: "straightConnector1",
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0,
-                                                     ~head: line_end(
-                                                              #'arrow, "med", "med")))))),
-                at(150.474, 85.484, ~tag: "Arrow",
-                   shape_pict(~width: 37.732, ~height: 21.764,
-                              ~geom: preset_geom(
-                                       "rightArrow",
-                                       [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
-                              ~fill: hex("000000"))))),
-  // Group (4) (id 811)
-  at(-27.0, 4.226, ~tag: "Group (4)",
-     group_pict(~width: 1312.695, ~height: 51.502,
-                at(778.271, 0.774, ~tag: "Group (5)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
-                                                     
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("017100"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(28.093, 5.452, ~tag: "Effectful E-Graphs",
-                                 textbox(~width: 229.229, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
+def slide_31:
+  // The nodes of the e-graph, bound by name so that the edges can be drawn
+  // between them below; the canvas only places them.
+  def n_box1 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box2 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box3 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box4 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box5 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box6 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box7 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
+                           ~geom: preset_geom(
+                                    "roundRect", [pair("adj", "val 33878")]),
+                           ~fill: hex("FFFFFF"),
+                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                           ~body: body(~anchor: #'center,
+                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                       para(~align: #'center, run("σ", ~size: 40.0))))
+  def n_a = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom(
+                                "roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"),
+                       ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center,
+                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("a", ~size: 40.0))))
+  def n_x = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom(
+                                "roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"),
+                       ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center,
+                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("x", ~size: 40.0))))
+  def n_update = shape_pict(~width: 180.242, ~height: 64.0,
+                            ~geom: preset_geom(
+                                     "roundRect", [pair("adj", "val 33349")]),
+                            ~fill: hex("FFFFFF"),
+                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center,
+                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center,
+                                             run("update", ~size: 40.0))))
+  def n_update2 = shape_pict(~width: 180.242, ~height: 64.0,
+                             ~geom: preset_geom(
+                                      "roundRect", [pair("adj", "val 33349")]),
+                             ~fill: hex("FFFFFF"),
+                             ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                             ~body: body(~anchor: #'center,
+                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                          para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful E-Graphs",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true, ~color: hex("FFFFFF"))))))),
-                at(1037.695, 0.0, ~tag: "Group (6)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (2)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
+                                              run("update", ~size: 40.0))))
+  def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom(
+                                     "roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"),
+                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center,
+                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("1", ~size: 40.0, ~baseline: -0.06))))
+  def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom(
+                                 "roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"),
+                        ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center,
+                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("1", ~size: 40.0, ~baseline: -0.06))))
+  def n_sigma2 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom(
+                                     "roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"),
+                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center,
+                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("2", ~size: 40.0, ~baseline: -0.06))))
+  def n_v2 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom(
+                                 "roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"),
+                        ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center,
+                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("2", ~size: 40.0, ~baseline: -0.06))))
+
+  def canvas:
+    slide_canvas(
+    ~width: slide_width, ~height: slide_height,
+    ~background: hex("FFFFFF"),
+    // Redundant Update Elimination (id 765)
+    at(95.0, 85.0, ~tag: "Redundant Update Elimination",
+       textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+               ~insets: insets(4.0, 4.0, 4.0, 4.0),
+               para(~line_spacing: pair(#'percent, 0.8),
+                    run("Redundant Update Elimination", ~font: "Helvetica Neue",
+                        ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
+    // Slide Number (id 766)
+    at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+    // Group (id 795)
+    at(1476.341, 50.118, ~tag: "Group",
+       group_pict(~width: 327.683, ~height: 182.827,
+                  at(0.0, 62.869, ~tag: "Group (2)",
+                     group_pict(~width: 106.985, ~height: 66.994,
+                                at(0.0, 0.0, ~tag: "Rectangle",
+                                   shape_pict(~width: 106.985, ~height: 66.994,
+                                              ~fill: hex("FFFFFF"),
+                                              ~line: make_stroke(
+                                                       hex("000000"), ~width: 1.0),
+                                              ~shadow: make_shadow(
+                                                         hex("000000"), ~blur: 15.0,
+                                                         ~distance: 1.0, ~direction: 90.0))),
+                                at(4.646, 4.397, ~tag: "Rectangle (2)",
+                                   shape_pict(~width: 60.549, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(11.612, 11.976, ~tag: "Rectangle (3)",
+                                   shape_pict(~width: 64.295, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(11.612, 19.555, ~tag: "Rectangle (4)",
+                                   shape_pict(~width: 79.846, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(19.007, 27.133, ~tag: "Rectangle (5)",
+                                   shape_pict(~width: 34.404, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(11.612, 34.712, ~tag: "Rectangle (6)",
+                                   shape_pict(~width: 49.795, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(19.007, 42.29, ~tag: "Rectangle (7)",
+                                   shape_pict(~width: 56.852, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(11.612, 49.869, ~tag: "Rectangle (8)",
+                                   shape_pict(~width: 47.325, ~height: 5.15,
+                                              ~fill: hex("929292"))),
+                                at(11.612, 57.447, ~tag: "Rectangle (9)",
+                                   shape_pict(~width: 90.727, ~height: 5.15,
+                                              ~fill: hex("929292"))))),
+                  at(193.792, 0.0, ~tag: "Group (3)",
+                     group_pict(~width: 133.891, ~height: 182.827,
+                                at(110.363, 159.299, ~tag: "Rounded Rectangle", n_box1),
+                                at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", n_box2),
+                                at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", n_box3),
+                                at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", n_box4),
+                                at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", n_box5),
+                                at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", n_box6),
+                                at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", n_box7))),
+                  at(150.474, 85.484, ~tag: "Arrow",
+                     shape_pict(~width: 37.732, ~height: 21.764,
+                                ~geom: preset_geom(
+                                         "rightArrow",
+                                         [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
+                                ~fill: hex("000000"))))),
+    // Group (4) (id 811)
+    at(-27.0, 4.226, ~tag: "Group (4)",
+       group_pict(~width: 1312.695, ~height: 51.502,
+                  at(778.271, 0.774, ~tag: "Group (5)",
+                     group_pict(~width: 275.0, ~height: 50.728,
+                                at(0.0, 0.0, ~tag: "Shape",
+                                   shape_pict(~width: 275.0, ~height: 50.728,
+                                              ~geom: custom_geom(
                                                      
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("D9EAD3"),
-                                            ~line: make_stroke(
-                                                     hex("017100"), ~width: 2.0))),
-                              at(22.392, 5.191, ~tag: "Effectful Extraction",
-                                 textbox(~width: 240.63, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Effectful Extraction",
-                                                ~font: "Helvetica Neue", ~size: 25.0,
-                                                ~bold: #true)))))),
-                at(259.424, 0.774, ~tag: "Group (7)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (3)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
+                                                       [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                       21600, 21600), ~fill: hex("017100"),
+                                              ~line: make_stroke(
+                                                       hex("017100"), ~width: 2.0))),
+                                at(28.093, 5.452, ~tag: "Effectful E-Graphs",
+                                   textbox(~width: 229.229, ~height: 39.823,
+                                           ~anchor: #'center,
+                                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                           para(~align: #'center,
+                                                ~line_spacing: pair(#'percent, 0.9),
+                                                ~space_before: 45.0,
+                                                run(
+                                                  "Effectful E-Graphs",
+                                                  ~font: "Helvetica Neue", ~size: 25.0,
+                                                  ~bold: #true, ~color: hex("FFFFFF"))))))),
+                  at(1037.695, 0.0, ~tag: "Group (6)",
+                     group_pict(~width: 275.0, ~height: 50.728,
+                                at(0.0, 0.0, ~tag: "Shape (2)",
+                                   shape_pict(~width: 275.0, ~height: 50.728,
+                                              ~geom: custom_geom(
                                                      
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(73.609, 5.452, ~tag: "E-Graphs",
-                                 textbox(~width: 128.197, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "E-Graphs", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(518.848, 0.774, ~tag: "Group (8)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (4)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
+                                                       [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                       21600, 21600), ~fill: hex("D9EAD3"),
+                                              ~line: make_stroke(
+                                                       hex("017100"), ~width: 2.0))),
+                                at(22.392, 5.191, ~tag: "Effectful Extraction",
+                                   textbox(~width: 240.63, ~height: 39.823,
+                                           ~anchor: #'center,
+                                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                           para(~align: #'center,
+                                                ~line_spacing: pair(#'percent, 0.9),
+                                                ~space_before: 45.0,
+                                                run(
+                                                  "Effectful Extraction",
+                                                  ~font: "Helvetica Neue", ~size: 25.0,
+                                                  ~bold: #true)))))),
+                  at(259.424, 0.774, ~tag: "Group (7)",
+                     group_pict(~width: 275.0, ~height: 50.728,
+                                at(0.0, 0.0, ~tag: "Shape (3)",
+                                   shape_pict(~width: 275.0, ~height: 50.728,
+                                              ~geom: custom_geom(
                                                      
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(62.233, 5.452, ~tag: "Extraction",
-                                 textbox(~width: 150.949, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Extraction", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))),
-                at(0.0, 0.774, ~tag: "Group (9)",
-                   group_pict(~width: 275.0, ~height: 50.728,
-                              at(0.0, 0.0, ~tag: "Shape (5)",
-                                 shape_pict(~width: 275.0, ~height: 50.728,
-                                            ~geom: custom_geom(
+                                                       [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                       21600, 21600), ~fill: hex("EBEBEB"),
+                                              ~line: make_stroke(
+                                                       hex("000000"), ~width: 2.0))),
+                                at(73.609, 5.452, ~tag: "E-Graphs",
+                                   textbox(~width: 128.197, ~height: 39.823,
+                                           ~anchor: #'center,
+                                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                           para(~align: #'center,
+                                                ~line_spacing: pair(#'percent, 0.9),
+                                                ~space_before: 45.0,
+                                                run(
+                                                  "E-Graphs", ~font: "Helvetica Neue",
+                                                  ~size: 25.0, ~bold: #true)))))),
+                  at(518.848, 0.774, ~tag: "Group (8)",
+                     group_pict(~width: 275.0, ~height: 50.728,
+                                at(0.0, 0.0, ~tag: "Shape (4)",
+                                   shape_pict(~width: 275.0, ~height: 50.728,
+                                              ~geom: custom_geom(
                                                      
-                                                     [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
-                                                     21600, 21600), ~fill: hex("EBEBEB"),
-                                            ~line: make_stroke(
-                                                     hex("000000"), ~width: 2.0))),
-                              at(67.116, 5.452, ~tag: "Rewriting",
-                                 textbox(~width: 141.182, ~height: 39.823,
-                                         ~anchor: #'center,
-                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center,
-                                              ~line_spacing: pair(#'percent, 0.9),
-                                              ~space_before: 45.0,
-                                              run(
-                                                "Rewriting", ~font: "Helvetica Neue",
-                                                ~size: 25.0, ~bold: #true)))))))),
-  // (v1, σ1) = update(a, x)… (id 812)
-  at(32.458, 358.853, ~tag: "(v1, σ1) = update(a, x)…",
-     shape_pict(~width: 727.947, ~height: 340.475, ~fill: hex("FFFFFF"),
-                ~line: make_stroke(hex("000000"), ~width: 1.0),
-                ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                            para(~line_spacing: pair(#'percent, 1.5),
-                                 run("(v", ~size: 50.0),
-                                 run("1", ~size: 50.0, ~baseline: -0.06),
-                                 run(", σ", ~size: 50.0),
-                                 run("1", ~size: 50.0, ~baseline: -0.06),
-                                 run(") = update(a, x)", ~size: 50.0)),
-                            para(~line_spacing: pair(#'percent, 1.5),
-                                 run("(v", ~size: 50.0),
-                                 run("2", ~size: 50.0, ~baseline: -0.06),
-                                 run(", σ", ~size: 50.0),
-                                 run("2", ~size: 50.0, ~baseline: -0.06),
-                                 run(") = update(a, x)", ~size: 50.0)),
-                            para(~line_spacing: pair(#'percent, 1.5),
-                                 run("(v", ~size: 50.0),
-                                 run("3", ~size: 50.0, ~baseline: -0.06),
-                                 run(", σ", ~size: 50.0),
-                                 run("3", ~size: 50.0, ~baseline: -0.06),
-                                 run(") = update(b, y)", ~size: 50.0)),
-                            para(~line_spacing: pair(#'percent, 1.5),
-                                 run("(v", ~size: 50.0),
-                                 run("4", ~size: 50.0, ~baseline: -0.06),
-                                 run(", σ", ~size: 50.0),
-                                 run("4", ~size: 50.0, ~baseline: -0.06),
-                                 run(") = update(c, v", ~size: 50.0),
-                                 run("2", ~size: 50.0, ~baseline: -0.06),
-                                 run(")", ~size: 50.0))),
-                ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
-                                     ~direction: 90.0))),
-  // Group (10) (id 832)
-  at(601.203, 587.333, ~tag: "Group (10)",
-     group_pict(~width: 602.643, ~height: 454.706,
-                at(538.643, 391.219, ~tag: "σ",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("σ", ~size: 40.0))))),
-                at(0.0, 391.219, ~tag: "a",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 3.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("a", ~size: 40.0))))),
-                at(255.635, 391.219, ~tag: "x",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 3.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("x", ~size: 40.0))))),
-                at(406.471, 293.658, ~tag: "update",
-                   shape_pict(~width: 180.242, ~height: 64.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33349")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center,
-                                               run("update", ~size: 40.0))))),
-                at(406.471, 99.048, ~tag: "update (2)",
-                   shape_pict(~width: 180.242, ~height: 64.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33349")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center,
-                                               run("update", ~size: 40.0))))),
-                at(538.643, 196.61, ~tag: "σ1",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("σ", ~size: 40.0),
-                                               run("1", ~size: 40.0, ~baseline: -0.06))))),
-                at(384.554, 187.86, ~tag: "v1",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 3.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("v", ~size: 40.0),
-                                               run("1", ~size: 40.0, ~baseline: -0.06))))),
-                at(538.643, 2.0, ~tag: "σ2",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("σ", ~size: 40.0),
-                                               run("2", ~size: 40.0, ~baseline: -0.06))))),
-                at(384.554, 0.0, ~tag: "v2",
-                   shape_pict(~width: 64.0, ~height: 63.486,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 3.0),
-                              ~body: body(~anchor: #'center,
-                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("v", ~size: 40.0),
-                                               run("2", ~size: 40.0, ~baseline: -0.06))))),
-                at(496.592, 325.658, ~tag: "Connection Line (10)",
-                   shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                              ~flip_v: #true, ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("0433FF"), ~width: 6.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(496.592, 228.353, ~tag: "Connection Line (11)",
-                   shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-                at(496.592, 131.048, ~tag: "Connection Line (12)",
-                   shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                              ~flip_v: #true, ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("0433FF"), ~width: 6.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(496.592, 33.743, ~tag: "Connection Line (13)",
-                   shape_pict(~width: 74.052, ~height: 97.305, ~flip_v: #true,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("0433FF"), ~width: 6.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(287.635, 325.658, ~tag: "Connection Line (14)",
-                   shape_pict(~width: 208.957, ~height: 97.305, ~flip_v: #true,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(32.0, 325.658, ~tag: "Connection Line (15)",
-                   shape_pict(~width: 464.592, ~height: 97.305, ~flip_v: #true,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(416.554, 219.603, ~tag: "Connection Line (16)",
-                   shape_pict(~width: 80.038, ~height: 106.055,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-                at(287.635, 131.048, ~tag: "Connection Line (17)",
-                   shape_pict(~width: 208.957, ~height: 291.915, ~flip_v: #true,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(32.0, 131.048, ~tag: "Connection Line (18)",
-                   shape_pict(~width: 464.592, ~height: 291.915, ~flip_v: #true,
-                              ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-                at(416.554, 31.743, ~tag: "Connection Line (19)",
-                   shape_pict(~width: 80.038, ~height: 99.305, ~flip_h: #true,
-                              ~flip_v: #true, ~shape: "straightConnector1",
-                              ~line: make_stroke(
-                                       hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med"))))))
-)
+                                                       [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                       21600, 21600), ~fill: hex("EBEBEB"),
+                                              ~line: make_stroke(
+                                                       hex("000000"), ~width: 2.0))),
+                                at(62.233, 5.452, ~tag: "Extraction",
+                                   textbox(~width: 150.949, ~height: 39.823,
+                                           ~anchor: #'center,
+                                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                           para(~align: #'center,
+                                                ~line_spacing: pair(#'percent, 0.9),
+                                                ~space_before: 45.0,
+                                                run(
+                                                  "Extraction", ~font: "Helvetica Neue",
+                                                  ~size: 25.0, ~bold: #true)))))),
+                  at(0.0, 0.774, ~tag: "Group (9)",
+                     group_pict(~width: 275.0, ~height: 50.728,
+                                at(0.0, 0.0, ~tag: "Shape (5)",
+                                   shape_pict(~width: 275.0, ~height: 50.728,
+                                              ~geom: custom_geom(
+                                                     
+                                                       [[[#'move, pair(0, 0)], [#'line, pair(0, 189)], [#'line, pair(1957, 10800)], [#'line, pair(0, 21411)], [#'line, pair(0, 21600)], [#'line, pair(19595, 21600)], [#'line, pair(19595, 21150)], [#'line, pair(19643, 21411)], [#'line, pair(21600, 10800)], [#'line, pair(19643, 189)], [#'line, pair(19595, 450)], [#'line, pair(19595, 0)], [#'line, pair(0, 0)], [#'close]]],
+                                                       21600, 21600), ~fill: hex("EBEBEB"),
+                                              ~line: make_stroke(
+                                                       hex("000000"), ~width: 2.0))),
+                                at(67.116, 5.452, ~tag: "Rewriting",
+                                   textbox(~width: 141.182, ~height: 39.823,
+                                           ~anchor: #'center,
+                                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                           para(~align: #'center,
+                                                ~line_spacing: pair(#'percent, 0.9),
+                                                ~space_before: 45.0,
+                                                run(
+                                                  "Rewriting", ~font: "Helvetica Neue",
+                                                  ~size: 25.0, ~bold: #true)))))))),
+    // (v1, σ1) = update(a, x)… (id 812)
+    at(32.458, 358.853, ~tag: "(v1, σ1) = update(a, x)…",
+       shape_pict(~width: 727.947, ~height: 340.475, ~fill: hex("FFFFFF"),
+                  ~line: make_stroke(hex("000000"), ~width: 1.0),
+                  ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                              para(~line_spacing: pair(#'percent, 1.5),
+                                   run("(v", ~size: 50.0),
+                                   run("1", ~size: 50.0, ~baseline: -0.06),
+                                   run(", σ", ~size: 50.0),
+                                   run("1", ~size: 50.0, ~baseline: -0.06),
+                                   run(") = update(a, x)", ~size: 50.0)),
+                              para(~line_spacing: pair(#'percent, 1.5),
+                                   run("(v", ~size: 50.0),
+                                   run("2", ~size: 50.0, ~baseline: -0.06),
+                                   run(", σ", ~size: 50.0),
+                                   run("2", ~size: 50.0, ~baseline: -0.06),
+                                   run(") = update(a, x)", ~size: 50.0)),
+                              para(~line_spacing: pair(#'percent, 1.5),
+                                   run("(v", ~size: 50.0),
+                                   run("3", ~size: 50.0, ~baseline: -0.06),
+                                   run(", σ", ~size: 50.0),
+                                   run("3", ~size: 50.0, ~baseline: -0.06),
+                                   run(") = update(b, y)", ~size: 50.0)),
+                              para(~line_spacing: pair(#'percent, 1.5),
+                                   run("(v", ~size: 50.0),
+                                   run("4", ~size: 50.0, ~baseline: -0.06),
+                                   run(", σ", ~size: 50.0),
+                                   run("4", ~size: 50.0, ~baseline: -0.06),
+                                   run(") = update(c, v", ~size: 50.0),
+                                   run("2", ~size: 50.0, ~baseline: -0.06),
+                                   run(")", ~size: 50.0))),
+                  ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
+                                       ~direction: 90.0))),
+    // Group (10) (id 832)
+    at(601.203, 587.333, ~tag: "Group (10)",
+       group_pict(~width: 602.643, ~height: 454.706,
+                  at(538.643, 391.219, ~tag: "σ", n_sigma),
+                  at(0.0, 391.219, ~tag: "a", n_a),
+                  at(255.635, 391.219, ~tag: "x", n_x),
+                  at(406.471, 293.658, ~tag: "update", n_update),
+                  at(406.471, 99.048, ~tag: "update (2)", n_update2),
+                  at(538.643, 196.61, ~tag: "σ1", n_sigma1),
+                  at(384.554, 187.86, ~tag: "v1", n_v1),
+                  at(538.643, 2.0, ~tag: "σ2", n_sigma2),
+                  at(384.554, 0.0, ~tag: "v2", n_v2)))
+  )
+
+  // Keynote drew each edge as a connector between two centres and clipped it
+  // at the boxes; these are the same edges as `arrow`s, from border to border.
+  let p = as_pict(canvas)
+  let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
+                          [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
+                          [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
+  let p = state_edges(p, [[n_update, n_sigma], [n_sigma1, n_update], [n_update2, n_sigma1],
+                          [n_sigma2, n_update2]])
+  let p = value_edges(p, [[n_update, n_x], [n_update, n_a], [n_v1, n_update], [n_update2, n_x],
+                          [n_update2, n_a], [n_v2, n_update2]])
+  p
 
 // -------------------------------------------------------------------------------------
 // slide_32: Slide 21 through Slide 22, as one animated pict.
@@ -2647,6 +2441,156 @@ def slide_31 = slide_canvas(
 //
 // One `fade_in` per stage, so the deck takes the same number of clicks it did.
 def slide_32:
+  // The nodes of the e-graph, bound by name so that the edges can be drawn
+  // between them below; the canvas and the stages only place them.
+  def n_box1 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box2 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box3 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box4 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box5 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box6 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_box7 = shape_pict(~width: 23.528, ~height: 23.528,
+                          ~geom: preset_geom(
+                                   "roundRect",
+                                   [pair("adj", "val 30640")]),
+                          ~fill: hex("FFFFFF"),
+                          ~line: make_stroke(
+                                   hex("000000"), ~width: 3.0))
+  def n_b = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("b", ~size: 40.0))))
+  def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
+                           ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                           ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                           ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                       para(~align: #'center, run("σ", ~size: 40.0))))
+  def n_a = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("a", ~size: 40.0))))
+  def n_x = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("x", ~size: 40.0))))
+  def n_update = shape_pict(~width: 180.242, ~height: 64.0,
+                            ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
+                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("update", ~size: 40.0))))
+  def n_update2 = shape_pict(~width: 180.242, ~height: 64.0,
+                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
+                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                         para(~align: #'center, run("update", ~size: 40.0))))
+  def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("1", ~size: 40.0, ~baseline: -0.06))))
+  def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("1", ~size: 40.0, ~baseline: -0.06))))
+  def n_update3 = shape_pict(~width: 180.242, ~height: 64.0,
+                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
+                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                         para(~align: #'center, run("update", ~size: 40.0))))
+  def n_sigma2 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("2", ~size: 40.0, ~baseline: -0.06))))
+  def n_v2 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("2", ~size: 40.0, ~baseline: -0.06))))
+  def n_sigma3 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("3", ~size: 40.0, ~baseline: -0.06))))
+  def n_v3 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("3", ~size: 40.0, ~baseline: -0.06))))
+  def n_y = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("y", ~size: 40.0))))
+  def n_c = shape_pict(~width: 64.0, ~height: 63.486,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                   para(~align: #'center, run("c", ~size: 40.0))))
+  def n_update4 = shape_pict(~width: 180.242, ~height: 64.0,
+                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
+                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                         para(~align: #'center, run("update", ~size: 40.0))))
+  def n_sigma4 = shape_pict(~width: 64.0, ~height: 63.486,
+                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
+                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                        para(~align: #'center, run("σ", ~size: 40.0),
+                                             run("4", ~size: 40.0, ~baseline: -0.06))))
+  def n_v4 = shape_pict(~width: 64.0, ~height: 63.486,
+                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
+                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
+                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                    para(~align: #'center, run("v", ~size: 40.0),
+                                         run("4", ~size: 40.0, ~baseline: -0.06))))
+
   // the picture before the first reveal
   def base_canvas:
     slide_canvas(
@@ -2697,127 +2641,13 @@ def slide_32:
                                                 ~fill: hex("929292"))))),
                     at(193.792, 0.0, ~tag: "Group (3)",
                        group_pict(~width: 133.891, ~height: 182.827,
-                                  at(110.363, 159.299, ~tag: "Rounded Rectangle",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(82.772, 107.433, ~tag: "Rounded Rectangle (2)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(55.182, 159.299, ~tag: "Rounded Rectangle (3)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(55.182, 53.717, ~tag: "Rounded Rectangle (4)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(32.239, 107.433, ~tag: "Rounded Rectangle (5)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(0.0, 159.299, ~tag: "Rounded Rectangle (6)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(94.536, 119.197, ~tag: "Connection Line",
-                                     shape_pict(~width: 27.591, ~height: 51.866,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(66.945, 119.197, ~tag: "Connection Line (2)",
-                                     shape_pict(~width: 27.591, ~height: 51.866,
-                                                ~flip_h: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(44.002, 119.197, ~tag: "Connection Line (3)",
-                                     shape_pict(~width: 22.943, ~height: 51.866,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(11.764, 119.197, ~tag: "Connection Line (4)",
-                                     shape_pict(~width: 32.239, ~height: 51.866,
-                                                ~flip_h: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(11.764, 119.197, ~tag: "Connection Line (5)",
-                                     shape_pict(~width: 32.239, ~height: 51.866,
-                                                ~flip_h: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(55.182, 0.0, ~tag: "Rounded Rectangle (7)",
-                                     shape_pict(~width: 23.528, ~height: 23.528,
-                                                ~geom: preset_geom(
-                                                         "roundRect",
-                                                         [pair("adj", "val 30640")]),
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 3.0))),
-                                  at(66.945, 11.764, ~tag: "Connection Line (6)",
-                                     shape_pict(~width: 0.0, ~height: 53.717,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~tail: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(66.945, 65.481, ~tag: "Connection Line (7)",
-                                     shape_pict(~width: 55.182, ~height: 105.583,
-                                                ~flip_h: #true, ~flip_v: #true,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~head: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(66.945, 65.481, ~tag: "Connection Line (8)",
-                                     shape_pict(~width: 27.591, ~height: 53.717,
-                                                ~flip_h: #true, ~flip_v: #true,
-                                                ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~head: line_end(
-                                                                  #'arrow, "med", "med")))),
-                                  at(44.002, 65.481, ~tag: "Connection Line (9)",
-                                     shape_pict(~width: 22.943, ~height: 53.717,
-                                                ~flip_v: #true, ~shape: "straightConnector1",
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 2.0,
-                                                         ~head: line_end(
-                                                                  #'arrow, "med", "med")))))),
+                                  at(110.363, 159.299, ~tag: "Rounded Rectangle", n_box1),
+                                  at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", n_box2),
+                                  at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", n_box3),
+                                  at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", n_box4),
+                                  at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", n_box5),
+                                  at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", n_box6),
+                                  at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", n_box7))),
                     at(150.474, 85.484, ~tag: "Arrow",
                        shape_pict(~width: 37.732, ~height: 21.764,
                                   ~geom: preset_geom(
@@ -2960,225 +2790,52 @@ def slide_32:
                                      run(")", ~size: 50.0))),
                     ~shadow: make_shadow(hex("000000"), ~blur: 15.0, ~distance: 1.0,
                                          ~direction: 90.0))),
-      at(686.415, 978.552, ~tag: "b",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("b", ~size: 40.0))))),
-      at(1139.847, 978.552, ~tag: "σ",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 40.0))))),
-      at(601.203, 978.552, ~tag: "a",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("a", ~size: 40.0))))),
-      at(856.839, 978.552, ~tag: "x",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("x", ~size: 40.0))))),
-      at(1007.675, 880.99, ~tag: "update",
-         shape_pict(~width: 180.242, ~height: 64.0,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("update", ~size: 40.0))))),
-      at(1007.675, 686.381, ~tag: "update (2)",
-         shape_pict(~width: 180.242, ~height: 64.0,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("update", ~size: 40.0))))),
-      at(1139.847, 783.942, ~tag: "σ1",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 40.0),
-                                     run("1", ~size: 40.0, ~baseline: -0.06))))),
-      at(985.757, 775.192, ~tag: "v1",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("v", ~size: 40.0),
-                                     run("1", ~size: 40.0, ~baseline: -0.06))))),
-      at(1007.675, 491.771, ~tag: "update (3)",
-         shape_pict(~width: 180.242, ~height: 64.0,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("update", ~size: 40.0))))),
-      at(1139.847, 589.333, ~tag: "σ2",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 40.0),
-                                     run("2", ~size: 40.0, ~baseline: -0.06))))),
-      at(985.757, 587.333, ~tag: "v2",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("v", ~size: 40.0),
-                                     run("2", ~size: 40.0, ~baseline: -0.06))))),
-      at(1139.847, 394.723, ~tag: "σ3",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("σ", ~size: 40.0),
-                                     run("3", ~size: 40.0, ~baseline: -0.06))))),
-      at(985.757, 399.473, ~tag: "v3",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("v", ~size: 40.0),
-                                     run("3", ~size: 40.0, ~baseline: -0.06))))),
-      at(1097.745, 912.983, ~tag: "Connection Line (10)",
-         shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(1097.745, 815.698, ~tag: "Connection Line (11)",
-         shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(1097.745, 718.384, ~tag: "Connection Line (12)",
-         shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(1097.795, 621.076, ~tag: "Connection Line (13)",
-         shape_pict(~width: 74.052, ~height: 97.305, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(1097.795, 523.771, ~tag: "Connection Line (14)",
-         shape_pict(~width: 74.052, ~height: 97.305, ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(1097.745, 426.472, ~tag: "Connection Line (15)",
-         shape_pict(~width: 74.052, ~height: 97.305, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(888.839, 912.99, ~tag: "Connection Line (16)",
-         shape_pict(~width: 208.957, ~height: 97.305, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(633.203, 912.99, ~tag: "Connection Line (17)",
-         shape_pict(~width: 464.592, ~height: 97.305, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(1017.757, 806.935, ~tag: "Connection Line (18)",
-         shape_pict(~width: 80.038, ~height: 106.055, ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(888.831, 718.328, ~tag: "Connection Line (19)",
-         shape_pict(~width: 208.957, ~height: 291.915, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(633.203, 718.328, ~tag: "Connection Line (20)",
-         shape_pict(~width: 464.592, ~height: 291.915, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(1017.694, 619.087, ~tag: "Connection Line (21)",
-         shape_pict(~width: 80.038, ~height: 99.305, ~flip_h: #true, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(1017.694, 431.206, ~tag: "Connection Line (22)",
-         shape_pict(~width: 80.038, ~height: 92.555, ~flip_h: #true, ~flip_v: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~head: line_end(#'arrow, "med", "med")))),
-      at(942.05, 978.552, ~tag: "y",
-         shape_pict(~width: 64.0, ~height: 63.486,
-                    ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                    ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                para(~align: #'center, run("y", ~size: 40.0))))),
-      at(718.356, 523.757, ~tag: "Connection Line (23)",
-         shape_pict(~width: 379.38, ~height: 486.524, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))),
-      at(974.05, 523.771, ~tag: "Connection Line (24)",
-         shape_pict(~width: 123.745, ~height: 486.524, ~flip_h: #true,
-                    ~shape: "straightConnector1",
-                    ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                       ~tail: line_end(#'arrow, "med", "med")))))
+      at(686.415, 978.552, ~tag: "b", n_b),
+      at(1139.847, 978.552, ~tag: "σ", n_sigma),
+      at(601.203, 978.552, ~tag: "a", n_a),
+      at(856.839, 978.552, ~tag: "x", n_x),
+      at(1007.675, 880.99, ~tag: "update", n_update),
+      at(1007.675, 686.381, ~tag: "update (2)", n_update2),
+      at(1139.847, 783.942, ~tag: "σ1", n_sigma1),
+      at(985.757, 775.192, ~tag: "v1", n_v1),
+      at(1007.675, 491.771, ~tag: "update (3)", n_update3),
+      at(1139.847, 589.333, ~tag: "σ2", n_sigma2),
+      at(985.757, 587.333, ~tag: "v2", n_v2),
+      at(1139.847, 394.723, ~tag: "σ3", n_sigma3),
+      at(985.757, 399.473, ~tag: "v3", n_v3),
+      at(942.05, 978.552, ~tag: "y", n_y))
 
   // adds 'c', 'update', 'σ', '4', 'v'
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(771.627, 978.552, ~tag: "c",
-                  shape_pict(~width: 64.0, ~height: 63.486,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("c", ~size: 40.0))))),
-               at(1007.675, 297.161, ~tag: "update (4)",
-                  shape_pict(~width: 180.242, ~height: 64.0,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~size: 40.0))))),
-               at(1139.847, 200.627, ~tag: "σ4",
-                  shape_pict(~width: 64.0, ~height: 63.486,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("σ", ~size: 40.0),
-                                              run("4", ~size: 40.0, ~baseline: -0.06))))),
-               at(985.757, 200.627, ~tag: "v4",
-                  shape_pict(~width: 64.0, ~height: 63.486,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("v", ~size: 40.0),
-                                              run("4", ~size: 40.0, ~baseline: -0.06))))),
-               at(1097.795, 232.37, ~tag: "Connection Line (25)",
-                  shape_pict(~width: 74.052, ~height: 96.791, ~flip_v: #true,
-                             ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                                ~head: line_end(#'arrow, "med", "med")))),
-               at(1097.795, 329.161, ~tag: "Connection Line (26)",
-                  shape_pict(~width: 74.052, ~height: 97.305, ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("0433FF"), ~width: 6.0,
-                                                ~tail: line_end(#'arrow, "med", "med")))),
-               at(1017.694, 232.356, ~tag: "Connection Line (27)",
-                  shape_pict(~width: 80.038, ~height: 96.791, ~flip_h: #true, ~flip_v: #true,
-                             ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~head: line_end(#'arrow, "med", "med")))),
-               at(1017.694, 329.159, ~tag: "Connection Line (28)",
-                  shape_pict(~width: 80.038, ~height: 289.915, ~flip_h: #true,
-                             ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~tail: line_end(#'arrow, "med", "med")))),
-               at(803.565, 329.159, ~tag: "Connection Line (29)",
-                  shape_pict(~width: 294.168, ~height: 681.134, ~flip_h: #true,
-                             ~shape: "straightConnector1",
-                             ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                                ~tail: line_end(#'arrow, "med", "med")))))
+               at(771.627, 978.552, ~tag: "c", n_c),
+               at(1007.675, 297.161, ~tag: "update (4)", n_update4),
+               at(1139.847, 200.627, ~tag: "σ4", n_sigma4),
+               at(985.757, 200.627, ~tag: "v4", n_v4))
 
-  staged(base_canvas, [stage_1])
+  // Keynote drew each edge as a connector between two centres and clipped it
+  // at the boxes; these are the same edges as `arrow`s, from border to border.
+  // Stage `k` brings the edges of the nodes it adds; stage 0 is `base_canvas`.
+  fun wire(p, k):
+    match k
+    | 0:
+        let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
+                                [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
+                                [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
+        let p = state_edges(p, [[n_update, n_sigma], [n_sigma1, n_update],
+                                [n_update2, n_sigma1], [n_sigma2, n_update2],
+                                [n_update3, n_sigma2], [n_sigma3, n_update3]])
+        let p = value_edges(p, [[n_update, n_x], [n_update, n_a], [n_v1, n_update],
+                                [n_update2, n_x], [n_update2, n_a], [n_v2, n_update2],
+                                [n_v3, n_update3], [n_update3, n_b], [n_update3, n_y]])
+        p
+    | 1:
+        let p = state_edges(p, [[n_sigma4, n_update4], [n_update4, n_sigma3]])
+        let p = value_edges(p, [[n_v4, n_update4], [n_update4, n_v2], [n_update4, n_c]])
+        p
+    | ~else: p
+
+  staged(base_canvas, [stage_1], ~wire: wire)
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
