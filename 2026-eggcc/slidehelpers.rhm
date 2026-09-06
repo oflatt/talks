@@ -467,9 +467,10 @@ fun arrows(~on: on :: Pict, edges :: List.of(List), ~& kws) :: Pict:
 // section down a spine, each disc its own hue, the one we are on lit and haloed
 // and the others dimmed back, with the spine filled in as far as we have got.
 //
-// What is new here is the ending: the list then magic-moves into the top margin,
-// the discs flying from a column into a row and the other sections' labels fading
-// out on the way. That only works because the settled discs and labels are built
+// What is new here are the two ends: the previous slide's header magic-moves down
+// into the list as a divider arrives, and the list then magic-moves back into the
+// top margin, the discs flying between a column and a row and the other sections'
+// labels fading on the way. That only works because the settled discs and labels are built
 // once and handed to both layouts -- `magic_move` matches picts by identity, so a
 // disc rebuilt per frame would match nothing and the move would be a dissolve.
 
@@ -540,13 +541,21 @@ fun place_center(base :: Pict, p :: Pict, cx :: Real, cy :: Real) :: Pict:
 fun place_left(base :: Pict, p :: Pict, x :: Real, cy :: Real) :: Pict:
   overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: cy - p.height / 2, base, p)
 
+// `~label_width` is the room the labels get. The list is centred on the canvas,
+// so its width decides where it sits -- and a lit label is 8% wider than a dim
+// one, so measuring the labels handed in would move the whole list sideways as
+// the lit one changes. The discs hide a 20pt drift; the thin, faint spine does
+// not, and drifting across pixel boundaries made it flicker. Callers that
+// animate pass the width of the widest label at its lit size, once.
 fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
                    ~current: current :: Real, ~canvas: canvas :: Pict,
                    ~color: color = talk_blue,
+                   ~label_width: label_width :: maybe(Real) = #false,
                    ~disc_prog: disc_prog :: maybe(List) = #false) :: Pict:
   def line_color = as_color(color)
   def n = discs.length()
-  def lab_w = for values(m :~ Real = 0.0) (p :~ Pict in labels): math.max(m, p.width)
+  def lab_w = label_width
+                || (for values(m :~ Real = 0.0) (p :~ Pict in labels): math.max(m, p.width))
   def disc_cx = outline_left + outline_r
   def w = disc_cx + outline_r + outline_gap + lab_w
   def h = n * outline_row
@@ -605,10 +614,13 @@ fun outline_to_header(items :: List.of(String),
   def written_lit = for List (q :~ Pict in plain): q.colorize(line_color)
   // the settled pieces, built once: these are what the header shows and what the
   // move matches on
+  // the widest label at its lit size, so every layout below is the same width
+  def lab_w = 1.08 * (for values(m :~ Real = 0.0) (q :~ Pict in plain): math.max(m, q.width))
   def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
   def labels = for List (i in 0..n):
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
-  def full = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: canvas, ~color: color)
+  def full = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: canvas, ~color: color,
+                            ~label_width: lab_w)
   def head = header_layout(discs, labels, ~at: at, ~canvas: canvas)
   def opening:
     if intro
@@ -633,20 +645,40 @@ fun outline_to_header(items :: List.of(String),
                       def ds = for List (i in 0..n):
                                  outline_disc(i, n, (if i == at | clamp01((p - 0.84) / 0.16) | 0.0))
                       outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
-                                     ~canvas: canvas, ~color: color, ~disc_prog: prog))
+                                     ~canvas: canvas, ~color: color, ~label_width: lab_w,
+                                     ~disc_prog: prog))
     | block:
+        // The header of the slide just left, exactly as `section_header` drew it,
+        // magic-moving back down into the list: the discs fly from their row into
+        // the column, the label of the section just finished grows back to its
+        // place, and the other labels and the spine fade in around them. It is
+        // built from its own settled discs and labels, so that the two layouts
+        // share the picts the move matches on.
+        def prev = math.max(0, at - 1)
+        def discs0 = for List (i in 0..n): outline_disc(i, n, (if i == prev | 1.0 | 0.0))
+        def labels0 = for List (i in 0..n):
+                        outline_label(written[i], written_lit[i], (if i == prev | 1.0 | 0.0))
+        def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas)
+        def full0 = outline_layout(discs0, labels0, ~current: 1.0 * prev,
+                                   ~canvas: canvas, ~color: color, ~label_width: lab_w)
+        def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
         // the marker walking down from the section just finished to this one
-        animate(~extent: 1.4,
-                fun (p):
-                  if p >= 1.0
-                  | full
-                  | block:
-                      def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
-                      def ds = for List (i in 0..n):
-                                 outline_disc(i, n, clamp01(1.0 - absr(cur - i)))
-                      def ls = for List (i in 0..n):
-                                 outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
-                      outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color))
+        def walk:
+          animate(~extent: 1.4,
+                  fun (p):
+                    if p >= 1.0
+                    | full
+                    | block:
+                        def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
+                        def ds = for List (i in 0..n):
+                                   outline_disc(i, n, clamp01(1.0 - absr(cur - i)))
+                        def ls = for List (i in 0..n):
+                                   outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
+                        outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
+                                       ~label_width: lab_w))
+        // spliced: the walk starts the moment the descent lands, in the same beat,
+        // so arriving at the slide still costs no press before the move up
+        switch(descent, walk, ~join: #'splice)
   // `magic_move`'s epoch 0 *is* the move and its epoch 1 is the settled result --
   // measured, not assumed -- so it is the tail that has to go, not the head.
   // `~other: #'fade` -- the picts the two layouts do *not* have in common are the
