@@ -3137,6 +3137,9 @@ module main:
   // fades the slide up, and a pan to the next one. `set_reveal`, `set_transitions`,
   // `set_start_from` and the rest come through here too.
   import: lib("glide-pptx/show.rhm") open
+  // The logical number in the corner, the one `--skip` counts by. Keynote's own
+  // "Slide Number" fields came through empty, so this is the only number drawn.
+  set_slide_numbers(#true)
   show_slides(all_slides, ~width: slide_width, ~height: slide_height)
 
 // The backup PDF, without opening a window:
