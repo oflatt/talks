@@ -114,23 +114,6 @@ fun in_section(k :: Int, mk):
   fun ():
     section_header(sections, ~at: k, ~canvas: as_pict(mk()))
 
-// Every animated slide holds its last frame for one more advance.
-//
-// A slide's final epoch plays as the *outgoing* transition -- the press that runs
-// it is the same press that moves on -- so whatever that epoch adds is never seen
-// at rest. Sustaining gives the transition a duplicate frame to consume instead,
-// which is why the extra epoch is not a wasted press even though `dead_beats`
-// reports it as one. A static slide has no closing animation to lose, so it is
-// left alone rather than spending a press on a frame nobody needs.
-//
-// Wrapped around the thunks in `all_slides` rather than written into each slide,
-// so it cannot be forgotten on the next one, and so `show_slides` still builds a
-// slide only when it is about to show it.
-fun held(mk):
-  fun ():
-    def p = as_pict(mk())
-    if p.duration > 1 | p.sustain() | p
-
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
   for values(p = base) (st in stages, k in 1..):
@@ -2504,30 +2487,35 @@ fun slide_39():
   staged(base_canvas, [stage_1])
 
 def all_slides:
-  [held(slide_1),
+  [slide_1,
    // 1 -- why effects belong in an e-graph at all
-   held(divider(0)),
-   held(in_section(0, slide_2)), held(in_section(0, slide_12)),
-   held(in_section(0, slide_18)), held(in_section(0, slide_19)),
-   held(in_section(0, slide_20)),
+   divider(0),
+   in_section(0, slide_2), in_section(0, slide_12),
+   in_section(0, slide_18), in_section(0, slide_19),
+   in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
-   held(divider(1)),
-   held(in_section(1, slide_23)), held(in_section(1, slide_26)),
-   held(in_section(1, slide_29)), held(in_section(1, slide_31)),
-   held(in_section(1, slide_32)),
+   divider(1),
+   in_section(1, slide_23), in_section(1, slide_26),
+   in_section(1, slide_29), in_section(1, slide_31),
+   in_section(1, slide_32),
    // 3 -- the algorithm
-   held(divider(2)),
-   held(in_section(2, slide_34)),
+   divider(2),
+   in_section(2, slide_34),
    // 4 -- the numbers
-   held(divider(3)),
-   held(in_section(3, slide_36)), held(in_section(3, slide_37)),
-   held(in_section(3, slide_38)), held(in_section(3, slide_39))]
+   divider(3),
+   in_section(3, slide_36), in_section(3, slide_37),
+   in_section(3, slide_38), in_section(3, slide_39)]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the
   // ICFP talk uses: a slide number in the corner for `--skip`, a reveal that
   // fades the slide up, and a pan to the next one. `set_reveal`, `set_transitions`,
   // `set_start_from` and the rest come through here too.
+  //
+  // It also holds an animated slide's last frame for one more press, which this
+  // file used to do for itself with a `held` wrapper around every slide in
+  // `all_slides`. A slide's final epoch plays as the transition *off* it, so
+  // without the hold whatever that epoch adds is never seen at rest.
   import: lib("glide-pptx/show.rhm") open
   // The logical number in the corner, the one `--skip` counts by. Keynote's own
   // "Slide Number" fields came through empty, so this is the only number drawn.
