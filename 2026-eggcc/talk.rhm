@@ -141,6 +141,17 @@ fun mark_line(p, k :: Int):
                           ~fill: highlight, ~line: #false, ~rounded: -0.3)
   pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: bx + 12.0, ~dy: top + 20.0, p, band)
 
+// Keynote's centred one-line text box, which the deck has forty-one of. Every one
+// of them spelled out `~anchor: #'center` and `~wrap: #false` again; they say it
+// once here instead. `~width` and `~height` stay the size Keynote gave the box --
+// the glyphs are free to overflow it, and several of them do, which is Keynote's
+// geometry rather than a mistake to correct here.
+//
+// The name is seven letters to match `textbox`, so that swapping one for the other
+// leaves every continuation line in this file at the column shrubbery wants it.
+fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
+  textbox(~width: w, ~height: h, ~anchor: #'center, ~wrap: #false, & paras, ~& kws)
+
 // An e-class, drawn as the region round the nodes it holds. Keynote drew these
 // freehand, one blob per slide, so they had to be redrawn by hand whenever the
 // graph moved. The members of these ones share a column, and a capsule down that
@@ -285,7 +296,7 @@ fun slide_2():
                              at(0.0, 42.089, ~tag: "pasted-movie.png (5)",
                                 image_pict(media("image17.png"), 558.478, 250.198)),
                              at(31.222, -51.323, ~tag: "Floating point",
-                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                                linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -303,7 +314,7 @@ fun slide_2():
                              at(70.107, 40.268, ~tag: "pasted-movie.png",
                                 image_pict(media("image13.png"), 280.727, 280.727)),
                              at(0.0, -51.217, ~tag: "Python Simulations",
-                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                                linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -319,7 +330,7 @@ fun slide_2():
                at(1099.052, 247.464, ~tag: "Group (7)",
                   group_pict(~width: 371.484, ~height: 269.86,
                              at(7.51, -62.537, ~tag: "RTL Optimization",
-                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                                linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -339,7 +350,7 @@ fun slide_2():
                              at(0.0, 45.622, ~tag: "pasted-movie.png (6)",
                                 image_pict(media("image18.png"), 264.568, 264.568)),
                              at(1.976, -26.986, ~tag: "ML Kernels",
-                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                                linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -349,7 +360,7 @@ fun slide_2():
                                                ~font: "Helvetica Neue Medium",
                                                ~size: 48.0)))),
                              at(40.664, 337.154, ~tag: "(Luminal)",
-                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                                linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -367,8 +378,7 @@ fun slide_2():
                              at(35.938, 59.801, ~tag: "pasted-movie.png (3)",
                                 image_pict(media("image15.png"), 276.435, 285.65)),
                              at(0.0, -12.807, ~tag: "SQL",
-                                textbox(~width: 104.136, ~height: 64.608, ~anchor: #'center,
-                                        ~wrap: #false, ~autofit: #'grow,
+                                linebox(~width: 104.136, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                              run("SQL", ~font: "Helvetica Neue Medium", ~size: 48.0)))))))
@@ -382,7 +392,7 @@ fun slide_2():
                                 image_pict(media("image14.png"), 375.394, 295.819,
                                            ~crop: [0.0, 0.0, 0.1, 0.0])),
                              at(5.164, -52.457, ~tag: "CAD",
-                                textbox(~width: 100.0, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                                linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9),
@@ -399,8 +409,7 @@ fun slide_2():
                              at(2.627, 68.882, ~tag: "pasted-movie.png (4)",
                                 image_pict(media("image16.png"), 404.626, 232.136)),
                              at(0.0, -19.688, ~tag: "WASM",
-                                textbox(~width: 158.904, ~height: 64.608, ~anchor: #'center,
-                                        ~wrap: #false, ~autofit: #'grow,
+                                linebox(~width: 158.904, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                              run("WASM", ~font: "Helvetica Neue Medium", ~size: 48.0)))))))
@@ -411,8 +420,7 @@ fun slide_2():
                at(1256.336, 640.14, ~tag: "Group (8)",
                   group_pict(~width: 633.867, ~height: 311.723,
                              at(61.05, -29.665, ~tag: "WASM (2)",
-                                textbox(~width: 538.008, ~height: 64.608, ~anchor: #'center,
-                                        ~wrap: #false, ~autofit: #'grow,
+                                linebox(~width: 538.008, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                              run("User DSL Optimizations",
@@ -424,7 +432,7 @@ fun slide_2():
   def stage_9:
     group_pict(~width: slide_width, ~height: slide_height,
                at(1625.217, 967.946, ~tag: "…and more!",
-                  textbox(~width: 280.2, ~height: 64.608, ~anchor: #'center, ~wrap: #false,
+                  linebox(~width: 280.2, ~height: 64.608,
                           ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                                run("…and more!", ~font: "Helvetica Neue Medium", ~size: 48.0)))))
@@ -509,16 +517,14 @@ fun slide_12():
                at(1170.567, 252.964, ~tag: "Group",
                   group_pict(~width: 669.288, ~height: 412.157,
                              at(81.989, 105.232, ~tag: "(α + β) − γ ⇝ α + (β − γ)",
-                                textbox(~width: 587.35, ~height: 78.0, ~anchor: #'center,
-                                        ~wrap: #false, ~autofit: #'grow,
+                                linebox(~width: 587.35, ~height: 78.0, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(
                                              run("(α + β) − γ ⇝ α + (β − γ)",
                                                  ~font: "Times New Roman", ~size: 60.0,
                                                  ~color: hex("0433FF"))))),
                              at(90.294, 219.714, ~tag: "α − α ⇝ 0",
-                                textbox(~width: 231.832, ~height: 78.0, ~anchor: #'center,
-                                        ~wrap: #false, ~autofit: #'grow,
+                                linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(
                                              run("α − α ⇝ 0", ~font: "Times New Roman", ~size: 60.0,
@@ -530,8 +536,7 @@ fun slide_12():
                                              run("Rules:", ~font: "Helvetica Neue", ~size: 60.0,
                                                  ~spacing: -2.0)))),
                              at(90.294, 334.196, ~tag: "α + 0 ⇝ α",
-                                textbox(~width: 231.832, ~height: 78.0, ~anchor: #'center,
-                                        ~wrap: #false, ~autofit: #'grow,
+                                linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(
                                              run("α + 0 ⇝ α", ~font: "Times New Roman", ~size: 60.0,
@@ -618,8 +623,7 @@ fun slide_12():
         arrow(~on: p, m_flow_top, m_flow_bot, ~line_width: 4,
               ~color: draw.Color(150, 150, 150),
               // `t` is slideshow's; this file has the runtime's textbox instead
-              ~label: as_pict(textbox(~width: 220.0, ~height: 52.0, ~anchor: #'center,
-                                      ~wrap: #false, ~autofit: #'grow,
+              ~label: as_pict(linebox(~width: 220.0, ~height: 52.0, ~autofit: #'grow,
                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                       para(~align: #'center,
                                            run("data flow", ~font: "Helvetica Neue",
@@ -627,16 +631,23 @@ fun slide_12():
               ~label_dx: -80, ~label_dy: 0)
     | 3:
         let q = seen(p, [stage_2])
-        let q = arrows(~on: q, [[n_a, n_plus_r], [n_minus_r, n_plus_r], [n_one, n_minus_r]],
+        let q = arrows(~on: q, [[n_minus_r, n_plus_r], [n_one, n_minus_r]],
                        ~line_width: 4, ~gap: 4, ~color: keynote_blue)
+        // `a` is both an operand of this `+` and in its e-class, so this arrow and
+        // the dashed line at k = 5 would lie exactly on top of each other. The
+        // operand arrow is the one that steps aside: the dashed line has to stay on
+        // the centre of the pink region, because that region *is* the e-class it
+        // names, and a dashed line drawn beside it reads as joining something else.
+        let q = arrow(~on: q, n_a, n_plus_r, ~line_width: 4, ~gap: 4,
+                      ~color: keynote_blue, ~shift: -30)
         eq(q, n_minus, n_plus_r, keynote_blue)
     | 4: eq(seen(p, [stage_2, stage_3]), n_minus_r, n_zero, draw.Color(255, 147, 0))
     | 5:
-        // `a` is both an operand of this `+` and in its e-class, so the dashed line
-        // would lie exactly along the solid one. `~shift` slides it clear.
+        // Unshifted, so it runs down the middle of the pink e-class; the operand
+        // arrow it would otherwise lie under was moved aside at k = 3.
         arrow(~on: seen(p, [stage_2, stage_3, stage_4]), n_plus_r, n_a,
               ~style: #'line, ~line_style: #'short_dash, ~color: draw.Color(0, 143, 0),
-              ~line_width: 4, ~shift: 30)
+              ~line_width: 4)
     | 7:
         // A bubble rather than a caption in the margin: it has to say *which*
         // e-class the term comes out of, and the spike is what says it. It sits
@@ -678,22 +689,19 @@ fun slide_20():
   def notes:
     group_pict(~width: slide_width, ~height: slide_height,
                at(228.358, 522.666, ~tag: "(Herbie)",
-                  textbox(~width: 181.512, ~height: 64.608, ~anchor: #'center,
-                          ~wrap: #false, ~autofit: #'grow,
+                  linebox(~width: 181.512, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                run("(Herbie)", ~font: "Helvetica Neue Medium",
                                    ~size: 48.0)))),
                at(905.804, 943.181, ~tag: "(Cranelift)",
-                  textbox(~width: 222.408, ~height: 64.608, ~anchor: #'center,
-                          ~wrap: #false, ~autofit: #'grow,
+                  linebox(~width: 222.408, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                run("(Cranelift)", ~font: "Helvetica Neue Medium",
                                    ~size: 48.0)))),
                at(489.157, 1011.599, ~tag: "(Szalinski)",
-                  textbox(~width: 230.424, ~height: 64.608, ~anchor: #'center,
-                          ~wrap: #false, ~autofit: #'grow,
+                  linebox(~width: 230.424, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                run("(Szalinski)", ~font: "Helvetica Neue Medium",
@@ -731,8 +739,7 @@ fun slide_20():
     multi_callout(~on: placed, ~place: slot,
                   ~at: [m_numba, m_luminal, m_cranelift, m_mlir],
                   ~color: talk_red, ~padding: 10.0,
-                  as_pict(textbox(~width: 404.2, ~height: 57.6, ~anchor: #'center,
-                                  ~wrap: #false, ~autofit: #'grow,
+                  as_pict(linebox(~width: 404.2, ~height: 57.6, ~autofit: #'grow,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
                                        run("need side effects!", ~font: "Helvetica Neue",
@@ -792,7 +799,7 @@ fun slide_23():
   def stage_2:
     callout(~on: pc.blank(~width: slide_width, ~height: slide_height),
             ~at: pc.Find.abs(824.715, 276.13), ~spike: #'w,
-            as_pict(textbox(~width: 840.0, ~height: 48.0, ~anchor: #'center, ~wrap: #false,
+            as_pict(linebox(~width: 840.0, ~height: 48.0,
                             ~insets: insets(0.0, 0.0, 0.0, 0.0),
                             para(run("Write ", ~font: "Helvetica Neue", ~size: 40.0),
                                  run("v", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true),
@@ -926,7 +933,7 @@ fun slide_26():
   def stage_2:
     group_pict(~width: slide_width, ~height: slide_height,
                at(751.007, 652.254, ~tag: "Is this optimization safe?",
-                  textbox(~width: 900.225, ~height: 96.825, ~anchor: #'center, ~wrap: #false,
+                  linebox(~width: 900.225, ~height: 96.825,
                           ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                                run("Is this optimization safe?", ~font: "Helvetica Neue", ~size: 75.0,
@@ -1002,7 +1009,7 @@ fun slide_26():
   // Keynote's yellow speech bubble, as one of our callouts. The spike lands where
   // Keynote's did, on the right edge of the code box.
   callout(~on: shown, ~at: pc.Find.abs(1263.648, 403.06), ~spike: #'w,
-          as_pict(textbox(~width: 384.0, ~height: 48.0, ~anchor: #'center, ~wrap: #false,
+          as_pict(linebox(~width: 384.0, ~height: 48.0,
                           ~insets: insets(0.0, 0.0, 0.0, 0.0),
                           para(~align: #'center,
                                run("update is idempotent", ~font: "Helvetica Neue", ~size: 40.0)))))
@@ -1812,12 +1819,12 @@ fun slide_34():
                           ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
       at(653.508, 743.56, ~tag: "Our Approach",
-         textbox(~width: 260.2, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 260.2, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Our Approach", ~font: "Helvetica Neue", ~size: 40.0)))),
       at(1105.508, 625.56, ~tag: "Solver-Based Techniques",
-         textbox(~width: 462.4, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 462.4, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Solver-Based Techniques", ~font: "Helvetica Neue", ~size: 40.0)))),
@@ -1841,12 +1848,12 @@ fun slide_34():
                     ~line: make_stroke(hex("000000"), ~width: 6.0,
                                        ~tail: line_end(#'triangle, "med", "med")))),
       at(1600.242, 325.027, ~tag: "Solver Timeouts",
-         textbox(~width: 297.92, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 297.92, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Solver Timeouts", ~font: "Helvetica Neue", ~size: 40.0)))),
       at(929.123, 1000.48, ~tag: "Log scale",
-         textbox(~width: 216.12, ~height: 63.656, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 216.12, ~height: 63.656,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Log scale", ~font: "Helvetica Neue", ~size: 48.0,
@@ -1866,7 +1873,7 @@ fun slide_34():
   def stage_1:
     def bubble:
       make_bubble(~color: talk_green,
-                  as_pict(textbox(~width: 486.0, ~height: 73.0, ~anchor: #'center, ~wrap: #false,
+                  as_pict(linebox(~width: 486.0, ~height: 73.0,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
                                        run("Extraction is fast", ~font: "Helvetica Neue", ~size: 60.0, ~bold: #true)))))
@@ -1894,13 +1901,13 @@ fun slide_36(): slide_canvas(
   at(5.0, 203.0, ~tag: "g0.pdf", image_pict(media("image22.png"), 986.874, 822.395)),
   // LLVM-O0-O0 (id 1019)
   at(956.952, 892.972, ~tag: "LLVM-O0-O0",
-     textbox(~width: 304.6, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
   // Polybench Benchmark Suite (id 1020)
   at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
-     textbox(~width: 515.8, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 515.8, ~height: 54.88,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0))))
@@ -1924,19 +1931,19 @@ fun slide_37(): slide_canvas(
   at(5.0, 203.0, ~tag: "g1.pdf", image_pict(media("image23.png"), 986.4, 822.0)),
   // LLVM-O0-O0 (id 1025)
   at(956.952, 892.972, ~tag: "LLVM-O0-O0",
-     textbox(~width: 304.6, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
   // eggcc (id 1026)
   at(956.952, 745.812, ~tag: "eggcc",
-     textbox(~width: 146.95, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 146.95, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("eggcc", ~font: "Helvetica Neue", ~size: 50.0)))),
   // Polybench Benchmark Suite (id 1027)
   at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
-     textbox(~width: 515.8, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 515.8, ~height: 54.88,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0))))
@@ -1960,25 +1967,25 @@ fun slide_38(): slide_canvas(
   at(5.0, 203.0, ~tag: "g2.pdf", image_pict(media("image24.png"), 986.4, 822.0)),
   // LLVM-O0-O0 (id 1032)
   at(956.952, 892.972, ~tag: "LLVM-O0-O0",
-     textbox(~width: 304.6, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
   // eggcc (id 1033)
   at(956.952, 745.812, ~tag: "eggcc",
-     textbox(~width: 146.95, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 146.95, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("eggcc", ~font: "Helvetica Neue", ~size: 50.0)))),
   // LLVM-O3-O0 (id 1034)
   at(956.952, 499.126, ~tag: "LLVM-O3-O0",
-     textbox(~width: 304.6, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("LLVM-O3-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
   // Polybench Benchmark Suite (id 1035)
   at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
-     textbox(~width: 515.8, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+     linebox(~width: 515.8, ~height: 54.88,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                   run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0))))
@@ -2009,27 +2016,27 @@ fun slide_39():
       at(4.788, 202.577, ~tag: "g2.pdf", image_pict(media("image24.png"), 986.4, 822.0)),
       at(4.788, 202.577, ~tag: "g3.pdf", image_pict(media("image25.png"), 986.4, 822.0)),
       at(956.952, 892.972, ~tag: "LLVM-O0-O0",
-         textbox(~width: 304.6, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 304.6, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
       at(956.952, 745.812, ~tag: "eggcc",
-         textbox(~width: 146.95, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 146.95, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("eggcc", ~font: "Helvetica Neue", ~size: 50.0)))),
       at(956.952, 499.126, ~tag: "LLVM-O3-O0",
-         textbox(~width: 304.6, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 304.6, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("LLVM-O3-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
       at(956.952, 231.703, ~tag: "Solver Approaches",
-         textbox(~width: 433.1, ~height: 66.6, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 433.1, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Solver Approaches", ~font: "Helvetica Neue", ~size: 50.0)))),
       at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
-         textbox(~width: 515.8, ~height: 54.88, ~anchor: #'center, ~wrap: #false,
+         linebox(~width: 515.8, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
                       run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0)))))
@@ -2038,7 +2045,7 @@ fun slide_39():
   def stage_1:
     def bubble:
       make_bubble(~color: talk_green,
-                  as_pict(textbox(~width: 376.0, ~height: 182.0, ~anchor: #'center, ~wrap: #false,
+                  as_pict(linebox(~width: 376.0, ~height: 182.0,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
                                        run("Non-trivial", ~font: "Helvetica Neue", ~size: 75.0, ~bold: #true)),
