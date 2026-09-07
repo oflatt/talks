@@ -22,8 +22,6 @@ export:
   slide_1
   slide_2
   slide_12
-  slide_18
-  slide_19
   slide_20
   slide_23
   slide_26
@@ -142,6 +140,42 @@ fun mark_line(p, k :: Int):
   def band = pc.rectangle(~width: bw - 24.0, ~height: line_h - 22.0,
                           ~fill: highlight, ~line: #false, ~rounded: -0.3)
   pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: bx + 12.0, ~dy: top + 20.0, p, band)
+
+// An e-class, drawn as the region round the nodes it holds. Keynote drew these
+// freehand, one blob per slide, so they had to be redrawn by hand whenever the
+// graph moved. The members of these ones share a column, and a capsule down that
+// column says the same thing while following the layout.
+fun eclass(w :: Real, h :: Real):
+  shape_pict(~width: w, ~height: h,
+             ~geom: preset_geom("roundRect", [pair("adj", "val 50000")]),
+             ~fill: hex("929292", ~alpha: 0.4))
+
+// The `update` chain that slides 29, 31 and 32 build between them. They are the
+// same graph with one, two and four updates, so they share one layout and grow
+// downwards: what is on screen never moves, it only gets longer.
+//
+// Inputs on top and results underneath. Each leaf sits one layer above the update
+// that first uses it, in one of two columns on the left; the updates run down the
+// middle and the state chain down the right. That is what keeps the three long
+// edges -- `a` and `x` into the second update, `v2` into the fourth -- clear of
+// every box they pass.
+//
+//   layer 0  a  x                 σ
+//   layer 1        update
+//   layer 2            v1     σ1
+//   layer 3        update
+//   layer 4  b  y      v2     σ2
+//   layer 5        update
+//   layer 6  c         v3     σ3
+//   layer 7        update
+//   layer 8            v4     σ4
+def chain_row = 92.0
+fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
+def chain_leaf_l = 828.0     // a, b, c
+def chain_leaf_r = 1008.0    // x, y
+def chain_op = 1149.879      // the update boxes, which are 180.242 wide
+def chain_v = 1418.0         // v1 … v4
+def chain_s = 1608.0         // σ, σ1 … σ4
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -433,6 +467,8 @@ fun slide_12():
   // was placed. `blank` here is the runtime's, so it takes positional sizes.
   def m_flow_top = blank(1.0, 1.0)
   def m_flow_bot = blank(1.0, 1.0)
+  // where the closing callout's body goes; the bubble grows from this corner
+  def m_extract = blank(460.0, 150.0)
 
   // Inputs on top, the result underneath, so every edge points the way the data
   // goes. Keynote had it the other way up, with the root above its operands.
@@ -530,6 +566,29 @@ fun slide_12():
   // Stage `k` brings the edges of the nodes it adds. Solid arrows are operands
   // feeding an operator; a dashed line with no head is an e-class, saying two
   // nodes are the same value rather than that anything flows between them.
+
+  // The e-classes drawn as regions round the nodes they hold. Both are centred on
+  // the graph's own middle, so flipping the rows top-for-bottom leaves them where
+  // Keynote put them.
+  def stage_6:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(1018.857, 655.145, ~tag: "Shape",
+                  shape_pict(~width: 300.944, ~height: 140.827,
+                             ~geom: custom_geom(
+                                                [[[#'move, pair(30, 9560)], [#'curve, pair(100, 12968), pair(23, 16369), pair(1256, 18605)], [#'curve, pair(2488, 20840), pair(4215, 20426), pair(5891, 19465)], [#'curve, pair(7265, 18677), pair(8719, 17626), pair(10192, 17550)], [#'curve, pair(12232, 17444), pair(14240, 19292), pair(16150, 19391)], [#'curve, pair(18623, 19518), pair(20717, 16947), pair(21155, 12007)], [#'curve, pair(21506, 8052), pair(20580, 4523), pair(19141, 2378)], [#'curve, pair(17156, -580), pair(14452, -760), pair(11937, 1738)], [#'curve, pair(11230, 2439), pair(10558, 3411), pair(9769, 3538)], [#'curve, pair(8817, 3691), pair(7951, 2610), pair(7049, 1982)], [#'curve, pair(5679, 1029), pair(4247, 1091), pair(2842, 1517)], [#'curve, pair(1927, 1794), pair(1042, 2238), pair(505, 3647)], [#'curve, pair(-94, 5220), pair(-15, 7409), pair(30, 9560)], [#'close]]],
+                                                21230, 20239), ~fill: hex("0076BA", ~alpha: 0.4))),
+               at(783.351, 463.479, ~tag: "Shape (2)",
+                  shape_pict(~width: 367.991, ~height: 524.05, ~flip_v: #true,
+                             ~geom: custom_geom(
+                                               [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
+                                               21451, 21147), ~fill: hex("D31876", ~alpha: 0.4))))
+
+  // Only the slot: what is drawn here is a callout, and `wire` builds it, because
+  // a callout needs to see the node it points at and a stage only sees itself.
+  def stage_7:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(1370.0, 800.0, ~tag: "Extraction Problem", m_extract))
+
   fun eq(p, x, y, col):
     arrow(~on: p, x, y, ~style: #'line, ~line_style: #'short_dash,
           ~color: col, ~line_width: 4)
@@ -572,539 +631,32 @@ fun slide_12():
                        ~line_width: 4, ~gap: 4, ~color: keynote_blue)
         eq(q, n_minus, n_plus_r, keynote_blue)
     | 4: eq(seen(p, [stage_2, stage_3]), n_minus_r, n_zero, draw.Color(255, 147, 0))
-    | 5: eq(seen(p, [stage_2, stage_3, stage_4]), n_plus_r, n_a, draw.Color(0, 143, 0))
+    | 5:
+        // `a` is both an operand of this `+` and in its e-class, so the dashed line
+        // would lie exactly along the solid one. `~shift` slides it clear.
+        arrow(~on: seen(p, [stage_2, stage_3, stage_4]), n_plus_r, n_a,
+              ~style: #'line, ~line_style: #'short_dash, ~color: draw.Color(0, 143, 0),
+              ~line_width: 4, ~shift: 30)
+    | 7:
+        // A bubble rather than a caption in the margin: it has to say *which*
+        // e-class the term comes out of, and the spike is what says it. It sits
+        // in the empty bottom-right corner, below the rules, so the spike reaches
+        // the root e-class without crossing the graph.
+        multi_callout(~on: seen(p, [stage_2, stage_3, stage_4, stage_6]),
+                      ~place: as_pict(m_extract), ~at: [as_pict(n_plus_r)],
+                      ~color: talk_red, ~padding: 12.0,
+                      as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center,
+                                      ~autofit: #'grow,
+                                      ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                      para(~align: #'center,
+                                           run("extract", ~font: "Helvetica Neue",
+                                               ~size: 48.0, ~bold: #true),
+                                           run(" a resulting term",
+                                               ~font: "Helvetica Neue", ~size: 48.0)))))
     | ~else: p
 
-  staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5], ~wire: wire)
-
-// -------------------------------------------------------------------------------------
-// slide_18: Slide 9
-fun slide_18(): slide_canvas(
-  ~width: slide_width, ~height: slide_height,
-  ~background: hex("FFFFFF"),
-  // Slide Number (id 321)
-  at(1890.004, 1045.0, ~tag: "Slide Number", shape_pict(~width: 19.008, ~height: 29.496)),
-  // Shape (id 322)
-  at(1018.857, 655.145, ~tag: "Shape",
-     shape_pict(~width: 300.944, ~height: 140.827,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(30, 9560)], [#'curve, pair(100, 12968), pair(23, 16369), pair(1256, 18605)], [#'curve, pair(2488, 20840), pair(4215, 20426), pair(5891, 19465)], [#'curve, pair(7265, 18677), pair(8719, 17626), pair(10192, 17550)], [#'curve, pair(12232, 17444), pair(14240, 19292), pair(16150, 19391)], [#'curve, pair(18623, 19518), pair(20717, 16947), pair(21155, 12007)], [#'curve, pair(21506, 8052), pair(20580, 4523), pair(19141, 2378)], [#'curve, pair(17156, -580), pair(14452, -760), pair(11937, 1738)], [#'curve, pair(11230, 2439), pair(10558, 3411), pair(9769, 3538)], [#'curve, pair(8817, 3691), pair(7951, 2610), pair(7049, 1982)], [#'curve, pair(5679, 1029), pair(4247, 1091), pair(2842, 1517)], [#'curve, pair(1927, 1794), pair(1042, 2238), pair(505, 3647)], [#'curve, pair(-94, 5220), pair(-15, 7409), pair(30, 9560)], [#'close]]],
-                                   21230, 20239), ~fill: hex("0076BA", ~alpha: 0.4))),
-  // Shape (2) (id 323)
-  at(783.351, 463.479, ~tag: "Shape (2)",
-     shape_pict(~width: 367.991, ~height: 524.05,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
-                                   21451, 21147), ~fill: hex("D31876", ~alpha: 0.4))),
-  // + (id 326)
-  at(806.681, 676.242, ~tag: "+",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "+ (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("+", ~font: "Times New Roman", ~size: 69.75)))))),
-  // a (id 329)
-  at(806.681, 867.432, ~tag: "a",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (2)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "a (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("a", ~font: "Times New Roman", ~size: 69.75)))))),
-  // 1 (id 332)
-  at(1030.017, 867.432, ~tag: "1",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (3)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "1 (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("1", ~font: "Times New Roman", ~size: 69.75)))))),
-  // − (id 335)
-  at(806.681, 485.051, ~tag: "−",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (4)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "− (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("−", ~font: "Times New Roman", ~size: 69.75)))))),
-  // Connection Line (id 363)
-  at(886.125, 585.464, ~tag: "Connection Line",
-     shape_pict(~width: 164.448, ~height: 281.556,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'line, pair(0, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (2) (id 364)
-  at(856.681, 587.051, ~tag: "Connection Line (2)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(21600, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (3) (id 365)
-  at(856.681, 778.242, ~tag: "Connection Line (3)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(21600, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (4) (id 366)
-  at(902.16, 765.175, ~tag: "Connection Line (4)",
-     shape_pict(~width: 132.379, ~height: 113.325,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'line, pair(0, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // + (3) (id 342)
-  at(1030.017, 485.051, ~tag: "+ (3)",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (5)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "+ (4)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("+", ~font: "Times New Roman", ~size: 69.75)))))),
-  // − (3) (id 345)
-  at(1030.017, 676.242, ~tag: "− (3)",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (6)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "− (4)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("−", ~font: "Times New Roman", ~size: 69.75)))))),
-  // Connection Line (5) (id 367)
-  at(1080.017, 778.242, ~tag: "Connection Line (5)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(0, 0)]]],
-                                   0, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (6) (id 368)
-  at(1080.017, 778.242, ~tag: "Connection Line (6)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(0, 0)]]],
-                                   0, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (7) (id 369)
-  at(886.125, 585.464, ~tag: "Connection Line (7)",
-     shape_pict(~width: 164.448, ~height: 281.556,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 0)], [#'line, pair(0, 21600)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'triangle, "med", "med")))),
-  // Connection Line (8) (id 370)
-  at(1080.017, 587.051, ~tag: "Connection Line (8)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 0)], [#'curve, pair(0, 7200), pair(-21600, 14400), pair(0, 21600)]]],
-                                   0, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'triangle, "med", "med")))),
-  // Connection Line (9) (id 371)
-  at(908.681, 535.051, ~tag: "Connection Line (9)",
-     shape_pict(~width: 119.337, ~height: 0.0,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 0)], [#'curve, pair(14400, 0), pair(7200, 0), pair(0, 0)]]],
-                                   21600, 0),
-                ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // 0 (id 353)
-  at(1191.17, 676.242, ~tag: "0",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (7)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "0 (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("0", ~font: "Times New Roman", ~size: 69.75)))))),
-  // Connection Line (10) (id 372)
-  at(1132.017, 726.242, ~tag: "Connection Line (10)",
-     shape_pict(~width: 57.153, ~height: 0.0,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 0)], [#'curve, pair(7200, 0), pair(14400, 0), pair(21600, 0)]]],
-                                   21600, 0),
-                ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Connection Line (11) (id 373)
-  at(872.349, 579.377, ~tag: "Connection Line (11)",
-     shape_pict(~width: 167.035, ~height: 286.054,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 21600)], [#'curve, pair(5165, 13518), pair(12365, 6318), pair(21600, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Input term: (a + 1) - 1 (id 356)
-  at(95.0, 249.26, ~tag: "Input term: (a + 1) - 1",
-     textbox(~width: 371.37, ~height: 228.28, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("Input term:", ~font: "Helvetica Neue", ~size: 60.0,
-                      ~spacing: -2.01)),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("", ~font: "Arial", ~size: 60.0, ~spacing: -2.0)),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("  (a + 1) - 1", ~font: "Helvetica Neue", ~size: 60.0,
-                      ~spacing: -2.01)))),
-  // Group (id 361)
-  at(1170.567, 252.964, ~tag: "Group",
-     group_pict(~width: 669.288, ~height: 412.157,
-                at(81.989, 105.232, ~tag: "(α + β) − γ ⇝ α + (β − γ)",
-                   textbox(~width: 587.35, ~height: 78.0, ~anchor: #'center,
-                           ~wrap: #false, ~autofit: #'grow,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(
-                                run("(α + β) − γ ⇝ α + (β − γ)",
-                                    ~font: "Times New Roman", ~size: 60.0,
-                                    ~color: hex("0433FF"))))),
-                at(90.294, 219.714, ~tag: "α − α ⇝ 0",
-                   textbox(~width: 231.832, ~height: 78.0, ~anchor: #'center,
-                           ~wrap: #false, ~autofit: #'grow,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(
-                                run("α − α ⇝ 0", ~font: "Times New Roman", ~size: 60.0,
-                                    ~color: hex("FF9300"))))),
-                at(0.0, 0.0, ~tag: "Input term: (a + 1) - 1 (2)",
-                   textbox(~width: 371.37, ~height: 164.752, ~autofit: #'shrink,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(~line_spacing: pair(#'percent, 0.8),
-                                run("Rules:", ~font: "Helvetica Neue", ~size: 60.0,
-                                    ~spacing: -2.0)))),
-                at(90.294, 334.196, ~tag: "α + 0 ⇝ α",
-                   textbox(~width: 231.832, ~height: 78.0, ~anchor: #'center,
-                           ~wrap: #false, ~autofit: #'grow,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(
-                                run("α + 0 ⇝ α", ~font: "Times New Roman", ~size: 60.0,
-                                    ~color: hex("4F8F00"))))))),
-  // Equivalence Graph (E-Graph) (id 362)
-  at(95.0, 85.0, ~tag: "Equivalence Graph (E-Graph)",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("E-Graphs Explore a Big Space", ~font: "Helvetica Neue",
-                      ~size: 85.0, ~bold: #true, ~spacing: -2.01))))
-)
-
-// -------------------------------------------------------------------------------------
-// slide_19: Slide 10
-fun slide_19(): slide_canvas(
-  ~width: slide_width, ~height: slide_height,
-  ~background: hex("FFFFFF"),
-  // Equivalence Graph (E-Graph) (id 375)
-  at(95.0, 85.0, ~tag: "Equivalence Graph (E-Graph)",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("E-Graphs Explore a Big Space", ~font: "Helvetica Neue",
-                      ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
-  // Slide Number (id 376)
-  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-  // Shape (id 377)
-  at(1018.857, 655.145, ~tag: "Shape",
-     shape_pict(~width: 300.944, ~height: 140.827,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(30, 9560)], [#'curve, pair(100, 12968), pair(23, 16369), pair(1256, 18605)], [#'curve, pair(2488, 20840), pair(4215, 20426), pair(5891, 19465)], [#'curve, pair(7265, 18677), pair(8719, 17626), pair(10192, 17550)], [#'curve, pair(12232, 17444), pair(14240, 19292), pair(16150, 19391)], [#'curve, pair(18623, 19518), pair(20717, 16947), pair(21155, 12007)], [#'curve, pair(21506, 8052), pair(20580, 4523), pair(19141, 2378)], [#'curve, pair(17156, -580), pair(14452, -760), pair(11937, 1738)], [#'curve, pair(11230, 2439), pair(10558, 3411), pair(9769, 3538)], [#'curve, pair(8817, 3691), pair(7951, 2610), pair(7049, 1982)], [#'curve, pair(5679, 1029), pair(4247, 1091), pair(2842, 1517)], [#'curve, pair(1927, 1794), pair(1042, 2238), pair(505, 3647)], [#'curve, pair(-94, 5220), pair(-15, 7409), pair(30, 9560)], [#'close]]],
-                                   21230, 20239), ~fill: hex("0076BA", ~alpha: 0.4))),
-  // Shape (2) (id 378)
-  at(783.351, 463.479, ~tag: "Shape (2)",
-     shape_pict(~width: 367.991, ~height: 524.05,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
-                                   21451, 21147), ~fill: hex("D31876", ~alpha: 0.4))),
-  // + (id 381)
-  at(806.681, 676.242, ~tag: "+",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "+ (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("+", ~font: "Times New Roman", ~size: 69.75)))))),
-  // a (id 384)
-  at(806.681, 867.432, ~tag: "a",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (2)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "a (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("a", ~font: "Times New Roman", ~size: 69.75)))))),
-  // 1 (id 387)
-  at(1030.017, 867.432, ~tag: "1",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (3)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "1 (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("1", ~font: "Times New Roman", ~size: 69.75)))))),
-  // − (id 390)
-  at(806.681, 485.051, ~tag: "−",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (4)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "− (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("−", ~font: "Times New Roman", ~size: 69.75)))))),
-  // Connection Line (id 419)
-  at(886.125, 585.464, ~tag: "Connection Line",
-     shape_pict(~width: 164.448, ~height: 281.556,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'line, pair(0, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (2) (id 420)
-  at(856.681, 587.051, ~tag: "Connection Line (2)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(21600, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (3) (id 421)
-  at(856.681, 778.242, ~tag: "Connection Line (3)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(21600, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (4) (id 422)
-  at(902.16, 765.175, ~tag: "Connection Line (4)",
-     shape_pict(~width: 132.379, ~height: 113.325,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 21600)], [#'line, pair(0, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // + (3) (id 397)
-  at(1030.017, 485.051, ~tag: "+ (3)",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (5)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "+ (4)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("+", ~font: "Times New Roman", ~size: 69.75)))))),
-  // − (3) (id 400)
-  at(1030.017, 676.242, ~tag: "− (3)",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (6)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "− (4)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("−", ~font: "Times New Roman", ~size: 69.75)))))),
-  // Connection Line (5) (id 423)
-  at(1080.017, 778.242, ~tag: "Connection Line (5)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(0, 0)]]],
-                                   0, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (6) (id 424)
-  at(1080.017, 778.242, ~tag: "Connection Line (6)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 21600)], [#'curve, pair(0, 14400), pair(0, 7200), pair(0, 0)]]],
-                                   0, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~head: line_end(#'triangle, "med", "med")))),
-  // Connection Line (7) (id 425)
-  at(886.125, 585.464, ~tag: "Connection Line (7)",
-     shape_pict(~width: 164.448, ~height: 281.556,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 0)], [#'line, pair(0, 21600)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'triangle, "med", "med")))),
-  // Connection Line (8) (id 426)
-  at(1080.017, 587.051, ~tag: "Connection Line (8)",
-     shape_pict(~width: 0.0, ~height: 87.19,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 0)], [#'curve, pair(0, 7200), pair(-21600, 14400), pair(0, 21600)]]],
-                                   0, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 4.0,
-                                   ~tail: line_end(#'triangle, "med", "med")))),
-  // Connection Line (9) (id 427)
-  at(908.681, 535.051, ~tag: "Connection Line (9)",
-     shape_pict(~width: 119.337, ~height: 0.0,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(21600, 0)], [#'curve, pair(14400, 0), pair(7200, 0), pair(0, 0)]]],
-                                   21600, 0),
-                ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // 0 (id 408)
-  at(1191.17, 676.242, ~tag: "0",
-     group_pict(~width: 100.0, ~height: 100.0,
-                at(0.0, 0.0, ~tag: "Rounded Rectangle (7)",
-                   shape_pict(~width: 100.0, ~height: 100.0,
-                              ~geom: preset_geom(
-                                       "roundRect", [pair("adj", "val 30640")]),
-                              ~fill: hex("FFFFFF"),
-                              ~line: make_stroke(hex("000000"), ~width: 4.0))),
-                at(10.974, 10.974, ~tag: "0 (2)",
-                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
-                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center,
-                                run("0", ~font: "Times New Roman", ~size: 69.75)))))),
-  // Connection Line (10) (id 428)
-  at(1132.017, 726.242, ~tag: "Connection Line (10)",
-     shape_pict(~width: 57.153, ~height: 0.0,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 0)], [#'curve, pair(7200, 0), pair(14400, 0), pair(21600, 0)]]],
-                                   21600, 0),
-                ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Connection Line (11) (id 429)
-  at(872.349, 579.377, ~tag: "Connection Line (11)",
-     shape_pict(~width: 167.035, ~height: 286.054,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(0, 21600)], [#'curve, pair(5315, 13753), pair(12515, 6553), pair(21600, 0)]]],
-                                   21600, 21600),
-                ~line: make_stroke(hex("000000"), ~width: 6.0, ~dash: #'#{short-dash},
-                                   ~dash_pattern: [pair(200.0, 200.0)]))),
-  // Extraction Problem (id 411)
-  at(529.332, 214.474, ~tag: "Extraction Problem",
-     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("extract", ~font: "Helvetica Neue", ~size: 60.0, ~bold: #true,
-                      ~spacing: -2.01),
-                  run(" a resulting term (todo turn into bubble)",
-                      ~font: "Helvetica Neue", ~size: 60.0, ~spacing: -2.01)))),
-  // Shape (3) (id 412)
-  at(784.481, 317.828, ~rotate: 122.86, ~tag: "Shape (3)",
-     shape_pict(~width: 152.465, ~height: 99.087,
-                ~geom: custom_geom(
-                                   [[[#'move, pair(16050, 13991)], [#'line, pair(16050, 21600)], [#'line, pair(21600, 10800)], [#'line, pair(16050, 0)], [#'line, pair(16050, 7609)], [#'line, pair(0, 7609)], [#'line, pair(0, 13991)], [#'line, pair(16050, 13991)], [#'close]]],
-                                   21600, 21600), ~fill: hex("000000"))),
-  // Input term: (a + 1) - 1 (id 413)
-  at(95.0, 249.26, ~tag: "Input term: (a + 1) - 1",
-     textbox(~width: 371.37, ~height: 228.28, ~autofit: #'shrink,
-             ~insets: insets(4.0, 4.0, 4.0, 4.0),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("Input term:", ~font: "Helvetica Neue", ~size: 60.0,
-                      ~spacing: -2.01)),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("", ~font: "Arial", ~size: 60.0, ~spacing: -2.0)),
-             para(~line_spacing: pair(#'percent, 0.8),
-                  run("  (a + 1) - 1", ~font: "Helvetica Neue", ~size: 60.0,
-                      ~spacing: -2.01)))),
-  // Group (id 418)
-  at(1170.567, 252.964, ~tag: "Group",
-     group_pict(~width: 669.288, ~height: 412.157,
-                at(81.989, 105.232, ~tag: "(α + β) − γ ⇝ α + (β − γ)",
-                   textbox(~width: 587.35, ~height: 78.0, ~anchor: #'center,
-                           ~wrap: #false, ~autofit: #'grow,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(
-                                run("(α + β) − γ ⇝ α + (β − γ)",
-                                    ~font: "Times New Roman", ~size: 60.0,
-                                    ~color: hex("0433FF"))))),
-                at(90.294, 219.714, ~tag: "α − α ⇝ 0",
-                   textbox(~width: 231.832, ~height: 78.0, ~anchor: #'center,
-                           ~wrap: #false, ~autofit: #'grow,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(
-                                run("α − α ⇝ 0", ~font: "Times New Roman", ~size: 60.0,
-                                    ~color: hex("FF9300"))))),
-                at(0.0, 0.0, ~tag: "Input term: (a + 1) - 1 (2)",
-                   textbox(~width: 371.37, ~height: 164.752, ~autofit: #'shrink,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(~line_spacing: pair(#'percent, 0.8),
-                                run("Rules:", ~font: "Helvetica Neue", ~size: 60.0,
-                                    ~spacing: -2.0)))),
-                at(90.294, 334.196, ~tag: "α + 0 ⇝ α",
-                   textbox(~width: 231.832, ~height: 78.0, ~anchor: #'center,
-                           ~wrap: #false, ~autofit: #'grow,
-                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                           para(
-                                run("α + 0 ⇝ α", ~font: "Times New Roman", ~size: 60.0,
-                                    ~color: hex("4F8F00")))))))
-)
+  staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5, stage_6, stage_7],
+         ~wire: wire)
 
 // -------------------------------------------------------------------------------------
 // slide_20: slide_2 again, marking which of those tools need effects.
@@ -1317,6 +869,26 @@ fun slide_26():
                                           para(~align: #'center, run("σ", ~size: 30.0),
                                                run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))
 
+  // Inputs on top and results underneath, so every edge points the way the data
+  // goes; Keynote had it upside down. The columns are Keynote's own five rows
+  // spread out: `a` and `v` feed both updates, so they sit off to the right where
+  // those long edges have a clear run down past the middle row, and the state
+  // chain gets the left so the two e-classes are plain vertical columns. No edge
+  // crosses a node.
+  def row_in = 306.04
+  def row_op1 = 453.04
+  def row_mid = 600.04
+  def row_op2 = 747.04
+  def row_out = 894.04
+  def col_val = 95.0        // x
+  def col_state = 199.0     // σ, σʹ, σʹʹ
+  def col_op = 312.5        // update, update (2), which are 135 wide
+  def col_a = 479.0         // a
+  def col_v = 589.0         // v, y
+  def node_w = 62.079
+  def node_h = 61.581
+  def eclass_pad = 12.0
+
   // everything that is on screen the whole time
   def base_canvas:
     slide_canvas(
@@ -1329,29 +901,26 @@ fun slide_26():
                       run("Redundant Update Elimination", ~font: "Helvetica Neue",
                           ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-      at(338.516, 704.223, ~tag: "update", n_update),
-      at(211.26, 808.407, ~tag: "a", n_a),
-      at(326.361, 808.407, ~tag: "v", n_v),
-      at(423.091, 808.407, ~tag: "σ", n_sigma),
-      at(326.361, 600.04, ~tag: "x", n_x),
-      at(423.091, 600.04, ~tag: "σʹ", n_sigma_p),
-      at(338.516, 495.856, ~tag: "update (2)", n_update2),
-      at(326.361, 391.672, ~tag: "y", n_y),
-      at(423.091, 391.672, ~tag: "σʹʹ", n_sigma_pp))
+      at(col_op, row_op1, ~tag: "update", n_update),
+      at(col_a, row_in, ~tag: "a", n_a),
+      at(col_v, row_in, ~tag: "v", n_v),
+      at(col_state, row_in, ~tag: "σ", n_sigma),
+      at(col_val, row_mid, ~tag: "x", n_x),
+      at(col_state, row_mid, ~tag: "σʹ", n_sigma_p),
+      at(col_op, row_op2, ~tag: "update (2)", n_update2),
+      at(col_v, row_out, ~tag: "y", n_y),
+      at(col_state, row_out, ~tag: "σʹʹ", n_sigma_pp))
 
-  // adds the second `update` node and its two edges
+  // adds the two e-classes: `y` is the same value as `v`, and `σʹʹ` the same
+  // state as `σʹ` -- which is what makes the second `update` redundant
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(243.099, 377.773, ~tag: "Shape",
-                  shape_pict(~width: 162.263, ~height: 506.564, ~flip_h: #true,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(941, 2072)], [#'curve, pair(991, 2770), pair(1849, 3375), pair(3711, 3645)], [#'curve, pair(5530, 3908), pair(7816, 3696), pair(9530, 4050)], [#'curve, pair(11330, 4421), pair(11609, 5177), pair(12096, 5850)], [#'curve, pair(13191, 7363), pair(15847, 8811), pair(15997, 10409)], [#'curve, pair(16173, 12275), pair(13047, 13933), pair(11664, 15607)], [#'curve, pair(11080, 16314), pair(10600, 17025), pair(8532, 17388)], [#'curve, pair(6852, 17683), pair(4783, 17516), pair(3014, 17739)], [#'curve, pair(1355, 17948), pair(251, 18461), pair(47, 19017)], [#'curve, pair(-293, 19942), pair(1248, 20745), pair(3853, 21070)], [#'curve, pair(6603, 21413), pair(9739, 21106), pair(11787, 20361)], [#'curve, pair(13999, 19557), pair(14481, 18509), pair(15205, 17474)], [#'curve, pair(16572, 15522), pair(19121, 13605), pair(20299, 11570)], [#'curve, pair(21307, 9829), pair(21252, 8010), pair(19067, 6397)], [#'curve, pair(17376, 5149), pair(14421, 4070), pair(13183, 2780)], [#'curve, pair(12463, 2029), pair(12282, 1215), pair(10632, 614)], [#'curve, pair(8820, -47), pair(5890, -187), pair(3675, 258)], [#'curve, pair(1793, 635), pair(890, 1346), pair(941, 2072)], [#'close]]],
-                                                20930, 21209), ~fill: hex("929292", ~alpha: 0.4))),
-               at(407.265, 375.236, ~tag: "Shape (2)",
-                  shape_pict(~width: 126.68, ~height: 300.004,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(80, 3510)], [#'curve, pair(302, 4815), pair(2062, 5815), pair(4912, 6141)], [#'curve, pair(7366, 6422), pair(10144, 6041), pair(12337, 6597)], [#'curve, pair(15681, 7443), pair(15529, 9183), pair(15161, 10687)], [#'curve, pair(14820, 12077), pair(14397, 13739), pair(10894, 14508)], [#'curve, pair(8739, 14980), pair(6110, 14723), pair(3852, 15089)], [#'curve, pair(1735, 15433), pair(336, 16291), pair(66, 17205)], [#'curve, pair(-390, 18751), pair(1555, 20096), pair(4923, 20605)], [#'curve, pair(8131, 21089), pair(12103, 20671), pair(15048, 19431)], [#'curve, pair(20600, 17094), pair(20662, 13704), pair(20798, 10655)], [#'curve, pair(20934, 7594), pair(21210, 4191), pair(15993, 1694)], [#'curve, pair(12600, 70), pair(7429, -511), pair(3569, 504)], [#'curve, pair(1152, 1140), pair(-126, 2301), pair(80, 3510)], [#'close]]],
-                                                20852, 20801), ~fill: hex("929292", ~alpha: 0.4))))
+               at(col_state - eclass_pad, row_mid - eclass_pad, ~tag: "e-class σʹ σʹʹ",
+                  eclass(node_w + 2 * eclass_pad,
+                         row_out + node_h - row_mid + 2 * eclass_pad)),
+               at(col_v - eclass_pad, row_in - eclass_pad, ~tag: "e-class v y",
+                  eclass(node_w + 2 * eclass_pad,
+                         row_out + node_h - row_in + 2 * eclass_pad)))
 
   // adds 'Is this optimization safe?'
   def stage_2:
@@ -1406,10 +975,10 @@ fun slide_26():
   fun wire(p, k):
     match k
     | 0:
-        let p = value_edges(p, [[n_x, n_update], [n_update, n_a], [n_update, n_v],
-                                [n_y, n_update2], [n_update2, n_a], [n_update2, n_v]])
-        let p = state_edges(p, [[n_sigma_p, n_update], [n_update, n_sigma],
-                                [n_sigma_pp, n_update2], [n_update2, n_sigma_p]])
+        let p = value_edges(p, [[n_a, n_update], [n_v, n_update], [n_update, n_x],
+                                [n_a, n_update2], [n_v, n_update2], [n_update2, n_y]])
+        let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma_p],
+                                [n_sigma_p, n_update2], [n_update2, n_sigma_pp]])
         p
     | 1:
         let p = arrows(~on: p, [[n_sigma_p, n_sigma_pp], [n_y, n_v]],
@@ -1643,14 +1212,12 @@ fun slide_29():
   // adds 'σ', 'a', 'x', 'update', '1', 'v'
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(601.203, 775.192, ~tag: "Group (10)",
-                  group_pict(~width: 602.643, ~height: 266.846,
-                             at(538.643, 203.36, ~tag: "σ", n_sigma),
-                             at(0.0, 203.36, ~tag: "a", n_a),
-                             at(255.635, 203.36, ~tag: "x", n_x),
-                             at(406.471, 105.798, ~tag: "update", n_update),
-                             at(538.643, 8.75, ~tag: "σ1", n_sigma1),
-                             at(384.554, 0.0, ~tag: "v1", n_v1))))
+               at(chain_s, chain_y(0), ~tag: "σ", n_sigma),
+               at(chain_leaf_l, chain_y(0), ~tag: "a", n_a),
+               at(chain_leaf_r, chain_y(0), ~tag: "x", n_x),
+               at(chain_op, chain_y(1), ~tag: "update", n_update),
+               at(chain_s, chain_y(2), ~tag: "σ1", n_sigma1),
+               at(chain_v, chain_y(2), ~tag: "v1", n_v1))
 
   // Keynote drew each edge as a connector between two centres and clipped it
   // at the boxes; these are the same edges as `arrow`s, from border to border.
@@ -1663,8 +1230,8 @@ fun slide_29():
                                 [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
         p
     | 1:
-        let p = state_edges(p, [[n_update, n_sigma], [n_sigma1, n_update]])
-        let p = value_edges(p, [[n_update, n_x], [n_update, n_a], [n_v1, n_update]])
+        let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma1]])
+        let p = value_edges(p, [[n_a, n_update], [n_x, n_update], [n_update, n_v1]])
         mark_line(p, 0)
     | ~else: p
 
@@ -1896,18 +1463,15 @@ fun slide_31():
                                    run(") = update(c, v", ~size: 50.0),
                                    run("2", ~size: 50.0, ~baseline: -0.06),
                                    run(")", ~size: 50.0))))),
-    // Group (10) (id 832)
-    at(601.203, 587.333, ~tag: "Group (10)",
-       group_pict(~width: 602.643, ~height: 454.706,
-                  at(538.643, 391.219, ~tag: "σ", n_sigma),
-                  at(0.0, 391.219, ~tag: "a", n_a),
-                  at(255.635, 391.219, ~tag: "x", n_x),
-                  at(406.471, 293.658, ~tag: "update", n_update),
-                  at(406.471, 99.048, ~tag: "update (2)", n_update2),
-                  at(538.643, 196.61, ~tag: "σ1", n_sigma1),
-                  at(384.554, 187.86, ~tag: "v1", n_v1),
-                  at(538.643, 2.0, ~tag: "σ2", n_sigma2),
-                  at(384.554, 0.0, ~tag: "v2", n_v2)))
+    at(chain_s, chain_y(0), ~tag: "σ", n_sigma),
+    at(chain_leaf_l, chain_y(0), ~tag: "a", n_a),
+    at(chain_leaf_r, chain_y(0), ~tag: "x", n_x),
+    at(chain_op, chain_y(1), ~tag: "update", n_update),
+    at(chain_s, chain_y(2), ~tag: "σ1", n_sigma1),
+    at(chain_v, chain_y(2), ~tag: "v1", n_v1),
+    at(chain_op, chain_y(3), ~tag: "update (2)", n_update2),
+    at(chain_s, chain_y(4), ~tag: "σ2", n_sigma2),
+    at(chain_v, chain_y(4), ~tag: "v2", n_v2)
   )
 
   // Keynote drew each edge as a connector between two centres and clipped it
@@ -1916,10 +1480,10 @@ fun slide_31():
   let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
                           [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
                           [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
-  let p = state_edges(p, [[n_update, n_sigma], [n_sigma1, n_update], [n_update2, n_sigma1],
-                          [n_sigma2, n_update2]])
-  let p = value_edges(p, [[n_update, n_x], [n_update, n_a], [n_v1, n_update], [n_update2, n_x],
-                          [n_update2, n_a], [n_v2, n_update2]])
+  let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma1], [n_sigma1, n_update2],
+                          [n_update2, n_sigma2]])
+  let p = value_edges(p, [[n_a, n_update], [n_x, n_update], [n_update, n_v1], [n_a, n_update2],
+                          [n_x, n_update2], [n_update2, n_v2]])
   mark_line(p, 1)
 
 // -------------------------------------------------------------------------------------
@@ -2170,28 +1734,28 @@ fun slide_32():
                                      run(") = update(c, v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
                                      run(")", ~size: 50.0))))),
-      at(686.415, 978.552, ~tag: "b", n_b),
-      at(1139.847, 978.552, ~tag: "σ", n_sigma),
-      at(601.203, 978.552, ~tag: "a", n_a),
-      at(856.839, 978.552, ~tag: "x", n_x),
-      at(1007.675, 880.99, ~tag: "update", n_update),
-      at(1007.675, 686.381, ~tag: "update (2)", n_update2),
-      at(1139.847, 783.942, ~tag: "σ1", n_sigma1),
-      at(985.757, 775.192, ~tag: "v1", n_v1),
-      at(1007.675, 491.771, ~tag: "update (3)", n_update3),
-      at(1139.847, 589.333, ~tag: "σ2", n_sigma2),
-      at(985.757, 587.333, ~tag: "v2", n_v2),
-      at(1139.847, 394.723, ~tag: "σ3", n_sigma3),
-      at(985.757, 399.473, ~tag: "v3", n_v3),
-      at(942.05, 978.552, ~tag: "y", n_y))
+      at(chain_s, chain_y(0), ~tag: "σ", n_sigma),
+      at(chain_leaf_l, chain_y(0), ~tag: "a", n_a),
+      at(chain_leaf_r, chain_y(0), ~tag: "x", n_x),
+      at(chain_op, chain_y(1), ~tag: "update", n_update),
+      at(chain_s, chain_y(2), ~tag: "σ1", n_sigma1),
+      at(chain_v, chain_y(2), ~tag: "v1", n_v1),
+      at(chain_op, chain_y(3), ~tag: "update (2)", n_update2),
+      at(chain_leaf_l, chain_y(4), ~tag: "b", n_b),
+      at(chain_leaf_r, chain_y(4), ~tag: "y", n_y),
+      at(chain_s, chain_y(4), ~tag: "σ2", n_sigma2),
+      at(chain_v, chain_y(4), ~tag: "v2", n_v2),
+      at(chain_op, chain_y(5), ~tag: "update (3)", n_update3),
+      at(chain_s, chain_y(6), ~tag: "σ3", n_sigma3),
+      at(chain_v, chain_y(6), ~tag: "v3", n_v3))
 
   // adds 'c', 'update', 'σ', '4', 'v'
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(771.627, 978.552, ~tag: "c", n_c),
-               at(1007.675, 297.161, ~tag: "update (4)", n_update4),
-               at(1139.847, 200.627, ~tag: "σ4", n_sigma4),
-               at(985.757, 200.627, ~tag: "v4", n_v4))
+               at(chain_leaf_l, chain_y(6), ~tag: "c", n_c),
+               at(chain_op, chain_y(7), ~tag: "update (4)", n_update4),
+               at(chain_s, chain_y(8), ~tag: "σ4", n_sigma4),
+               at(chain_v, chain_y(8), ~tag: "v4", n_v4))
 
   // Keynote drew each edge as a connector between two centres and clipped it
   // at the boxes; these are the same edges as `arrow`s, from border to border.
@@ -2202,16 +1766,16 @@ fun slide_32():
         let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
                                 [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
                                 [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
-        let p = state_edges(p, [[n_update, n_sigma], [n_sigma1, n_update],
-                                [n_update2, n_sigma1], [n_sigma2, n_update2],
-                                [n_update3, n_sigma2], [n_sigma3, n_update3]])
-        let p = value_edges(p, [[n_update, n_x], [n_update, n_a], [n_v1, n_update],
-                                [n_update2, n_x], [n_update2, n_a], [n_v2, n_update2],
-                                [n_v3, n_update3], [n_update3, n_b], [n_update3, n_y]])
+        let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma1],
+                                [n_sigma1, n_update2], [n_update2, n_sigma2],
+                                [n_sigma2, n_update3], [n_update3, n_sigma3]])
+        let p = value_edges(p, [[n_a, n_update], [n_x, n_update], [n_update, n_v1],
+                                [n_a, n_update2], [n_x, n_update2], [n_update2, n_v2],
+                                [n_b, n_update3], [n_y, n_update3], [n_update3, n_v3]])
         p
     | 1:
-        let p = state_edges(p, [[n_sigma4, n_update4], [n_update4, n_sigma3]])
-        let p = value_edges(p, [[n_v4, n_update4], [n_update4, n_v2], [n_update4, n_c]])
+        let p = state_edges(p, [[n_sigma3, n_update4], [n_update4, n_sigma4]])
+        let p = value_edges(p, [[n_c, n_update4], [n_v2, n_update4], [n_update4, n_v4]])
         p
     | ~else: p
 
@@ -2491,7 +2055,6 @@ def all_slides:
    // 1 -- why effects belong in an e-graph at all
    divider(0),
    in_section(0, slide_2), in_section(0, slide_12),
-   in_section(0, slide_18), in_section(0, slide_19),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
    divider(1),

@@ -424,6 +424,11 @@ fun arrow(~on: on :: Pict,
           ~line_style: line_style :: ConnectLineStyle = #'solid,
           // clearance between each box and the line
           ~gap: gap :: Real = 0,
+          // slide the whole line sideways, at right angles to itself. Two nodes
+          // can be joined by more than one edge -- an operand feeding an operator
+          // *and* an e-class saying they are the same value -- and without this the
+          // second lies exactly on top of the first.
+          ~shift: shift :: Real = 0,
           ~from_at: from_at :: maybe(Find) = #false,
           ~to_at: to_at :: maybe(Find) = #false,
           ~label: label :: maybe(Pict) = #false,
@@ -444,9 +449,14 @@ fun arrow(~on: on :: Pict,
       def uy = dy / dist
       def tf = border_scale(dx, dy, from.width, from.height)
       def tt = border_scale(dx, dy, to.width, to.height)
+      // unit normal to the segment, for `~shift`
+      def px = -uy * shift
+      def py = ux * shift
       connect(~on: on,
-              from_at || Find.center(from, ~dx: dx * tf + ux * gap, ~dy: dy * tf + uy * gap),
-              to_at || Find.center(to, ~dx: -(dx * tt + ux * gap), ~dy: -(dy * tt + uy * gap)),
+              from_at || Find.center(from, ~dx: dx * tf + ux * gap + px,
+                                     ~dy: dy * tf + uy * gap + py),
+              to_at || Find.center(to, ~dx: -(dx * tt + ux * gap) + px,
+                                   ~dy: -(dy * tt + uy * gap) + py),
               ~style: style,
               ~line: as_color(color),
               ~line_width: lw,
