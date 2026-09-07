@@ -13,6 +13,8 @@ import:
   // Prefixed, not `open`: rhombus/pict and the runtime above both export
   // `blank`, and opening both would make that name ambiguous.
   pict as pc
+  // `current_font` is pict/text's, which `pict` does not re-export
+  pict/text as text
   draw
 
 export:
@@ -37,9 +39,33 @@ export:
 def slide_width = 1920.0
 def slide_height = 1080.0
 
-// The theme font. Runs that name no typeface use this one, so restyling
-// the whole deck is one edit.
-current_default_font("PT Mono")
+// ------------------------------------------------------------------------ faces
+// The deck is set in three faces, and every run names one of these rather than a
+// typeface, so the scheme is one edit and a fourth face cannot creep in unnamed:
+//
+//   `prose_font`  titles, captions, callouts -- anything read as English
+//   `code_font`   the code boxes, and the e-graph node labels, which are the same
+//                 program terms drawn as a graph
+//   `math_font`   Greek, primes and the rewrite rules -- the notation, not the code
+//
+// `code_font` is the theme default too, so a run naming no typeface gets it. That
+// default is why the Greek has to be said out loud: PT Mono has no Greek at all,
+// so every unnamed sigma in this file was drawn by whatever racket/draw reached
+// for instead -- Noto Sans on this machine, something else on a Mac. Naming the
+// face is the difference between choosing one and being handed one.
+def prose_font = "Helvetica Neue"
+def code_font = "PT Mono"
+def math_font = "Times New Roman"
+
+// The e-graph node labels get their own name because which face they want is a
+// judgement rather than a fact. They follow the notation: they sit beside the
+// rewrite rules, they hold the same Greek and primes, and PT Mono draws `0` with a
+// slash through it and gives `1` a flag, which is wrong for a term in a graph.
+// Setting this to `code_font` draws them as the code boxes instead -- but then every
+// sigma needs an exception, because PT Mono has no Greek at all.
+def node_font = math_font
+
+current_default_font(code_font)
 
 // ------------------------------------------------------------------------ fonts
 // racket/draw substitutes silently when a family is missing, and a substitute
@@ -59,12 +85,15 @@ current_default_font("PT Mono")
 // single glyph is measured, so a deck can carry the faces it is set in rather
 // than hope for them: `raco glide fonts talk.rhm` puts them there.
 register_fonts("fonts")
+//
+// One entry per face the deck is set in. Two entries used to be here that were not
+// faces: Medium is a weight of the sans that Keynote wrote out as a family of its
+// own, and the single Arial run was on an empty string. Both are gone rather than
+// checked.
 check_fonts(
-  ["PT Mono"],
-  ["Helvetica Neue", "Nimbus Sans"],          // Helvetica clone, Helvetica metrics
-  ["Helvetica Neue Medium", "Nimbus Sans"],
-  ["Arial", "Arimo"],                         // metric-compatible with Arial
-  ["Times New Roman", "Tinos"]                // metric-compatible with Times
+  [code_font],
+  [prose_font, "Nimbus Sans"],                // Helvetica clone, Helvetica metrics
+  [math_font, "Tinos"]                        // metric-compatible with Times
 )
 
 // Images sit next to this file, so the program travels as a folder.
@@ -102,15 +131,27 @@ fun section_canvas():
   as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
                        ~background: hex("FFFFFF")))
 
-fun divider(k :: Int):
+// The outline and the header are the one text on screen for the whole talk, and the
+// only text that names no face: `slidehelpers` draws them with `current_font`, whose
+// default is slideshow's rather than anything this deck declared or `check_fonts`
+// checked. Both entry points are wrapped so that they are built in the prose face,
+// which also picks up the numbers in the discs.
+fun in_prose_face(mk):
   fun ():
-    // only the first divider writes the list out; after that the list is familiar
-    // and what matters is which disc is lit
-    outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0)
+    parameterize { text.current_font: text.current_font() with (name = prose_font) }:
+      mk()
+
+fun divider(k :: Int):
+  in_prose_face(
+    fun ():
+      // only the first divider writes the list out; after that the list is familiar
+      // and what matters is which disc is lit
+      outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0))
 
 fun in_section(k :: Int, mk):
-  fun ():
-    section_header(sections, ~at: k, ~canvas: as_pict(mk()))
+  in_prose_face(
+    fun ():
+      section_header(sections, ~at: k, ~canvas: as_pict(mk())))
 
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
@@ -205,17 +246,17 @@ fun slide_1(): slide_canvas(
              para(
                   run(
                       "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
-                      ~font: "Helvetica Neue Medium", ~size: 39.0)),
+                      ~font: prose_font, ~size: 39.0)),
              para(
                   run("Chandrakana Nandi, Eli Rosenthal, Zachary Tatlock, Haobin Ni",
-                      ~font: "Helvetica Neue Medium", ~size: 39.0)))),
+                      ~font: prose_font, ~size: 39.0)))),
   // Efficient Extraction from Effectful E-Graphs (id 90)
   at(95.0, 202.755, ~tag: "Efficient Extraction from Effectful E-Graphs",
      textbox(~width: 1730.0, ~height: 366.0, ~anchor: #'bottom, ~autofit: #'shrink,
              ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.8),
                   run("Efficient Extraction from Effectful E-Graphs",
-                      ~font: "Helvetica Neue", ~size: 116.0, ~bold: #true,
+                      ~font: prose_font, ~size: 116.0, ~bold: #true,
                       ~spacing: -3.0)))),
   // unknown.png (2) (id 91)
   at(-4.619, 984.406, ~tag: "unknown.png (2)",
@@ -283,7 +324,7 @@ fun slide_2():
          textbox(~width: 1730.0, ~height: 112.848, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("E-Graphs are Super Useful!", ~font: "Helvetica Neue", ~size: 85.0,
+                      run("E-Graphs are Super Useful!", ~font: prose_font, ~size: 85.0,
                           ~bold: #true, ~spacing: -2.01)))),
       at(1890.408, 1044.894, ~tag: "Slide Number",
          shape_pict(~width: 19.008, ~height: 29.496)))
@@ -303,7 +344,7 @@ fun slide_2():
                                              ~space_before: 45.0,
                                              run(
                                                "Floating point",
-                                               ~font: "Helvetica Neue Medium",
+                                               ~font: prose_font,
                                                ~size: 48.0)))))))
 
   // adds 'Python Simulations'
@@ -321,7 +362,7 @@ fun slide_2():
                                              ~space_before: 45.0,
                                              run(
                                                "Python Simulations",
-                                               ~font: "Helvetica Neue Medium",
+                                               ~font: prose_font,
                                                ~size: 48.0)))))))
 
   // adds 'RTL Optimization'
@@ -337,7 +378,7 @@ fun slide_2():
                                              ~space_before: 45.0,
                                              run(
                                                "RTL Optimization",
-                                               ~font: "Helvetica Neue Medium",
+                                               ~font: prose_font,
                                                ~size: 48.0)))),
                              at(0.0, 23.789, ~tag: "pasted-movie.png (7)",
                                 image_pict(media("image19.png"), 371.484, 246.071)))))
@@ -357,7 +398,7 @@ fun slide_2():
                                              ~space_before: 45.0,
                                              run(
                                                "ML Kernels",
-                                               ~font: "Helvetica Neue Medium",
+                                               ~font: prose_font,
                                                ~size: 48.0)))),
                              at(40.664, 337.154, ~tag: "(Luminal)",
                                 linebox(~width: 100.0, ~height: 64.608,
@@ -367,7 +408,7 @@ fun slide_2():
                                              ~space_before: 45.0,
                                              run(
                                                "Luminal",
-                                               ~font: "Helvetica Neue Medium",
+                                               ~font: prose_font,
                                                ~size: 48.0)))))))
 
   // adds 'SQL'
@@ -381,7 +422,7 @@ fun slide_2():
                                 linebox(~width: 104.136, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                             run("SQL", ~font: "Helvetica Neue Medium", ~size: 48.0)))))))
+                                             run("SQL", ~font: prose_font, ~size: 48.0)))))))
 
   // adds 'CAD'
   def stage_6:
@@ -398,7 +439,7 @@ fun slide_2():
                                         para(~line_spacing: pair(#'percent, 0.9),
                                              ~space_before: 45.0,
                                              run(
-                                               "CAD", ~font: "Helvetica Neue Medium",
+                                               "CAD", ~font: prose_font,
                                                ~size: 48.0)))))))
 
   // adds 'WASM'
@@ -412,7 +453,7 @@ fun slide_2():
                                 linebox(~width: 158.904, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                                             run("WASM", ~font: "Helvetica Neue Medium", ~size: 48.0)))))))
+                                             run("WASM", ~font: prose_font, ~size: 48.0)))))))
 
   // adds 'User DSL Optimizations'
   def stage_8:
@@ -424,7 +465,7 @@ fun slide_2():
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                              run("User DSL Optimizations",
-                                                 ~font: "Helvetica Neue Medium", ~size: 48.0)))),
+                                                 ~font: prose_font, ~size: 48.0)))),
                              at(0.0, 58.176, ~tag: "pasted-movie.png (8)",
                                 image_pict(media("image20.png"), 633.867, 253.547)))))
 
@@ -435,7 +476,7 @@ fun slide_2():
                   linebox(~width: 280.2, ~height: 64.608,
                           ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                               run("…and more!", ~font: "Helvetica Neue Medium", ~size: 48.0)))))
+                               run("…and more!", ~font: prose_font, ~size: 48.0)))))
 
   staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5, stage_6, stage_7, stage_8, stage_9])
 
@@ -461,7 +502,7 @@ fun slide_12():
                   textbox(~width: 78.052, ~height: 78.052, ~anchor: #'center,
                           ~autofit: #'shrink, ~insets: insets(0.0, 0.0, 0.0, 0.0),
                           para(~align: #'center,
-                               run(label, ~font: "Times New Roman", ~size: 69.75)))))
+                               run(label, ~font: node_font, ~size: 69.75)))))
 
   def n_a = node("a")
   def n_one = node("1")
@@ -497,49 +538,49 @@ fun slide_12():
          textbox(~width: 371.37, ~height: 228.28, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Input term:", ~font: "Helvetica Neue", ~size: 60.0,
+                      run("Input term:", ~font: prose_font, ~size: 60.0,
                           ~spacing: -2.01)),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("", ~font: "Arial", ~size: 60.0, ~spacing: -2.0)),
+                      run("", ~size: 60.0, ~spacing: -2.0)),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("  (a + 1) - 1", ~font: "Helvetica Neue", ~size: 60.0,
+                      run("  (a + 1) - 1", ~font: prose_font, ~size: 60.0,
                           ~spacing: -2.01)))),
       at(95.0, 85.0, ~tag: "Equivalence Graph (E-Graph)",
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("E-Graphs Explore a Big Space", ~font: "Helvetica Neue",
+                      run("E-Graphs Explore a Big Space", ~font: prose_font,
                           ~size: 85.0, ~bold: #true, ~spacing: -2.01)))))
 
-  // adds '(α + β) − γ ⇝ α + (β − γ)', 'α − α ⇝ 0', 'Rules:', 'α + 0 ⇝ α'
+  // adds '(α + β) − γ → α + (β − γ)', 'α − α → 0', 'Rules:', 'α + 0 → α'
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
                at(1170.567, 252.964, ~tag: "Group",
                   group_pict(~width: 669.288, ~height: 412.157,
-                             at(81.989, 105.232, ~tag: "(α + β) − γ ⇝ α + (β − γ)",
+                             at(81.989, 105.232, ~tag: "(α + β) − γ → α + (β − γ)",
                                 linebox(~width: 587.35, ~height: 78.0, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(
-                                             run("(α + β) − γ ⇝ α + (β − γ)",
-                                                 ~font: "Times New Roman", ~size: 60.0,
+                                             run("(α + β) − γ → α + (β − γ)",
+                                                 ~font: math_font, ~size: 60.0,
                                                  ~color: hex("0433FF"))))),
-                             at(90.294, 219.714, ~tag: "α − α ⇝ 0",
+                             at(90.294, 219.714, ~tag: "α − α → 0",
                                 linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(
-                                             run("α − α ⇝ 0", ~font: "Times New Roman", ~size: 60.0,
+                                             run("α − α → 0", ~font: math_font, ~size: 60.0,
                                                  ~color: hex("FF9300"))))),
                              at(0.0, 0.0, ~tag: "Input term: (a + 1) - 1 (2)",
                                 textbox(~width: 371.37, ~height: 164.752, ~autofit: #'shrink,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.8),
-                                             run("Rules:", ~font: "Helvetica Neue", ~size: 60.0,
+                                             run("Rules:", ~font: prose_font, ~size: 60.0,
                                                  ~spacing: -2.0)))),
-                             at(90.294, 334.196, ~tag: "α + 0 ⇝ α",
+                             at(90.294, 334.196, ~tag: "α + 0 → α",
                                 linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(
-                                             run("α + 0 ⇝ α", ~font: "Times New Roman", ~size: 60.0,
+                                             run("α + 0 → α", ~font: math_font, ~size: 60.0,
                                                  ~color: hex("4F8F00"))))))))
 
   // adds '+', 'a', '1', '−'
@@ -626,7 +667,7 @@ fun slide_12():
               ~label: as_pict(linebox(~width: 220.0, ~height: 52.0, ~autofit: #'grow,
                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                       para(~align: #'center,
-                                           run("data flow", ~font: "Helvetica Neue",
+                                           run("data flow", ~font: prose_font,
                                                ~size: 40.0, ~color: hex("787878"))))),
               ~label_dx: -80, ~label_dy: 0)
     | 3:
@@ -660,10 +701,10 @@ fun slide_12():
                                       ~autofit: #'grow,
                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                       para(~align: #'center,
-                                           run("extract", ~font: "Helvetica Neue",
+                                           run("extract", ~font: prose_font,
                                                ~size: 48.0, ~bold: #true),
                                            run(" a resulting term",
-                                               ~font: "Helvetica Neue", ~size: 48.0)))))
+                                               ~font: prose_font, ~size: 48.0)))))
     | ~else: p
 
   staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5, stage_6, stage_7],
@@ -692,19 +733,19 @@ fun slide_20():
                   linebox(~width: 181.512, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                               run("(Herbie)", ~font: "Helvetica Neue Medium",
+                               run("(Herbie)", ~font: prose_font,
                                    ~size: 48.0)))),
                at(905.804, 943.181, ~tag: "(Cranelift)",
                   linebox(~width: 222.408, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                               run("(Cranelift)", ~font: "Helvetica Neue Medium",
+                               run("(Cranelift)", ~font: prose_font,
                                    ~size: 48.0)))),
                at(489.157, 1011.599, ~tag: "(Szalinski)",
                   linebox(~width: 230.424, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
-                               run("(Szalinski)", ~font: "Helvetica Neue Medium",
+                               run("(Szalinski)", ~font: prose_font,
                                    ~size: 48.0)))))
 
   // the notes are part of the picture from the moment the slide arrives; the
@@ -742,7 +783,7 @@ fun slide_20():
                   as_pict(linebox(~width: 404.2, ~height: 57.6, ~autofit: #'grow,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
-                                       run("need side effects!", ~font: "Helvetica Neue",
+                                       run("need side effects!", ~font: prose_font,
                                            ~size: 48.0, ~bold: #true)))))
 
   staged(base, [stage_1])
@@ -764,7 +805,7 @@ fun slide_23():
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Update", ~font: "Helvetica Neue", ~size: 85.0, ~bold: #true,
+                      run("Update", ~font: prose_font, ~size: 85.0, ~bold: #true,
                           ~spacing: -1.7)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)))
 
@@ -801,12 +842,12 @@ fun slide_23():
             ~at: pc.Find.abs(824.715, 276.13), ~spike: #'w,
             as_pict(linebox(~width: 840.0, ~height: 48.0,
                             ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(run("Write ", ~font: "Helvetica Neue", ~size: 40.0),
-                                 run("v", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true),
-                                 run(" to address ", ~font: "Helvetica Neue", ~size: 40.0),
-                                 run("a, ", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true),
-                                 run("return previous value at ", ~font: "Helvetica Neue", ~size: 40.0),
-                                 run("a", ~font: "Helvetica Neue", ~size: 40.0, ~bold: #true)))))
+                            para(run("Write ", ~font: prose_font, ~size: 40.0),
+                                 run("v", ~font: prose_font, ~size: 40.0, ~bold: #true),
+                                 run(" to address ", ~font: prose_font, ~size: 40.0),
+                                 run("a, ", ~font: prose_font, ~size: 40.0, ~bold: #true),
+                                 run("return previous value at ", ~font: prose_font, ~size: 40.0),
+                                 run("a", ~font: prose_font, ~size: 40.0, ~bold: #true)))))
 
   staged(base_canvas, [stage_1, stage_2])
 
@@ -832,49 +873,49 @@ fun slide_26():
                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("update", ~size: 30.0))))
+                                        para(~align: #'center, run("update", ~font: node_font, ~size: 30.0))))
   def n_a = shape_pict(~width: 62.079, ~height: 61.581,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~size: 30.0))))
+                                   para(~align: #'center, run("a", ~font: node_font, ~size: 30.0))))
   def n_v = shape_pict(~width: 62.079, ~height: 61.581,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("v", ~size: 30.0))))
+                                   para(~align: #'center, run("v", ~font: node_font, ~size: 30.0))))
   def n_sigma = shape_pict(~width: 62.079, ~height: 61.581,
                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~size: 30.0))))
+                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 30.0))))
   def n_x = shape_pict(~width: 62.079, ~height: 61.581,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~size: 30.0))))
+                                   para(~align: #'center, run("x", ~font: node_font, ~size: 30.0))))
   def n_sigma_p = shape_pict(~width: 62.079, ~height: 61.581,
                              ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("σ", ~size: 30.0),
-                                              run("ʹ", ~font: "Times New Roman", ~size: 30.0))))
+                                         para(~align: #'center, run("σ", ~font: node_font, ~size: 30.0),
+                                              run("ʹ", ~font: node_font, ~size: 30.0))))
   def n_update2 = shape_pict(~width: 135.0, ~height: 61.581,
                              ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~size: 30.0))))
+                                         para(~align: #'center, run("update", ~font: node_font, ~size: 30.0))))
   def n_y = shape_pict(~width: 62.079, ~height: 61.581,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("y", ~size: 30.0))))
+                                   para(~align: #'center, run("y", ~font: node_font, ~size: 30.0))))
   def n_sigma_pp = shape_pict(~width: 62.079, ~height: 61.581,
                               ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                               ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                               ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("σ", ~size: 30.0),
-                                               run("ʹʹ", ~font: "Times New Roman", ~size: 30.0))))
+                                          para(~align: #'center, run("σ", ~font: node_font, ~size: 30.0),
+                                               run("ʹʹ", ~font: node_font, ~size: 30.0))))
 
   // Inputs on top and results underneath, so every edge points the way the data
   // goes; Keynote had it upside down. The columns are Keynote's own five rows
@@ -905,7 +946,7 @@ fun slide_26():
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Redundant Update Elimination", ~font: "Helvetica Neue",
+                      run("Redundant Update Elimination", ~font: prose_font,
                           ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
       at(col_op, row_op1, ~tag: "update", n_update),
@@ -936,7 +977,7 @@ fun slide_26():
                   linebox(~width: 900.225, ~height: 96.825,
                           ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                               run("Is this optimization safe?", ~font: "Helvetica Neue", ~size: 75.0,
+                               run("Is this optimization safe?", ~font: prose_font, ~size: 75.0,
                                    ~bold: #true)))))
 
   // The code block, in the three states it is rewritten through.
@@ -1012,7 +1053,7 @@ fun slide_26():
           as_pict(linebox(~width: 384.0, ~height: 48.0,
                           ~insets: insets(0.0, 0.0, 0.0, 0.0),
                           para(~align: #'center,
-                               run("update is idempotent", ~font: "Helvetica Neue", ~size: 40.0)))))
+                               run("update is idempotent", ~font: prose_font, ~size: 40.0)))))
 
 // -------------------------------------------------------------------------------------
 // slide_29: Slide 18 through Slide 19, as one animated pict.
@@ -1080,7 +1121,7 @@ fun slide_29():
                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                            ~body: body(~anchor: #'center,
                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~size: 40.0))))
+                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0))))
   def n_a = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom(
                                 "roundRect", [pair("adj", "val 33878")]),
@@ -1088,7 +1129,7 @@ fun slide_29():
                        ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center,
                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~size: 40.0))))
+                                   para(~align: #'center, run("a", ~font: node_font, ~size: 40.0))))
   def n_x = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom(
                                 "roundRect", [pair("adj", "val 33878")]),
@@ -1096,7 +1137,7 @@ fun slide_29():
                        ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center,
                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~size: 40.0))))
+                                   para(~align: #'center, run("x", ~font: node_font, ~size: 40.0))))
   def n_update = shape_pict(~width: 180.242, ~height: 64.0,
                             ~geom: preset_geom(
                                      "roundRect", [pair("adj", "val 33349")]),
@@ -1105,7 +1146,7 @@ fun slide_29():
                             ~body: body(~anchor: #'center,
                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                         para(~align: #'center,
-                                             run("update", ~size: 40.0))))
+                                             run("update", ~font: node_font, ~size: 40.0))))
   def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom(
                                      "roundRect", [pair("adj", "val 33878")]),
@@ -1113,8 +1154,8 @@ fun slide_29():
                             ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center,
                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("1", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom(
                                  "roundRect", [pair("adj", "val 33878")]),
@@ -1122,8 +1163,8 @@ fun slide_29():
                         ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center,
                                     ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("1", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
 
   // the picture before the first reveal
   def base_canvas:
@@ -1134,7 +1175,7 @@ fun slide_29():
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Redundant Update Elimination", ~font: "Helvetica Neue",
+                      run("Redundant Update Elimination", ~font: prose_font,
                           ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
       at(1476.341, 50.118, ~tag: "Group",
@@ -1192,25 +1233,29 @@ fun slide_29():
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("1", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("1", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(a, x)", ~size: 50.0)),
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(a, x)", ~size: 50.0)),
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("3", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("3", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(b, y)", ~size: 50.0)),
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("4", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("4", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(c, v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
@@ -1305,7 +1350,7 @@ fun slide_31():
                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                            ~body: body(~anchor: #'center,
                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~size: 40.0))))
+                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0))))
   def n_a = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom(
                                 "roundRect", [pair("adj", "val 33878")]),
@@ -1313,7 +1358,7 @@ fun slide_31():
                        ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center,
                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~size: 40.0))))
+                                   para(~align: #'center, run("a", ~font: node_font, ~size: 40.0))))
   def n_x = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom(
                                 "roundRect", [pair("adj", "val 33878")]),
@@ -1321,7 +1366,7 @@ fun slide_31():
                        ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center,
                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~size: 40.0))))
+                                   para(~align: #'center, run("x", ~font: node_font, ~size: 40.0))))
   def n_update = shape_pict(~width: 180.242, ~height: 64.0,
                             ~geom: preset_geom(
                                      "roundRect", [pair("adj", "val 33349")]),
@@ -1330,7 +1375,7 @@ fun slide_31():
                             ~body: body(~anchor: #'center,
                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                         para(~align: #'center,
-                                             run("update", ~size: 40.0))))
+                                             run("update", ~font: node_font, ~size: 40.0))))
   def n_update2 = shape_pict(~width: 180.242, ~height: 64.0,
                              ~geom: preset_geom(
                                       "roundRect", [pair("adj", "val 33349")]),
@@ -1339,7 +1384,7 @@ fun slide_31():
                              ~body: body(~anchor: #'center,
                                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                          para(~align: #'center,
-                                              run("update", ~size: 40.0))))
+                                              run("update", ~font: node_font, ~size: 40.0))))
   def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom(
                                      "roundRect", [pair("adj", "val 33878")]),
@@ -1347,8 +1392,8 @@ fun slide_31():
                             ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center,
                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("1", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom(
                                  "roundRect", [pair("adj", "val 33878")]),
@@ -1356,8 +1401,8 @@ fun slide_31():
                         ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center,
                                     ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("1", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_sigma2 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom(
                                      "roundRect", [pair("adj", "val 33878")]),
@@ -1365,8 +1410,8 @@ fun slide_31():
                             ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center,
                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("2", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v2 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom(
                                  "roundRect", [pair("adj", "val 33878")]),
@@ -1374,8 +1419,8 @@ fun slide_31():
                         ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center,
                                     ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("2", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
 
   def canvas:
     slide_canvas(
@@ -1386,7 +1431,7 @@ fun slide_31():
        textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                ~insets: insets(4.0, 4.0, 4.0, 4.0),
                para(~line_spacing: pair(#'percent, 0.8),
-                    run("Redundant Update Elimination", ~font: "Helvetica Neue",
+                    run("Redundant Update Elimination", ~font: prose_font,
                         ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
     // Slide Number (id 766)
     at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
@@ -1447,25 +1492,29 @@ fun slide_31():
                               para(~line_spacing: pair(#'percent, 1.5),
                                    run("(v", ~size: 50.0),
                                    run("1", ~size: 50.0, ~baseline: -0.06),
-                                   run(", σ", ~size: 50.0),
+                                   run(", ", ~size: 50.0),
+                                   run("σ", ~font: math_font, ~size: 50.0),
                                    run("1", ~size: 50.0, ~baseline: -0.06),
                                    run(") = update(a, x)", ~size: 50.0)),
                               para(~line_spacing: pair(#'percent, 1.5),
                                    run("(v", ~size: 50.0),
                                    run("2", ~size: 50.0, ~baseline: -0.06),
-                                   run(", σ", ~size: 50.0),
+                                   run(", ", ~size: 50.0),
+                                   run("σ", ~font: math_font, ~size: 50.0),
                                    run("2", ~size: 50.0, ~baseline: -0.06),
                                    run(") = update(a, x)", ~size: 50.0)),
                               para(~line_spacing: pair(#'percent, 1.5),
                                    run("(v", ~size: 50.0),
                                    run("3", ~size: 50.0, ~baseline: -0.06),
-                                   run(", σ", ~size: 50.0),
+                                   run(", ", ~size: 50.0),
+                                   run("σ", ~font: math_font, ~size: 50.0),
                                    run("3", ~size: 50.0, ~baseline: -0.06),
                                    run(") = update(b, y)", ~size: 50.0)),
                               para(~line_spacing: pair(#'percent, 1.5),
                                    run("(v", ~size: 50.0),
                                    run("4", ~size: 50.0, ~baseline: -0.06),
-                                   run(", σ", ~size: 50.0),
+                                   run(", ", ~size: 50.0),
+                                   run("σ", ~font: math_font, ~size: 50.0),
                                    run("4", ~size: 50.0, ~baseline: -0.06),
                                    run(") = update(c, v", ~size: 50.0),
                                    run("2", ~size: 50.0, ~baseline: -0.06),
@@ -1556,100 +1605,100 @@ fun slide_32():
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("b", ~size: 40.0))))
+                                   para(~align: #'center, run("b", ~font: node_font, ~size: 40.0))))
   def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~size: 40.0))))
+                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0))))
   def n_a = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~size: 40.0))))
+                                   para(~align: #'center, run("a", ~font: node_font, ~size: 40.0))))
   def n_x = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~size: 40.0))))
+                                   para(~align: #'center, run("x", ~font: node_font, ~size: 40.0))))
   def n_update = shape_pict(~width: 180.242, ~height: 64.0,
                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("update", ~size: 40.0))))
+                                        para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
   def n_update2 = shape_pict(~width: 180.242, ~height: 64.0,
                              ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~size: 40.0))))
+                                         para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
   def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("1", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                         ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("1", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_update3 = shape_pict(~width: 180.242, ~height: 64.0,
                              ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~size: 40.0))))
+                                         para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
   def n_sigma2 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("2", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v2 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                         ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("2", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_sigma3 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("3", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("3", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v3 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                         ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("3", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("3", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_y = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("y", ~size: 40.0))))
+                                   para(~align: #'center, run("y", ~font: node_font, ~size: 40.0))))
   def n_c = shape_pict(~width: 64.0, ~height: 63.486,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("c", ~size: 40.0))))
+                                   para(~align: #'center, run("c", ~font: node_font, ~size: 40.0))))
   def n_update4 = shape_pict(~width: 180.242, ~height: 64.0,
                              ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~size: 40.0))))
+                                         para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
   def n_sigma4 = shape_pict(~width: 64.0, ~height: 63.486,
                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~size: 40.0),
-                                             run("4", ~size: 40.0, ~baseline: -0.06))))
+                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
+                                             run("4", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
   def n_v4 = shape_pict(~width: 64.0, ~height: 63.486,
                         ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
                         ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
                         ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~size: 40.0),
-                                         run("4", ~size: 40.0, ~baseline: -0.06))))
+                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
+                                         run("4", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
 
   // the picture before the first reveal
   def base_canvas:
@@ -1660,7 +1709,7 @@ fun slide_32():
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Redundant Update Elimination", ~font: "Helvetica Neue",
+                      run("Redundant Update Elimination", ~font: prose_font,
                           ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
       at(1476.341, 50.118, ~tag: "Group",
@@ -1718,25 +1767,29 @@ fun slide_32():
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("1", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("1", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(a, x)", ~size: 50.0)),
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(a, x)", ~size: 50.0)),
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("3", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("3", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(b, y)", ~size: 50.0)),
                                 para(~line_spacing: pair(#'percent, 1.5),
                                      run("(v", ~size: 50.0),
                                      run("4", ~size: 50.0, ~baseline: -0.06),
-                                     run(", σ", ~size: 50.0),
+                                     run(", ", ~size: 50.0),
+                                     run("σ", ~font: math_font, ~size: 50.0),
                                      run("4", ~size: 50.0, ~baseline: -0.06),
                                      run(") = update(c, v", ~size: 50.0),
                                      run("2", ~size: 50.0, ~baseline: -0.06),
@@ -1815,19 +1868,19 @@ fun slide_34():
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Fast Effect-safe Extraction in Practice", ~font: "Helvetica Neue",
+                      run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
                           ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
       at(653.508, 743.56, ~tag: "Our Approach",
          linebox(~width: 260.2, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("Our Approach", ~font: "Helvetica Neue", ~size: 40.0)))),
+                      run("Our Approach", ~font: prose_font, ~size: 40.0)))),
       at(1105.508, 625.56, ~tag: "Solver-Based Techniques",
          linebox(~width: 462.4, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("Solver-Based Techniques", ~font: "Helvetica Neue", ~size: 40.0)))),
+                      run("Solver-Based Techniques", ~font: prose_font, ~size: 40.0)))),
       at(634.714, 603.919, ~tag: "Line",
          shape_pict(~width: 87.399, ~height: 136.567, ~flip_h: #true, ~flip_v: #true,
                     ~shape: "line",
@@ -1851,12 +1904,12 @@ fun slide_34():
          linebox(~width: 297.92, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("Solver Timeouts", ~font: "Helvetica Neue", ~size: 40.0)))),
+                      run("Solver Timeouts", ~font: prose_font, ~size: 40.0)))),
       at(929.123, 1000.48, ~tag: "Log scale",
          linebox(~width: 216.12, ~height: 63.656,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("Log scale", ~font: "Helvetica Neue", ~size: 48.0,
+                      run("Log scale", ~font: prose_font, ~size: 48.0,
                           ~color: hex("EE230C"))))),
       at(1163.714, 504.919, ~tag: "Line (5)",
          shape_pict(~width: 87.399, ~height: 136.567, ~flip_h: #true, ~flip_v: #true,
@@ -1876,7 +1929,7 @@ fun slide_34():
                   as_pict(linebox(~width: 486.0, ~height: 73.0,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
-                                       run("Extraction is fast", ~font: "Helvetica Neue", ~size: 60.0, ~bold: #true)))))
+                                       run("Extraction is fast", ~font: prose_font, ~size: 60.0, ~bold: #true)))))
     pc.overlay(~horiz: #'left, ~vert: #'top,
                ~dx: 1494.06 - bubble.width / 2, ~dy: 787.93 - bubble.height / 2,
                pc.blank(~width: slide_width, ~height: slide_height), bubble)
@@ -1893,7 +1946,7 @@ fun slide_36(): slide_canvas(
      textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
              ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.8),
-                  run("Fast Effect-safe Extraction in Practice", ~font: "Helvetica Neue",
+                  run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
                       ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
   // Slide Number (id 1017)
   at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
@@ -1904,13 +1957,13 @@ fun slide_36(): slide_canvas(
      linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
+                  run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
   // Polybench Benchmark Suite (id 1020)
   at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
      linebox(~width: 515.8, ~height: 54.88,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0))))
+                  run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0))))
 )
 
 // -------------------------------------------------------------------------------------
@@ -1923,7 +1976,7 @@ fun slide_37(): slide_canvas(
      textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
              ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.8),
-                  run("Fast Effect-safe Extraction in Practice", ~font: "Helvetica Neue",
+                  run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
                       ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
   // Slide Number (id 1023)
   at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
@@ -1934,19 +1987,19 @@ fun slide_37(): slide_canvas(
      linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
+                  run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
   // eggcc (id 1026)
   at(956.952, 745.812, ~tag: "eggcc",
      linebox(~width: 146.95, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("eggcc", ~font: "Helvetica Neue", ~size: 50.0)))),
+                  run("eggcc", ~font: prose_font, ~size: 50.0)))),
   // Polybench Benchmark Suite (id 1027)
   at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
      linebox(~width: 515.8, ~height: 54.88,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0))))
+                  run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0))))
 )
 
 // -------------------------------------------------------------------------------------
@@ -1959,7 +2012,7 @@ fun slide_38(): slide_canvas(
      textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
              ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.8),
-                  run("Fast Effect-safe Extraction in Practice", ~font: "Helvetica Neue",
+                  run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
                       ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
   // Slide Number (id 1030)
   at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
@@ -1970,25 +2023,25 @@ fun slide_38(): slide_canvas(
      linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
+                  run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
   // eggcc (id 1033)
   at(956.952, 745.812, ~tag: "eggcc",
      linebox(~width: 146.95, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("eggcc", ~font: "Helvetica Neue", ~size: 50.0)))),
+                  run("eggcc", ~font: prose_font, ~size: 50.0)))),
   // LLVM-O3-O0 (id 1034)
   at(956.952, 499.126, ~tag: "LLVM-O3-O0",
      linebox(~width: 304.6, ~height: 66.6,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("LLVM-O3-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
+                  run("LLVM-O3-O0", ~font: prose_font, ~size: 50.0)))),
   // Polybench Benchmark Suite (id 1035)
   at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
      linebox(~width: 515.8, ~height: 54.88,
              ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                  run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0))))
+                  run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0))))
 )
 
 // -------------------------------------------------------------------------------------
@@ -2008,7 +2061,7 @@ fun slide_39():
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("Fast Effect-safe Extraction in Practice", ~font: "Helvetica Neue",
+                      run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
                           ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
       at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
       at(4.551, 202.379, ~tag: "g0.pdf", image_pict(media("image22.png"), 986.874, 822.395)),
@@ -2019,27 +2072,27 @@ fun slide_39():
          linebox(~width: 304.6, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("LLVM-O0-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
+                      run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
       at(956.952, 745.812, ~tag: "eggcc",
          linebox(~width: 146.95, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("eggcc", ~font: "Helvetica Neue", ~size: 50.0)))),
+                      run("eggcc", ~font: prose_font, ~size: 50.0)))),
       at(956.952, 499.126, ~tag: "LLVM-O3-O0",
          linebox(~width: 304.6, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("LLVM-O3-O0", ~font: "Helvetica Neue", ~size: 50.0)))),
+                      run("LLVM-O3-O0", ~font: prose_font, ~size: 50.0)))),
       at(956.952, 231.703, ~tag: "Solver Approaches",
          linebox(~width: 433.1, ~height: 66.6,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("Solver Approaches", ~font: "Helvetica Neue", ~size: 50.0)))),
+                      run("Solver Approaches", ~font: prose_font, ~size: 50.0)))),
       at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
          linebox(~width: 515.8, ~height: 54.88,
                  ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                      run("Polybench Benchmark Suite", ~font: "Helvetica Neue", ~size: 40.0)))))
+                      run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0)))))
 
   // Keynote's green box, as one of our bubbles, centred where the box was.
   def stage_1:
@@ -2048,9 +2101,9 @@ fun slide_39():
                   as_pict(linebox(~width: 376.0, ~height: 182.0,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
-                                       run("Non-trivial", ~font: "Helvetica Neue", ~size: 75.0, ~bold: #true)),
+                                       run("Non-trivial", ~font: prose_font, ~size: 75.0, ~bold: #true)),
                                   para(~align: #'center,
-                                       run("e-graphs!", ~font: "Helvetica Neue", ~size: 75.0, ~bold: #true)))))
+                                       run("e-graphs!", ~font: prose_font, ~size: 75.0, ~bold: #true)))))
     pc.overlay(~horiz: #'left, ~vert: #'top,
                ~dx: 1518.01 - bubble.width / 2, ~dy: 757.86 - bubble.height / 2,
                pc.blank(~width: slide_width, ~height: slide_height), bubble)
