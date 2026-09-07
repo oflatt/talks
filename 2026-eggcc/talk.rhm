@@ -25,11 +25,9 @@ export:
   slide_2
   slide_12
   slide_20
-  slide_23
-  slide_26
-  slide_29
-  slide_31
-  slide_32
+  slide_update
+  slide_egraph
+  slide_rue
   slide_34
   slide_36
   slide_37
@@ -166,22 +164,6 @@ def keynote_blue = draw.Color(4, 51, 255)
 fun value_edges(p, edges): arrows(~on: p, edges, ~line_width: 4)
 fun state_edges(p, edges): arrows(~on: p, edges, ~line_width: 6, ~color: keynote_blue)
 
-// The line of the code box naming the `update` just put into the e-graph, marked
-// as with a highlighter: a translucent band over it, since the runtime draws a
-// box's fill and text as one picture. Keynote had this and its export dropped it.
-// `k` counts lines from 0. The geometry is the runtime's own: at 50pt, 150%
-// spacing is a 90pt line, and the four lines sit centred in the box, whose
-// position is the same on every slide that shows it.
-def code_box = [32.458, 358.853, 768.0, 380.0]
-def highlight = draw.Color(38, 132, 235, 0.25)
-fun mark_line(p, k :: Int):
-  def [bx, by, bw, bh] = code_box
-  def line_h = 1.5 * 1.2 * 50.0
-  def top = by + 4.0 + (bh - 8.0 - 4 * line_h) / 2 + k * line_h
-  def band = pc.rectangle(~width: bw - 24.0, ~height: line_h - 22.0,
-                          ~fill: highlight, ~line: #false, ~rounded: -0.3)
-  pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: bx + 12.0, ~dy: top + 20.0, p, band)
-
 // Keynote's centred one-line text box, which the deck has forty-one of. Every one
 // of them spelled out `~anchor: #'center` and `~wrap: #false` again; they say it
 // once here instead. `~width` and `~height` stay the size Keynote gave the box --
@@ -202,9 +184,8 @@ fun eclass(w :: Real, h :: Real):
              ~geom: preset_geom("roundRect", [pair("adj", "val 50000")]),
              ~fill: hex("929292", ~alpha: 0.4))
 
-// The `update` chain that slides 29, 31 and 32 build between them. They are the
-// same graph with one, two and four updates, so they share one layout and grow
-// downwards: what is on screen never moves, it only gets longer.
+// The `update` chain that `slide_egraph` builds and `slide_rue` rewrites. It
+// grows downwards: what is on screen never moves, it only gets longer.
 //
 // Inputs on top and results underneath. Each leaf sits one layer above the update
 // that first uses it, in one of two columns on the left; the updates run down the
@@ -212,22 +193,22 @@ fun eclass(w :: Real, h :: Real):
 // edges -- `a` and `x` into the second update, `v2` into the fourth -- clear of
 // every box they pass.
 //
-//   layer 0  a  x                 σ
+//   layer 0  a  x                 ω
 //   layer 1        update
-//   layer 2            v1     σ1
+//   layer 2            v1     ω1
 //   layer 3        update
-//   layer 4  b  y      v2     σ2
+//   layer 4  b  y      v2     ω2
 //   layer 5        update
-//   layer 6  c         v3     σ3
+//   layer 6  c         v3     ω3
 //   layer 7        update
-//   layer 8            v4     σ4
+//   layer 8            v4     ω4
 def chain_row = 92.0
 fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
-def chain_leaf_l = 828.0     // a, b, c
-def chain_leaf_r = 1008.0    // x, y
-def chain_op = 1149.879      // the update boxes, which are 180.242 wide
-def chain_v = 1418.0         // v1 … v4
-def chain_s = 1608.0         // σ, σ1 … σ4
+def chain_leaf_l = 1000.0    // a, b, c
+def chain_leaf_r = 1180.0    // x, y
+def chain_op = 1322.0        // the update boxes, which are 180.242 wide
+def chain_v = 1590.0         // v1 … v4
+def chain_s = 1780.0         // ω, ω1 … ω4
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -789,1065 +770,300 @@ fun slide_20():
   staged(base, [stage_1])
 
 // -------------------------------------------------------------------------------------
-// slide_23: Slide 12 through Slide 14, as one animated pict.
+// slide_update, slide_egraph, slide_rue: the `update` example, as one story.
 //
-// These were separate slides, each a copy of the one before plus one more
-// element -- so they collapse into a base picture and 2 reveals.
+// Straight-line code first, as anyone would write it; what one `update` does;
+// the state values, magic-moved into the code; the e-graph built up one `update`
+// per press; a rule over `update`; and the rule applied, as a union. The code
+// box sits in one place on all three slides, so it stays put across the cuts.
 //
-// One `fade_in` per stage, so the deck takes the same number of clicks it did.
-fun slide_23():
-  // the picture before the first reveal
-  def base_canvas:
-    slide_canvas(
-      ~width: slide_width, ~height: slide_height,
-      ~background: hex("FFFFFF"),
-      at(95.0, 85.0, ~tag: "Update",
-         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("Update", ~font: prose_font, ~size: 85.0, ~bold: #true,
-                          ~spacing: -1.7)))),
-      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)))
+// The code is picts rather than a text box, so that its pieces can move: the
+// `(`, `, ω`, `)` and the state argument of the state form are new picts that
+// fade in, while `v`, its subscript, `= update(a, x` and the closing paren are
+// the *same* picts in both forms and slide to make room. `code_parts` builds
+// every piece once, for both layouts, which is what `magic_move` matches on.
+def code_face = draw.Font(~name: code_font, ~size: 50.0)
+def math_face = draw.Font(~name: math_font, ~size: 50.0)
+fun code(s :: String) :: pc.Pict: pc.text(s, ~font: code_face)
+fun code_sub(s :: String) :: pc.Pict: code(s).scale(0.6)
+// the Greek is set in the notation face, as everywhere else in the deck: PT Mono
+// has none
+fun greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face)
+def code_x = 32.458
+def code_y = 358.853
+def code_w = 940.0         // room for `(v2, ω2) = update(a, x, ω1)` at 50pt
+def code_h = 380.0
+def code_row = 90.0        // 150% spacing at 50pt, the room Keynote's box gave a line
+def code_inset = 16.0
 
-  // adds 'v', '1', '= update(a, x)', '2', '3', '= update(b, y)', '4', '= update(c, v', ')'
-  def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(56.715, 244.514, ~tag: "v1 = update(a, x)…",
-                  shape_pict(~width: 768.0, ~height: 380.0, ~fill: hex("FFFFFF"),
-                             ~line: make_stroke(hex("000000"), ~width: 1.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(16.0, 4.0, 16.0, 4.0),
-                                         para(~line_spacing: pair(#'percent, 1.5),
-                                              run("v", ~size: 50.0),
-                                              run("1", ~size: 50.0, ~baseline: -0.06),
-                                              run(" = update(a, x)", ~size: 50.0)),
-                                         para(~line_spacing: pair(#'percent, 1.5),
-                                              run("v", ~size: 50.0),
-                                              run("2", ~size: 50.0, ~baseline: -0.06),
-                                              run(" = update(a, x)", ~size: 50.0)),
-                                         para(~line_spacing: pair(#'percent, 1.5),
-                                              run("v", ~size: 50.0),
-                                              run("3", ~size: 50.0, ~baseline: -0.06),
-                                              run(" = update(b, y)", ~size: 50.0)),
-                                         para(~line_spacing: pair(#'percent, 1.5),
-                                              run("v", ~size: 50.0),
-                                              run("4", ~size: 50.0, ~baseline: -0.06),
-                                              run(" = update(c, v", ~size: 50.0),
-                                              run("2", ~size: 50.0, ~baseline: -0.06),
-                                              run(")", ~size: 50.0))))))
+// A bordered box. The runtime's shape rather than pict's `rectangle`: a pict
+// outline borrows the pen *style* of the surface it lands on, and the canvas
+// leaves a transparent pen behind it, so a pict's border drawn straight onto a
+// slide comes out invisible. The runtime's shapes set their own pen.
+fun frame_box(w :: Real, h :: Real, ~rounded: r = #false) :: pc.Pict:
+  as_pict(shape_pict(~width: w, ~height: h,
+                     ~geom: if r | preset_geom("roundRect", [pair("adj", "val " +& r)]) | #false,
+                     ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
 
-  // Keynote's yellow speech bubble, as one of our callouts. The spike lands where
-  // Keynote's pointed, the right edge of the code box beside `update(a, x)`.
-  def stage_2:
-    callout(~on: pc.blank(~width: slide_width, ~height: slide_height),
-            ~at: pc.Find.abs(824.715, 276.13), ~spike: #'w,
-            as_pict(linebox(~width: 840.0, ~height: 48.0,
-                            ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                            para(run("Write ", ~font: prose_font, ~size: 40.0),
-                                 run("v", ~font: prose_font, ~size: 40.0, ~bold: #true),
-                                 run(" to address ", ~font: prose_font, ~size: 40.0),
-                                 run("a, ", ~font: prose_font, ~size: 40.0, ~bold: #true),
-                                 run("return previous value at ", ~font: prose_font, ~size: 40.0),
-                                 run("a", ~font: prose_font, ~size: 40.0, ~bold: #true)))))
+fun code_parts() :: Map:
+  def frame = frame_box(code_w, code_h)
+  def lines:
+    for List (i in 1..5):
+      // the call up to its last argument, then the state it takes, then `)`
+      def head:
+        if i == 4
+        | [code(" = update(c, v"), code_sub("2")]
+        | [code(" = update" ++ ["(a, x", "(a, x", "(b, y"][i - 1])]
+      def state_in:
+        if i == 1
+        | [code(", "), greek("ω")]
+        | [code(", "), greek("ω"), code_sub(to_string(i - 1))]
+      def close = code(")")
+      def v = code("v")
+      def i_sub = code_sub(to_string(i))
+      def omega = greek("ω")
+      {#'plain: pc.beside(~vert: #'bottom, v, i_sub, & head, close),
+       #'states: pc.beside(~vert: #'bottom, code("("), v, i_sub, code(", "), omega,
+                           code_sub(to_string(i)), code(")"), & head, & state_in, close),
+       #'omega: omega}
+  {#'frame: frame, #'lines: lines}
 
-  staged(base_canvas, [stage_1, stage_2])
-
-// -------------------------------------------------------------------------------------
-// slide_26: Slides 15 through 17, as one animated pict.
-//
-// Not purely additive, so this is two tracks overlaid rather than one `staged`
-// chain. The e-graph nodes fade in additively, but the code block on the left is
-// *rewritten* twice -- `y = update(a, v)`, then struck through, then `y=v` -- and a
-// reveal can only add, never replace. So the code gets a track of its own that
-// cross-fades between its three states, concurrent with the reveals.
-//
-// Two exporter artifacts are dropped rather than animated:
-//   - `Connection Line (3)` is 4.0pt on Slide 15 but 2.0pt on 16 and 17. Every
-//     other black connector in the deck is 4.0, so the thinning is a stray edit
-//     rather than the animation; it stays 4.0 throughout.
-//   - the shapes inside `Group` are only renumbered ("Shape" -> "Shape (3)") from
-//     slide to slide, which is the exporter naming them afresh. They draw the same.
-fun slide_26():
-  // The nodes of the e-graph, bound by name so that the edges can be drawn
-  // between them below; the canvas and the stages only place them.
-  def n_update = shape_pict(~width: 135.0, ~height: 61.581,
-                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("update", ~font: node_font, ~size: 30.0))))
-  def n_a = shape_pict(~width: 62.079, ~height: 61.581,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~font: node_font, ~size: 30.0))))
-  def n_v = shape_pict(~width: 62.079, ~height: 61.581,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("v", ~font: node_font, ~size: 30.0))))
-  def n_sigma = shape_pict(~width: 62.079, ~height: 61.581,
-                           ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                           ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                           ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 30.0))))
-  def n_x = shape_pict(~width: 62.079, ~height: 61.581,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~font: node_font, ~size: 30.0))))
-  def n_sigma_p = shape_pict(~width: 62.079, ~height: 61.581,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("σ", ~font: node_font, ~size: 30.0),
-                                              run("ʹ", ~font: node_font, ~size: 30.0))))
-  def n_update2 = shape_pict(~width: 135.0, ~height: 61.581,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~font: node_font, ~size: 30.0))))
-  def n_y = shape_pict(~width: 62.079, ~height: 61.581,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("y", ~font: node_font, ~size: 30.0))))
-  def n_sigma_pp = shape_pict(~width: 62.079, ~height: 61.581,
-                              ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                              ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                              ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                          para(~align: #'center, run("σ", ~font: node_font, ~size: 30.0),
-                                               run("ʹʹ", ~font: node_font, ~size: 30.0))))
-
-  // Inputs on top and results underneath, so every edge points the way the data
-  // goes; Keynote had it upside down. The columns are Keynote's own five rows
-  // spread out: `a` and `v` feed both updates, so they sit off to the right where
-  // those long edges have a clear run down past the middle row, and the state
-  // chain gets the left so the two e-classes are plain vertical columns. No edge
-  // crosses a node.
-  def row_in = 306.04
-  def row_op1 = 453.04
-  def row_mid = 600.04
-  def row_op2 = 747.04
-  def row_out = 894.04
-  def col_val = 95.0        // x
-  def col_state = 199.0     // σ, σʹ, σʹʹ
-  def col_op = 312.5        // update, update (2), which are 135 wide
-  def col_a = 479.0         // a
-  def col_v = 589.0         // v, y
-  def node_w = 62.079
-  def node_h = 61.581
-  def eclass_pad = 12.0
-
-  // everything that is on screen the whole time
-  def base_canvas:
-    slide_canvas(
-      ~width: slide_width, ~height: slide_height,
-      ~background: hex("FFFFFF"),
-      at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("Redundant Update Elimination", ~font: prose_font,
-                          ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-      at(col_op, row_op1, ~tag: "update", n_update),
-      at(col_a, row_in, ~tag: "a", n_a),
-      at(col_v, row_in, ~tag: "v", n_v),
-      at(col_state, row_in, ~tag: "σ", n_sigma),
-      at(col_val, row_mid, ~tag: "x", n_x),
-      at(col_state, row_mid, ~tag: "σʹ", n_sigma_p),
-      at(col_op, row_op2, ~tag: "update (2)", n_update2),
-      at(col_v, row_out, ~tag: "y", n_y),
-      at(col_state, row_out, ~tag: "σʹʹ", n_sigma_pp))
-
-  // adds the two e-classes: `y` is the same value as `v`, and `σʹʹ` the same
-  // state as `σʹ` -- which is what makes the second `update` redundant
-  def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(col_state - eclass_pad, row_mid - eclass_pad, ~tag: "e-class σʹ σʹʹ",
-                  eclass(node_w + 2 * eclass_pad,
-                         row_out + node_h - row_mid + 2 * eclass_pad)),
-               at(col_v - eclass_pad, row_in - eclass_pad, ~tag: "e-class v y",
-                  eclass(node_w + 2 * eclass_pad,
-                         row_out + node_h - row_in + 2 * eclass_pad)))
-
-  // adds 'Is this optimization safe?'
-  def stage_2:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(751.007, 652.254, ~tag: "Is this optimization safe?",
-                  linebox(~width: 900.225, ~height: 96.825,
-                          ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
-                               run("Is this optimization safe?", ~font: prose_font, ~size: 75.0,
-                                   ~bold: #true)))))
-
-  // The code block, in the three states it is rewritten through.
-  // state 1: 'x = update(a, v)', 'y = update(a, v)'
-  def code_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(703.648, 298.572, ~tag: "x = update(a, v)…",
-                  shape_pict(~width: 560.0, ~height: 232.0, ~fill: hex("FFFFFF"),
-                             ~line: make_stroke(hex("000000"), ~width: 1.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("x = update(a, v)", ~size: 50.0)),
-                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("y = update(a, v)", ~size: 50.0))))))
-
-  // state 2: 'x = update(a, v)', 'y = update(a, v)'
-  def code_2:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(703.648, 298.572, ~tag: "x = update(a, v)…",
-                  shape_pict(~width: 560.0, ~height: 232.0, ~fill: hex("FFFFFF"),
-                             ~line: make_stroke(hex("000000"), ~width: 1.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("x = update(a, v)", ~size: 50.0)),
-                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("y = update(a, v)", ~size: 50.0, ~strike: #true))))))
-
-  // state 3: 'x = update(a, v)', 'y=v'
-  def code_3:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(703.648, 298.572, ~tag: "x = update(a, v)…",
-                  shape_pict(~width: 560.0, ~height: 232.0, ~fill: hex("FFFFFF"),
-                             ~line: make_stroke(hex("000000"), ~width: 1.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("x = update(a, v)", ~size: 50.0)),
-                                         para(~align: #'center, ~line_spacing: pair(#'percent, 1.8),
-                                              run("y=v", ~size: 50.0))))))
-
-  // Keynote drew each edge as a connector between two centres and clipped it
-  // at the boxes; these are the same edges as `arrow`s, from border to border.
-  // Stage `k` brings the edges of the nodes it adds; stage 0 is `base_canvas`.
-  fun wire(p, k):
-    match k
-    | 0:
-        let p = value_edges(p, [[n_a, n_update], [n_v, n_update], [n_update, n_x],
-                                [n_a, n_update2], [n_v, n_update2], [n_update2, n_y]])
-        let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma_p],
-                                [n_sigma_p, n_update2], [n_update2, n_sigma_pp]])
-        p
-    | 1:
-        let p = arrows(~on: p, [[n_sigma_p, n_sigma_pp], [n_y, n_v]],
-                       ~style: #'line, ~line_style: #'short_dash, ~line_width: 4)
-        p
-    | ~else: p
-
-  // Both tracks are three epochs long, so click k plays the k'th reveal and the
-  // k'th rewrite together -- exactly what the three separate slides did.
-  def shown:
+// The box with its four lines, in one form or the other.
+fun code_pict(parts :~ Map, ~states: states :: Boolean) :: pc.Pict:
+  for values(p :~ pc.Pict = parts[#'frame]) (line :~ Map in parts[#'lines], k in 0..):
+    def q :~ pc.Pict = if states | line[#'states] | line[#'plain]
     pc.overlay(~horiz: #'left, ~vert: #'top,
-               staged(base_canvas, [stage_1, stage_2], ~wire: wire),
-               pc.switch(as_pict(code_1),
-                         // `cross_fade`, not `fade_through`: the latter holds the two
-                         // apart (`~overlap` 0.15), so at the midpoint both sit at 13%
-                         // alpha and the code box drops out and comes back -- a flash,
-                         // the box being opaque white with a border and a shadow.
-                         pc.cross_fade(as_pict(code_1), as_pict(code_2), ~extent: 1.0),
-                         pc.cross_fade(as_pict(code_2), as_pict(code_3), ~extent: 1.0)))
+               ~dx: code_inset, ~dy: 10.0 + code_row * k + (code_row - q.height) / 2,
+               p, q)
 
-  // Keynote's yellow speech bubble, as one of our callouts. The spike lands where
-  // Keynote's did, on the right edge of the code box.
-  callout(~on: shown, ~at: pc.Find.abs(1263.648, 403.06), ~spike: #'w,
-          as_pict(linebox(~width: 384.0, ~height: 48.0,
-                          ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                          para(~align: #'center,
-                               run("update is idempotent", ~font: prose_font, ~size: 40.0)))))
+// A pict at (x, y) on `base`, top-left corner; `p` may be one of the runtime's picts.
+fun put(base :: pc.Pict, p, x :: Real, y :: Real) :: pc.Pict:
+  pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, as_pict(p))
 
-// -------------------------------------------------------------------------------------
-// slide_29: Slide 18 through Slide 19, as one animated pict.
-//
-// These were separate slides, each a copy of the one before plus one more
-// element -- so they collapse into a base picture and 1 reveals.
-//
-// One `fade_in` per stage, so the deck takes the same number of clicks it did.
-fun slide_29():
-  // The nodes of the e-graph, bound by name so that the edges can be drawn
-  // between them below; the canvas and the stages only place them.
-  def n_box1 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box2 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box3 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box4 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box5 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box6 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box7 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
-                           ~geom: preset_geom(
-                                    "roundRect", [pair("adj", "val 33878")]),
-                           ~fill: hex("FFFFFF"),
-                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                           ~body: body(~anchor: #'center,
-                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0))))
-  def n_a = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom(
-                                "roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"),
-                       ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center,
-                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~font: node_font, ~size: 40.0))))
-  def n_x = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom(
-                                "roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"),
-                       ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center,
-                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~font: node_font, ~size: 40.0))))
-  def n_update = shape_pict(~width: 180.242, ~height: 64.0,
-                            ~geom: preset_geom(
-                                     "roundRect", [pair("adj", "val 33349")]),
-                            ~fill: hex("FFFFFF"),
-                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center,
-                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("update", ~font: node_font, ~size: 40.0))))
-  def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom(
-                                     "roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"),
-                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center,
-                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom(
-                                 "roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"),
-                        ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center,
-                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
+// The line of the code box naming the `update` just put into the e-graph, marked
+// as with a highlighter: a translucent band over it. `k` counts lines from 0.
+def highlight = draw.Color(38, 132, 235, 0.25)
+fun mark_line(p :: pc.Pict, k :: Int) :: pc.Pict:
+  def band = pc.rectangle(~width: code_w - 24.0, ~height: code_row - 22.0,
+                          ~fill: highlight, ~line: #false, ~rounded: -0.3)
+  put(p, band, code_x + 12.0, code_y + 21.0 + code_row * k)
 
-  // the picture before the first reveal
-  def base_canvas:
-    slide_canvas(
-      ~width: slide_width, ~height: slide_height,
-      ~background: hex("FFFFFF"),
-      at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("Redundant Update Elimination", ~font: prose_font,
-                          ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-      at(1476.341, 50.118, ~tag: "Group",
-         group_pict(~width: 327.683, ~height: 182.827,
-                    at(0.0, 62.869, ~tag: "Group (2)",
-                       group_pict(~width: 106.985, ~height: 66.994,
-                                  at(0.0, 0.0, ~tag: "Rectangle",
-                                     shape_pict(~width: 106.985, ~height: 66.994,
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 1.0))),
-                                  at(4.646, 4.397, ~tag: "Rectangle (2)",
-                                     shape_pict(~width: 60.549, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 11.976, ~tag: "Rectangle (3)",
-                                     shape_pict(~width: 64.295, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 19.555, ~tag: "Rectangle (4)",
-                                     shape_pict(~width: 79.846, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(19.007, 27.133, ~tag: "Rectangle (5)",
-                                     shape_pict(~width: 34.404, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 34.712, ~tag: "Rectangle (6)",
-                                     shape_pict(~width: 49.795, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(19.007, 42.29, ~tag: "Rectangle (7)",
-                                     shape_pict(~width: 56.852, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 49.869, ~tag: "Rectangle (8)",
-                                     shape_pict(~width: 47.325, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 57.447, ~tag: "Rectangle (9)",
-                                     shape_pict(~width: 90.727, ~height: 5.15,
-                                                ~fill: hex("929292"))))),
-                    at(193.792, 0.0, ~tag: "Group (3)",
-                       group_pict(~width: 133.891, ~height: 182.827,
-                                  at(110.363, 159.299, ~tag: "Rounded Rectangle", n_box1),
-                                  at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", n_box2),
-                                  at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", n_box3),
-                                  at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", n_box4),
-                                  at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", n_box5),
-                                  at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", n_box6),
-                                  at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", n_box7))),
-                    at(150.474, 85.484, ~tag: "Arrow",
-                       shape_pict(~width: 37.732, ~height: 21.764,
-                                  ~geom: preset_geom(
-                                           "rightArrow",
-                                           [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
-                                  ~fill: hex("000000"))))),
-      at(32.458, 358.853, ~tag: "(v1, σ1) = update(a, x)…",
-         shape_pict(~width: 768.0, ~height: 380.0, ~fill: hex("FFFFFF"),
-                    ~line: make_stroke(hex("000000"), ~width: 1.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(16.0, 4.0, 16.0, 4.0),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("1", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("1", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(a, x)", ~size: 50.0)),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(a, x)", ~size: 50.0)),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("3", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("3", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(b, y)", ~size: 50.0)),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("4", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("4", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(c, v", ~size: 50.0),
-                                     run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(")", ~size: 50.0))))))
+// A sentence for a bubble, in the deck's Helvetica Neue: each item is a string
+// and how it is set, `#'plain`, `#'bold` or `#'sub`.
+def prose_face = draw.Font(~name: prose_font, ~size: 40.0)
+def prose_bold = prose_face with (weight = #'bold)
+fun prose(items :: List) :: pc.Pict:
+  pc.beside(~vert: #'bottom,
+            & for List ([s, style] in items):
+                match style
+                | #'bold: pc.text(s, ~font: prose_bold)
+                | #'sub: pc.text(s, ~font: prose_face).scale(0.6)
+                | ~else: pc.text(s, ~font: prose_face))
 
-  // adds 'σ', 'a', 'x', 'update', '1', 'v'
-  def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(chain_s, chain_y(0), ~tag: "σ", n_sigma),
-               at(chain_leaf_l, chain_y(0), ~tag: "a", n_a),
-               at(chain_leaf_r, chain_y(0), ~tag: "x", n_x),
-               at(chain_op, chain_y(1), ~tag: "update", n_update),
-               at(chain_s, chain_y(2), ~tag: "σ1", n_sigma1),
-               at(chain_v, chain_y(2), ~tag: "v1", n_v1))
+// A slide with the deck's title at the deck's place, and nothing else yet.
+fun titled(title :: String) :: pc.Pict:
+  as_pict(slide_canvas(
+            ~width: slide_width, ~height: slide_height,
+            ~background: hex("FFFFFF"),
+            at(95.0, 85.0, ~tag: title,
+               textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+                       ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                       para(~line_spacing: pair(#'percent, 0.8),
+                            run(title, ~font: prose_font, ~size: 85.0, ~bold: #true,
+                                ~spacing: -1.7))))))
 
-  // Keynote drew each edge as a connector between two centres and clipped it
-  // at the boxes; these are the same edges as `arrow`s, from border to border.
-  // Stage `k` brings the edges of the nodes it adds; stage 0 is `base_canvas`.
-  fun wire(p, k):
-    match k
-    | 0:
-        let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
-                                [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
-                                [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
-        p
-    | 1:
-        let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma1]])
-        let p = value_edges(p, [[n_a, n_update], [n_x, n_update], [n_update, n_v1]])
-        mark_line(p, 0)
-    | ~else: p
+// Keynote's little "program becomes a tree" icon in the top-right corner.
+fun with_icon(canvas :: pc.Pict) :: pc.Pict:
+  fun box():
+    shape_pict(~width: 23.528, ~height: 23.528,
+               ~geom: preset_geom("roundRect", [pair("adj", "val 30640")]),
+               ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0))
+  def [b1, b2, b3, b4, b5, b6, b7] = for List (i in 0..7): box()
+  fun bar(x, y, w):
+    at(x, y, ~tag: "Rectangle", shape_pict(~width: w, ~height: 5.15, ~fill: hex("929292")))
+  def icon:
+    group_pict(~width: 327.683, ~height: 182.827,
+               at(0.0, 62.869, ~tag: "Group (2)",
+                  group_pict(~width: 106.985, ~height: 66.994,
+                             at(0.0, 0.0, ~tag: "Rectangle",
+                                shape_pict(~width: 106.985, ~height: 66.994, ~fill: hex("FFFFFF"),
+                                           ~line: make_stroke(hex("000000"), ~width: 1.0))),
+                             bar(4.646, 4.397, 60.549), bar(11.612, 11.976, 64.295),
+                             bar(11.612, 19.555, 79.846), bar(19.007, 27.133, 34.404),
+                             bar(11.612, 34.712, 49.795), bar(19.007, 42.29, 56.852),
+                             bar(11.612, 49.869, 47.325), bar(11.612, 57.447, 90.727))),
+               at(193.792, 0.0, ~tag: "Group (3)",
+                  group_pict(~width: 133.891, ~height: 182.827,
+                             at(110.363, 159.299, ~tag: "Rounded Rectangle", b1),
+                             at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", b2),
+                             at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", b3),
+                             at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", b4),
+                             at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", b5),
+                             at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", b6),
+                             at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", b7))),
+               at(150.474, 85.484, ~tag: "Arrow",
+                  shape_pict(~width: 37.732, ~height: 21.764,
+                             ~geom: preset_geom("rightArrow",
+                                                [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
+                             ~fill: hex("000000"))))
+  arrows(~on: put(canvas, icon, 1476.341, 50.118),
+         [[b2, b1], [b2, b3], [b5, b3], [b5, b6], [b7, b4], [b4, b1], [b4, b2], [b4, b5]],
+         ~line_width: 2)
 
-  staged(base_canvas, [stage_1], ~wire: wire)
+// The nodes of the `update` chain. Values black, states blue, as Keynote had them.
+fun chain_nodes() :: Map:
+  fun node(w, color, lw, runs):
+    shape_pict(~width: w, ~height: if w > 100 | 64.0 | 63.486,
+               ~geom: preset_geom("roundRect", [pair("adj", if w > 100 | "val 33349" | "val 33878")]),
+               ~fill: hex("FFFFFF"), ~line: make_stroke(hex(color), ~width: lw),
+               ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                           para(~align: #'center, & runs)))
+  fun label(s): run(s, ~font: node_font, ~size: 40.0)
+  fun sub(i): run(to_string(i), ~font: node_font, ~size: 40.0, ~baseline: -0.06)
+  fun leaf(s): node(64.0, "000000", 3.0, [label(s)])
+  fun value(i): node(64.0, "000000", 3.0, [label("v"), sub(i)])
+  fun state(i): node(64.0, "0433FF", 4.0, if i == 0 | [label("ω")] | [label("ω"), sub(i)])
+  fun op(): node(180.242, "0433FF", 4.0, [label("update")])
+  {#'a: leaf("a"), #'x: leaf("x"), #'b: leaf("b"), #'y: leaf("y"), #'c: leaf("c"),
+   #'s0: state(0), #'s1: state(1), #'s2: state(2), #'s3: state(3), #'s4: state(4),
+   #'v1: value(1), #'v2: value(2), #'v3: value(3), #'v4: value(4),
+   #'u1: op(), #'u2: op(), #'u3: op(), #'u4: op()}
+
+// What each `update` brings with it: its node, the leaves it is the first to use,
+// and the value and state it produces -- placed on the layout above -- and its
+// edges. `chain_frame` draws the first `upto` of them on `base`.
+def chain_steps:
+  [[[chain_s, 0, "ω", #'s0], [chain_leaf_l, 0, "a", #'a], [chain_leaf_r, 0, "x", #'x],
+    [chain_op, 1, "update", #'u1], [chain_s, 2, "ω1", #'s1], [chain_v, 2, "v1", #'v1]],
+   [[chain_op, 3, "update (2)", #'u2], [chain_s, 4, "ω2", #'s2], [chain_v, 4, "v2", #'v2]],
+   [[chain_leaf_l, 4, "b", #'b], [chain_leaf_r, 4, "y", #'y],
+    [chain_op, 5, "update (3)", #'u3], [chain_s, 6, "ω3", #'s3], [chain_v, 6, "v3", #'v3]],
+   [[chain_leaf_l, 6, "c", #'c],
+    [chain_op, 7, "update (4)", #'u4], [chain_s, 8, "ω4", #'s4], [chain_v, 8, "v4", #'v4]]]
+def chain_value_edges:
+  [[[#'a, #'u1], [#'x, #'u1], [#'u1, #'v1]],
+   [[#'a, #'u2], [#'x, #'u2], [#'u2, #'v2]],
+   [[#'b, #'u3], [#'y, #'u3], [#'u3, #'v3]],
+   [[#'c, #'u4], [#'v2, #'u4], [#'u4, #'v4]]]
+def chain_state_edges:
+  [[[#'s0, #'u1], [#'u1, #'s1]],
+   [[#'s1, #'u2], [#'u2, #'s2]],
+   [[#'s2, #'u3], [#'u3, #'s3]],
+   [[#'s3, #'u4], [#'u4, #'s4]]]
+
+fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int) :: pc.Pict:
+  def placed:
+    for List (k in 0..upto):
+      each [x, layer, tag, key] in chain_steps[k]
+      at(x, chain_y(layer), ~tag: tag, n[key])
+  def p = put(base, group_pict(~width: slide_width, ~height: slide_height, & placed), 0.0, 0.0)
+  fun pairs(es :~ List): for List ([f, t] in es): [n[f], n[t]]
+  for values(q :~ pc.Pict = p) (k in 0..upto):
+    state_edges(value_edges(q, pairs(chain_value_edges[k])), pairs(chain_state_edges[k]))
 
 // -------------------------------------------------------------------------------------
-// slide_31: Slide 20
-fun slide_31():
-  // The nodes of the e-graph, bound by name so that the edges can be drawn
-  // between them below; the canvas only places them.
-  def n_box1 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box2 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box3 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box4 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box5 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box6 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box7 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
-                           ~geom: preset_geom(
-                                    "roundRect", [pair("adj", "val 33878")]),
-                           ~fill: hex("FFFFFF"),
-                           ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                           ~body: body(~anchor: #'center,
-                                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0))))
-  def n_a = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom(
-                                "roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"),
-                       ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center,
-                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~font: node_font, ~size: 40.0))))
-  def n_x = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom(
-                                "roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"),
-                       ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center,
-                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~font: node_font, ~size: 40.0))))
-  def n_update = shape_pict(~width: 180.242, ~height: 64.0,
-                            ~geom: preset_geom(
-                                     "roundRect", [pair("adj", "val 33349")]),
-                            ~fill: hex("FFFFFF"),
-                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center,
-                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center,
-                                             run("update", ~font: node_font, ~size: 40.0))))
-  def n_update2 = shape_pict(~width: 180.242, ~height: 64.0,
-                             ~geom: preset_geom(
-                                      "roundRect", [pair("adj", "val 33349")]),
-                             ~fill: hex("FFFFFF"),
-                             ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center,
-                                         ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center,
-                                              run("update", ~font: node_font, ~size: 40.0))))
-  def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom(
-                                     "roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"),
-                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center,
-                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom(
-                                 "roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"),
-                        ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center,
-                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_sigma2 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom(
-                                     "roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"),
-                            ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center,
-                                        ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v2 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom(
-                                 "roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"),
-                        ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center,
-                                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-
-  def canvas:
-    slide_canvas(
-    ~width: slide_width, ~height: slide_height,
-    ~background: hex("FFFFFF"),
-    // Redundant Update Elimination (id 765)
-    at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-       textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-               ~insets: insets(4.0, 4.0, 4.0, 4.0),
-               para(~line_spacing: pair(#'percent, 0.8),
-                    run("Redundant Update Elimination", ~font: prose_font,
-                        ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-    // Slide Number (id 766)
-    at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-    // Group (id 795)
-    at(1476.341, 50.118, ~tag: "Group",
-       group_pict(~width: 327.683, ~height: 182.827,
-                  at(0.0, 62.869, ~tag: "Group (2)",
-                     group_pict(~width: 106.985, ~height: 66.994,
-                                at(0.0, 0.0, ~tag: "Rectangle",
-                                   shape_pict(~width: 106.985, ~height: 66.994,
-                                              ~fill: hex("FFFFFF"),
-                                              ~line: make_stroke(
-                                                       hex("000000"), ~width: 1.0))),
-                                at(4.646, 4.397, ~tag: "Rectangle (2)",
-                                   shape_pict(~width: 60.549, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(11.612, 11.976, ~tag: "Rectangle (3)",
-                                   shape_pict(~width: 64.295, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(11.612, 19.555, ~tag: "Rectangle (4)",
-                                   shape_pict(~width: 79.846, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(19.007, 27.133, ~tag: "Rectangle (5)",
-                                   shape_pict(~width: 34.404, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(11.612, 34.712, ~tag: "Rectangle (6)",
-                                   shape_pict(~width: 49.795, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(19.007, 42.29, ~tag: "Rectangle (7)",
-                                   shape_pict(~width: 56.852, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(11.612, 49.869, ~tag: "Rectangle (8)",
-                                   shape_pict(~width: 47.325, ~height: 5.15,
-                                              ~fill: hex("929292"))),
-                                at(11.612, 57.447, ~tag: "Rectangle (9)",
-                                   shape_pict(~width: 90.727, ~height: 5.15,
-                                              ~fill: hex("929292"))))),
-                  at(193.792, 0.0, ~tag: "Group (3)",
-                     group_pict(~width: 133.891, ~height: 182.827,
-                                at(110.363, 159.299, ~tag: "Rounded Rectangle", n_box1),
-                                at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", n_box2),
-                                at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", n_box3),
-                                at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", n_box4),
-                                at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", n_box5),
-                                at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", n_box6),
-                                at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", n_box7))),
-                  at(150.474, 85.484, ~tag: "Arrow",
-                     shape_pict(~width: 37.732, ~height: 21.764,
-                                ~geom: preset_geom(
-                                         "rightArrow",
-                                         [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
-                                ~fill: hex("000000"))))),
-    // (v1, σ1) = update(a, x)… (id 812)
-    at(32.458, 358.853, ~tag: "(v1, σ1) = update(a, x)…",
-       shape_pict(~width: 768.0, ~height: 380.0, ~fill: hex("FFFFFF"),
-                  ~line: make_stroke(hex("000000"), ~width: 1.0),
-                  ~body: body(~anchor: #'center, ~insets: insets(16.0, 4.0, 16.0, 4.0),
-                              para(~line_spacing: pair(#'percent, 1.5),
-                                   run("(v", ~size: 50.0),
-                                   run("1", ~size: 50.0, ~baseline: -0.06),
-                                   run(", ", ~size: 50.0),
-                                   run("σ", ~font: math_font, ~size: 50.0),
-                                   run("1", ~size: 50.0, ~baseline: -0.06),
-                                   run(") = update(a, x)", ~size: 50.0)),
-                              para(~line_spacing: pair(#'percent, 1.5),
-                                   run("(v", ~size: 50.0),
-                                   run("2", ~size: 50.0, ~baseline: -0.06),
-                                   run(", ", ~size: 50.0),
-                                   run("σ", ~font: math_font, ~size: 50.0),
-                                   run("2", ~size: 50.0, ~baseline: -0.06),
-                                   run(") = update(a, x)", ~size: 50.0)),
-                              para(~line_spacing: pair(#'percent, 1.5),
-                                   run("(v", ~size: 50.0),
-                                   run("3", ~size: 50.0, ~baseline: -0.06),
-                                   run(", ", ~size: 50.0),
-                                   run("σ", ~font: math_font, ~size: 50.0),
-                                   run("3", ~size: 50.0, ~baseline: -0.06),
-                                   run(") = update(b, y)", ~size: 50.0)),
-                              para(~line_spacing: pair(#'percent, 1.5),
-                                   run("(v", ~size: 50.0),
-                                   run("4", ~size: 50.0, ~baseline: -0.06),
-                                   run(", ", ~size: 50.0),
-                                   run("σ", ~font: math_font, ~size: 50.0),
-                                   run("4", ~size: 50.0, ~baseline: -0.06),
-                                   run(") = update(c, v", ~size: 50.0),
-                                   run("2", ~size: 50.0, ~baseline: -0.06),
-                                   run(")", ~size: 50.0))))),
-    at(chain_s, chain_y(0), ~tag: "σ", n_sigma),
-    at(chain_leaf_l, chain_y(0), ~tag: "a", n_a),
-    at(chain_leaf_r, chain_y(0), ~tag: "x", n_x),
-    at(chain_op, chain_y(1), ~tag: "update", n_update),
-    at(chain_s, chain_y(2), ~tag: "σ1", n_sigma1),
-    at(chain_v, chain_y(2), ~tag: "v1", n_v1),
-    at(chain_op, chain_y(3), ~tag: "update (2)", n_update2),
-    at(chain_s, chain_y(4), ~tag: "σ2", n_sigma2),
-    at(chain_v, chain_y(4), ~tag: "v2", n_v2)
-  )
-
-  // Keynote drew each edge as a connector between two centres and clipped it
-  // at the boxes; these are the same edges as `arrow`s, from border to border.
-  let p = as_pict(canvas)
-  let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
-                          [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
-                          [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
-  let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma1], [n_sigma1, n_update2],
-                          [n_update2, n_sigma2]])
-  let p = value_edges(p, [[n_a, n_update], [n_x, n_update], [n_update, n_v1], [n_a, n_update2],
-                          [n_x, n_update2], [n_update2, n_v2]])
-  mark_line(p, 1)
+// slide_update: the four `update`s, what one does, and where the states come in.
+//
+// A press explains the operation. The next one magic-moves each line into its
+// `(v, ω) = update(...)` form: the pieces already on screen slide right to make
+// room, the parentheses and the ωs fade in around them, the first bubble goes
+// and one naming the state value arrives.
+fun slide_update():
+  def canvas = titled("Update")
+  def parts = code_parts()
+  def lines :~ List = parts[#'lines]
+  def plain = put(canvas, code_pict(parts, ~states: #false), code_x, code_y)
+  def with_states = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  // The bubbles are a layer of their own over the code, pinned at measured
+  // points: `magic_move` rebuilds its two pictures piece by piece, and a balloon
+  // pinned by a finder does not survive that. Kept apart, the layer can fade out
+  // as the move runs and the next one fade in, which is what should happen anyway.
+  def blank_layer = pc.blank(~width: slide_width, ~height: slide_height)
+  def (rx, ry) = pc.Find.right((lines[0] :~ Map)[#'plain]).in(plain)
+  def explain:
+    callout(~on: blank_layer, ~at: pc.Find.abs(rx, ry), ~spike: #'w,
+            prose([["Write ", #'plain], ["x", #'bold], [" to address ", #'plain], ["a", #'bold],
+                   [", return the previous value at ", #'plain], ["a", #'bold]]))
+  def (ox, oy) = pc.Find.top((lines[0] :~ Map)[#'omega]).in(with_states)
+  def name_state:
+    // body up and to the right of the ω: centred over it, it would run off the slide
+    callout(~on: blank_layer, ~at: pc.Find.abs(ox, oy), ~spike: #'sw,
+            prose([["ω", #'plain], ["1", #'sub],
+                   [" is the state of memory after the update", #'plain]]))
+  def explained = put(plain, explain, 0.0, 0.0)
+  def extent = 1.2
+  def moving:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               pc.magic_move(plain, with_states, ~other: #'fade, ~extent: extent)
+                 .time_pad(~after: -1),
+               pc.animate(~extent: extent, fun (t): explain.alpha(1.0 - t)),
+               pc.animate(~extent: extent, fun (t): name_state.alpha(t)))
+  pc.switch(plain, pc.cross_fade(plain, explained), moving)
 
 // -------------------------------------------------------------------------------------
-// slide_32: Slide 21 through Slide 22, as one animated pict.
+// slide_egraph: the chain of `update`s going into the e-graph, one per press, the
+// code line it comes from highlighted as it lands. Cross-fades between finished
+// pictures, since the highlight moves and a reveal could only add.
+fun slide_egraph():
+  def canvas = with_icon(titled("The Effectful E-Graph"))
+  def code = put(canvas, code_pict(code_parts(), ~states: #true), code_x, code_y)
+  def n = chain_nodes()
+  def frames:
+    for List (k in 0..5):
+      if k == 0 | code | mark_line(chain_frame(code, n, k), k - 1)
+  pc.switch(frames[0], & for List (k in 1..5): pc.cross_fade(frames[k - 1], frames[k]))
+
+// -------------------------------------------------------------------------------------
+// slide_rue: a rule over `update`, and the rule applied.
 //
-// These were separate slides, each a copy of the one before plus one more
-// element -- so they collapse into a base picture and 1 reveals.
-//
-// One `fade_in` per stage, so the deck takes the same number of clicks it did.
-fun slide_32():
-  // The nodes of the e-graph, bound by name so that the edges can be drawn
-  // between them below; the canvas and the stages only place them.
-  def n_box1 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box2 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box3 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box4 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box5 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box6 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_box7 = shape_pict(~width: 23.528, ~height: 23.528,
-                          ~geom: preset_geom(
-                                   "roundRect",
-                                   [pair("adj", "val 30640")]),
-                          ~fill: hex("FFFFFF"),
-                          ~line: make_stroke(
-                                   hex("000000"), ~width: 3.0))
-  def n_b = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("b", ~font: node_font, ~size: 40.0))))
-  def n_sigma = shape_pict(~width: 64.0, ~height: 63.486,
-                           ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                           ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                           ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                       para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0))))
-  def n_a = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("a", ~font: node_font, ~size: 40.0))))
-  def n_x = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("x", ~font: node_font, ~size: 40.0))))
-  def n_update = shape_pict(~width: 180.242, ~height: 64.0,
-                            ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
-  def n_update2 = shape_pict(~width: 180.242, ~height: 64.0,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
-  def n_sigma1 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v1 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("1", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_update3 = shape_pict(~width: 180.242, ~height: 64.0,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
-  def n_sigma2 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v2 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("2", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_sigma3 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("3", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v3 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("3", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_y = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("y", ~font: node_font, ~size: 40.0))))
-  def n_c = shape_pict(~width: 64.0, ~height: 63.486,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                       ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                       ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                   para(~align: #'center, run("c", ~font: node_font, ~size: 40.0))))
-  def n_update4 = shape_pict(~width: 180.242, ~height: 64.0,
-                             ~geom: preset_geom("roundRect", [pair("adj", "val 33349")]),
-                             ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                         para(~align: #'center, run("update", ~font: node_font, ~size: 40.0))))
-  def n_sigma4 = shape_pict(~width: 64.0, ~height: 63.486,
-                            ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                            ~fill: hex("FFFFFF"), ~line: make_stroke(hex("0433FF"), ~width: 4.0),
-                            ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                        para(~align: #'center, run("σ", ~font: node_font, ~size: 40.0),
-                                             run("4", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
-  def n_v4 = shape_pict(~width: 64.0, ~height: 63.486,
-                        ~geom: preset_geom("roundRect", [pair("adj", "val 33878")]),
-                        ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0),
-                        ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                    para(~align: #'center, run("v", ~font: node_font, ~size: 40.0),
-                                         run("4", ~font: node_font, ~size: 40.0, ~baseline: -0.06))))
+// The second `update(a, x)` writes what the first already wrote: it returns `x`
+// and leaves the state alone. A press states that under the code, as the paper's
+// overview figure does -- the two `update`s over a long horizontal line, what they
+// make equal under it -- with the two code lines it is about marked; the next one
+// does the union in the e-graph: `ω2` joins `ω1`'s class, drawn as the capsule
+// down the state column, and `v2` joins `x`'s, drawn as the dashed line between
+// them.
+def rule_font = code_face with (size = 36.0)
+fun rule_code(s :: String) :: pc.Pict: pc.text(s, ~font: rule_font)
+fun rule_greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face with (size = 36.0))
+fun rule_sub(s :: String) :: pc.Pict: rule_code(s).scale(0.6)
+fun rule_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
-  // the picture before the first reveal
-  def base_canvas:
-    slide_canvas(
-      ~width: slide_width, ~height: slide_height,
-      ~background: hex("FFFFFF"),
-      at(95.0, 85.0, ~tag: "Redundant Update Elimination",
-         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("Redundant Update Elimination", ~font: prose_font,
-                          ~size: 85.0, ~bold: #true, ~spacing: -1.7)))),
-      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
-      at(1476.341, 50.118, ~tag: "Group",
-         group_pict(~width: 327.683, ~height: 182.827,
-                    at(0.0, 62.869, ~tag: "Group (2)",
-                       group_pict(~width: 106.985, ~height: 66.994,
-                                  at(0.0, 0.0, ~tag: "Rectangle",
-                                     shape_pict(~width: 106.985, ~height: 66.994,
-                                                ~fill: hex("FFFFFF"),
-                                                ~line: make_stroke(
-                                                         hex("000000"), ~width: 1.0))),
-                                  at(4.646, 4.397, ~tag: "Rectangle (2)",
-                                     shape_pict(~width: 60.549, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 11.976, ~tag: "Rectangle (3)",
-                                     shape_pict(~width: 64.295, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 19.555, ~tag: "Rectangle (4)",
-                                     shape_pict(~width: 79.846, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(19.007, 27.133, ~tag: "Rectangle (5)",
-                                     shape_pict(~width: 34.404, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 34.712, ~tag: "Rectangle (6)",
-                                     shape_pict(~width: 49.795, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(19.007, 42.29, ~tag: "Rectangle (7)",
-                                     shape_pict(~width: 56.852, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 49.869, ~tag: "Rectangle (8)",
-                                     shape_pict(~width: 47.325, ~height: 5.15,
-                                                ~fill: hex("929292"))),
-                                  at(11.612, 57.447, ~tag: "Rectangle (9)",
-                                     shape_pict(~width: 90.727, ~height: 5.15,
-                                                ~fill: hex("929292"))))),
-                    at(193.792, 0.0, ~tag: "Group (3)",
-                       group_pict(~width: 133.891, ~height: 182.827,
-                                  at(110.363, 159.299, ~tag: "Rounded Rectangle", n_box1),
-                                  at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", n_box2),
-                                  at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", n_box3),
-                                  at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", n_box4),
-                                  at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", n_box5),
-                                  at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", n_box6),
-                                  at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", n_box7))),
-                    at(150.474, 85.484, ~tag: "Arrow",
-                       shape_pict(~width: 37.732, ~height: 21.764,
-                                  ~geom: preset_geom(
-                                           "rightArrow",
-                                           [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
-                                  ~fill: hex("000000"))))),
-      at(32.458, 358.853, ~tag: "(v1, σ1) = update(a, x)…",
-         shape_pict(~width: 768.0, ~height: 380.0, ~fill: hex("FFFFFF"),
-                    ~line: make_stroke(hex("000000"), ~width: 1.0),
-                    ~body: body(~anchor: #'center, ~insets: insets(16.0, 4.0, 16.0, 4.0),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("1", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("1", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(a, x)", ~size: 50.0)),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(a, x)", ~size: 50.0)),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("3", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("3", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(b, y)", ~size: 50.0)),
-                                para(~line_spacing: pair(#'percent, 1.5),
-                                     run("(v", ~size: 50.0),
-                                     run("4", ~size: 50.0, ~baseline: -0.06),
-                                     run(", ", ~size: 50.0),
-                                     run("σ", ~font: math_font, ~size: 50.0),
-                                     run("4", ~size: 50.0, ~baseline: -0.06),
-                                     run(") = update(c, v", ~size: 50.0),
-                                     run("2", ~size: 50.0, ~baseline: -0.06),
-                                     run(")", ~size: 50.0))))),
-      at(chain_s, chain_y(0), ~tag: "σ", n_sigma),
-      at(chain_leaf_l, chain_y(0), ~tag: "a", n_a),
-      at(chain_leaf_r, chain_y(0), ~tag: "x", n_x),
-      at(chain_op, chain_y(1), ~tag: "update", n_update),
-      at(chain_s, chain_y(2), ~tag: "σ1", n_sigma1),
-      at(chain_v, chain_y(2), ~tag: "v1", n_v1),
-      at(chain_op, chain_y(3), ~tag: "update (2)", n_update2),
-      at(chain_leaf_l, chain_y(4), ~tag: "b", n_b),
-      at(chain_leaf_r, chain_y(4), ~tag: "y", n_y),
-      at(chain_s, chain_y(4), ~tag: "σ2", n_sigma2),
-      at(chain_v, chain_y(4), ~tag: "v2", n_v2),
-      at(chain_op, chain_y(5), ~tag: "update (3)", n_update3),
-      at(chain_s, chain_y(6), ~tag: "σ3", n_sigma3),
-      at(chain_v, chain_y(6), ~tag: "v3", n_v3))
+fun update_rule() :: pc.Pict:
+  def premise1 = rule_line(rule_code("(v"), rule_sub("1"), rule_code(", "), rule_greek("ω"),
+                           rule_sub("1"), rule_code(") = update(a, x, "), rule_greek("ω"),
+                           rule_code(")"))
+  def premise2 = rule_line(rule_code("(v"), rule_sub("2"), rule_code(", "), rule_greek("ω"),
+                           rule_sub("2"), rule_code(") = update(a, x, "), rule_greek("ω"),
+                           rule_sub("1"), rule_code(")"))
+  def same = pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
+  def conclusion:
+    pc.beside(~sep: 72.0, ~vert: #'bottom,
+              rule_line(rule_greek("ω"), rule_sub("1"), same, rule_greek("ω"), rule_sub("2")),
+              rule_line(rule_code("v"), rule_sub("2"), same, rule_code("x")))
+  def w = math.max(premise1.width, math.max(premise2.width, conclusion.width))
+  def bar = pc.rectangle(~width: w, ~height: 3.0, ~fill: "black", ~line: #false)
+  def body = pc.stack(~sep: 14.0, ~horiz: #'center, premise1, premise2, bar, conclusion)
+  def box:
+    as_pict(shape_pict(~width: body.width + 40.0, ~height: body.height + 40.0,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 6000")]),
+                       ~fill: hex("E2E2E2"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
+  pc.overlay(box, body)
 
-  // adds 'c', 'update', 'σ', '4', 'v'
-  def stage_1:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(chain_leaf_l, chain_y(6), ~tag: "c", n_c),
-               at(chain_op, chain_y(7), ~tag: "update (4)", n_update4),
-               at(chain_s, chain_y(8), ~tag: "σ4", n_sigma4),
-               at(chain_v, chain_y(8), ~tag: "v4", n_v4))
-
-  // Keynote drew each edge as a connector between two centres and clipped it
-  // at the boxes; these are the same edges as `arrow`s, from border to border.
-  // Stage `k` brings the edges of the nodes it adds; stage 0 is `base_canvas`.
-  fun wire(p, k):
-    match k
-    | 0:
-        let p = arrows(~on: p, [[n_box2, n_box1], [n_box2, n_box3], [n_box5, n_box3],
-                                [n_box5, n_box6], [n_box7, n_box4], [n_box4, n_box1],
-                                [n_box4, n_box2], [n_box4, n_box5]], ~line_width: 2)
-        let p = state_edges(p, [[n_sigma, n_update], [n_update, n_sigma1],
-                                [n_sigma1, n_update2], [n_update2, n_sigma2],
-                                [n_sigma2, n_update3], [n_update3, n_sigma3]])
-        let p = value_edges(p, [[n_a, n_update], [n_x, n_update], [n_update, n_v1],
-                                [n_a, n_update2], [n_x, n_update2], [n_update2, n_v2],
-                                [n_b, n_update3], [n_y, n_update3], [n_update3, n_v3]])
-        p
-    | 1:
-        let p = state_edges(p, [[n_sigma3, n_update4], [n_update4, n_sigma4]])
-        let p = value_edges(p, [[n_c, n_update4], [n_v2, n_update4], [n_update4, n_v4]])
-        p
-    | ~else: p
-
-  // The highlight moves from the third line to the fourth as the fourth `update`
-  // arrives, and `staged` can only add to a picture -- so this one is a cross-fade
-  // between the two finished pictures, which for everything they share looks like
-  // nothing happening. One click, as before.
-  def base = wire(as_pict(base_canvas), 0)
-  def before = mark_line(base, 2)
-  def after:
-    mark_line(wire(pc.overlay(~horiz: #'left, ~vert: #'top, base, as_pict(stage_1)), 1), 3)
-  pc.switch(before, pc.cross_fade(before, after))
+fun slide_rue():
+  def canvas = with_icon(titled("Redundant Update Elimination"))
+  def code = put(canvas, code_pict(code_parts(), ~states: #true), code_x, code_y)
+  def n = chain_nodes()
+  def graph = chain_frame(code, n, 4)
+  def stated:
+    put(mark_line(mark_line(graph, 0), 1), update_rule(), code_x, code_y + code_h + 30.0)
+  def pad = 12.0
+  def unioned:
+    let p = put(stated, eclass(64.0 + 2 * pad, chain_y(4) + 63.486 - chain_y(2) + 2 * pad),
+                chain_s - pad, chain_y(2) - pad)
+    arrows(~on: p, [[n[#'s1], n[#'s2]], [n[#'x], n[#'v2]]],
+           ~style: #'line, ~line_style: #'short_dash, ~line_width: 4)
+  pc.switch(graph, pc.cross_fade(graph, stated), pc.cross_fade(stated, unioned))
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
@@ -2118,9 +1334,8 @@ def all_slides:
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
    divider(1),
-   in_section(1, slide_23), in_section(1, slide_26),
-   in_section(1, slide_29), in_section(1, slide_31),
-   in_section(1, slide_32),
+   in_section(1, slide_update), in_section(1, slide_egraph),
+   in_section(1, slide_rue),
    // 3 -- the algorithm
    divider(2),
    in_section(2, slide_34),
