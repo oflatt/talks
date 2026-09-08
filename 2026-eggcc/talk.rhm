@@ -453,7 +453,7 @@ fun slide_2():
   // adds '…and more!'
   def stage_9:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1625.217, 967.946, ~tag: "…and more!",
+               at(1625.216, 967.946, ~tag: "…and more!",
                   linebox(~width: 280.2, ~height: 64.608,
                           ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
@@ -522,7 +522,7 @@ fun slide_12():
                       run("Input term:", ~font: prose_font, ~size: 60.0,
                           ~spacing: -2.01)),
                  para(~line_spacing: pair(#'percent, 0.8),
-                      run("", ~size: 60.0, ~spacing: -2.0)),
+                      run("", ~size: 60.0, ~spacing: -2.0, ~font: "Arial")),
                  para(~line_spacing: pair(#'percent, 0.8),
                       run("  (a + 1) - 1", ~font: prose_font, ~size: 60.0,
                           ~spacing: -2.01)))),
