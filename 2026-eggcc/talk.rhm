@@ -626,10 +626,14 @@ fun slide_12():
   fun wire(p, k):
     match k
     | 2:
-        // the long diagonals thread the gap between the two middle nodes, which
-        // is why the columns sit where they do
-        let p = arrows(~on: p, [[n_a, n_plus], [n_one, n_plus],
-                                [n_plus, n_minus], [n_one, n_minus]],
+        // An operator points at its operands, so an arrow runs from a node up to
+        // the ones it is built from. Data still flows down -- the arrowheads say
+        // which term contains which, not which way the values go.
+        //
+        // The long diagonals thread the gap between the two middle nodes, which is
+        // why the columns sit where they do.
+        let p = arrows(~on: p, [[n_plus, n_a], [n_plus, n_one],
+                                [n_minus, n_plus], [n_minus, n_one]],
                        ~line_width: 4, ~gap: 4)
         arrow(~on: p, m_flow_top, m_flow_bot, ~line_width: 4,
               ~color: draw.Color(150, 150, 150),
@@ -644,7 +648,7 @@ fun slide_12():
               ~label_dx: -120, ~label_dy: 0)
     | 3:
         let q = seen(p, [stage_2])
-        let q = arrows(~on: q, [[n_minus_r, n_plus_r], [n_one, n_minus_r]],
+        let q = arrows(~on: q, [[n_plus_r, n_minus_r], [n_minus_r, n_one]],
                        ~line_width: 4, ~gap: 4, ~color: keynote_blue)
         // `a` is both an operand of this `+` and, once the last rule fires, in its
         // e-class -- so this arrow and that rule's dashed line would lie exactly on
@@ -652,8 +656,8 @@ fun slide_12():
         // dashed line has to stay on the centre of the class region, because that
         // region *is* the class it names, and a dashed line drawn beside it reads
         // as joining something else.
-        let q = arrow(~on: q, n_a, n_plus_r, ~line_width: 4, ~gap: 4,
-                      ~color: keynote_blue, ~shift: -30)
+        let q = arrow(~on: q, n_plus_r, n_a, ~line_width: 4, ~gap: 4,
+                      ~color: keynote_blue, ~shift: 30)
         eq(q, n_minus, n_plus_r, keynote_blue)
     | 4: eq(seen(p, [stage_2, stage_3]), n_minus_r, n_zero, draw.Color(255, 147, 0))
     | ~else: p
@@ -672,7 +676,12 @@ fun slide_12():
   def eclass_pad = 12.0
   def eclass_fill = draw.Color(146, 146, 146, 0.3)
   def walk_hex = "2684EB"                     // `talk_blue`, as the runtime spells it
-  def picked_line = draw.Color(79, 143, 0)    // the green of the rule that needs it
+  // Two colours, not one: the green belongs to the third rule -- it is the colour
+  // that rule is written in, so its dashed equivalence is drawn in it too -- and a
+  // picked node needs to be something else, or the mark on a node and the rule
+  // that changes which node gets marked read as the same thing.
+  def rule_green = draw.Color(79, 143, 0)
+  def picked_line = draw.Color(214, 22, 130)
 
   // A class, drawn as the region round the nodes it holds -- the box its members
   // span, grown a little. The two classes with two members each have both of them
@@ -734,7 +743,7 @@ fun slide_12():
     def [sx, sy] = slot
     multi_callout(~on: put(p, m_extract, sx, sy),
                   ~place: as_pict(m_extract), ~at: [as_pict(target)],
-                  ~color: talk_red, ~padding: 18.0, content)
+                  ~color: talk_blue, ~padding: 18.0, content)
 
   def task_says:
     as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center, ~autofit: #'grow,
@@ -757,7 +766,7 @@ fun slide_12():
     def joined:
       if merged
       | arrow(~on: ruled, n_plus_r, n_a, ~style: #'line, ~line_style: #'short_dash,
-              ~color: picked_line, ~line_width: 4)
+              ~color: rule_green, ~line_width: 4)
       | ruled
     def marked:
       for values(q :~ pc.Pict = joined) ([x, y] in picks):
@@ -771,33 +780,49 @@ fun slide_12():
   // equal to, then `a + 0` rather than the `(a + 1) - 1` it is equal to -- each
   // the smallest term in its class. `1` and `+` are never picked, which is the
   // point: the graph holds more than the answer needs.
+  //
+  // Two presses per class, not one: the pointer arrives at a class, and then the
+  // node is picked out of it. Both halves are worth a beat -- which class we are
+  // looking at is a step of the algorithm, and which node wins is the decision.
   def pick_a = [col_l, row_in]
   def pick_zero = [col_far, row_mid]
   def pick_plus_r = [col_r, row_out]
-  def f_classes = frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot)
-  def f_a = frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot,
-                  ~point: row_in, ~picks: [pick_a])
-  def f_zero = frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot,
-                     ~point: row_mid, ~picks: [pick_a, pick_zero])
-  // the last pick, and the bubble that named the job now holds what came out of it
-  def f_root = frame(~says: term_says("a + 0"), ~at: n_plus_r, ~slot: task_slot,
-                     ~point: row_out, ~picks: [pick_a, pick_zero, pick_plus_r])
-  // that extraction is done with, and the rule that changes its answer goes up
-  def f_third = frame(~third: #true)
-  // and fires: `a` is now in the root class, and the two regions are one
-  def f_merged = frame(~third: #true, ~merged: #true)
-  // so the same walk comes back with `a` itself
-  def f_again = frame(~third: #true, ~merged: #true, ~point: row_out, ~picks: [pick_a],
-                      ~says: term_says("a"), ~at: n_a, ~slot: answer_slot)
+  fun walking(~point: point = #false, ~picks: picks :: List = [],
+              ~third: third = #false, ~merged: merged = #false) :: pc.Pict:
+    frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot,
+          ~point: point, ~picks: picks, ~third: third, ~merged: merged)
+
+  def frames:
+    [// the classes, and then the job, each on its own press
+     frame(),
+     walking(),
+     // down the graph, a class at a time
+     walking(~point: row_in),
+     walking(~point: row_in, ~picks: [pick_a]),
+     walking(~point: row_mid, ~picks: [pick_a]),
+     walking(~point: row_mid, ~picks: [pick_a, pick_zero]),
+     walking(~point: row_out, ~picks: [pick_a, pick_zero]),
+     // the last pick, and the bubble that named the job now holds what came out
+     frame(~says: term_says("a + 0"), ~at: n_plus_r, ~slot: task_slot,
+           ~point: row_out, ~picks: [pick_a, pick_zero, pick_plus_r]),
+     // that extraction is done with, and the rule that changes its answer goes up
+     frame(~third: #true),
+     // and fires: `a` is now in the root class, and the two regions are one
+     frame(~third: #true, ~merged: #true),
+     // the same walk again, down the same classes, keeping `a` again
+     walking(~third: #true, ~merged: #true, ~point: row_in),
+     walking(~third: #true, ~merged: #true, ~point: row_in, ~picks: [pick_a]),
+     walking(~third: #true, ~merged: #true, ~point: row_mid, ~picks: [pick_a]),
+     walking(~third: #true, ~merged: #true, ~point: row_mid, ~picks: [pick_a, pick_zero]),
+     walking(~third: #true, ~merged: #true, ~point: row_out, ~picks: [pick_a, pick_zero]),
+     // but the root class holds `a` itself now, so that is the whole term and the
+     // `0` picked on the way to it is not needed after all
+     frame(~third: #true, ~merged: #true, ~point: row_out, ~picks: [pick_a],
+           ~says: term_says("a"), ~at: n_a, ~slot: answer_slot)]
 
   pc.switch(explored,
-            pc.cross_fade(settled, f_classes),
-            pc.cross_fade(f_classes, f_a),
-            pc.cross_fade(f_a, f_zero),
-            pc.cross_fade(f_zero, f_root),
-            pc.cross_fade(f_root, f_third),
-            pc.cross_fade(f_third, f_merged),
-            pc.cross_fade(f_merged, f_again))
+            & for List (i in 0..frames.length()):
+                pc.cross_fade(if i == 0 | settled | frames[i - 1], frames[i]))
 
 // -------------------------------------------------------------------------------------
 // slide_20: slide_2 again, marking which of those tools need effects.
@@ -1091,16 +1116,19 @@ def chain_steps:
    [[#'c, chain_leaf_l, chain_y(6), "c"],
     [#'u4, chain_op, chain_y(7), "update (4)"],
     [#'s4, chain_s, chain_y(8), "ω4"], [#'v4, chain_v, chain_y(8), "v4"]]]
+// An edge runs from a node to the ones it is built from: an `update` points at
+// its arguments, and the value and state it returns point back at it. Data still
+// flows down the picture; the arrowheads say what contains what.
 def chain_value_edges:
-  [[[#'a, #'u1], [#'x, #'u1], [#'u1, #'v1]],
-   [[#'a, #'u2], [#'x, #'u2], [#'u2, #'v2]],
-   [[#'b, #'u3], [#'y, #'u3], [#'u3, #'v3]],
-   [[#'c, #'u4], [#'v2, #'u4], [#'u4, #'v4]]]
+  [[[#'u1, #'a], [#'u1, #'x], [#'v1, #'u1]],
+   [[#'u2, #'a], [#'u2, #'x], [#'v2, #'u2]],
+   [[#'u3, #'b], [#'u3, #'y], [#'v3, #'u3]],
+   [[#'u4, #'c], [#'u4, #'v2], [#'v4, #'u4]]]
 def chain_state_edges:
-  [[[#'s0, #'u1], [#'u1, #'s1]],
-   [[#'s1, #'u2], [#'u2, #'s2]],
-   [[#'s2, #'u3], [#'u3, #'s3]],
-   [[#'s3, #'u4], [#'u4, #'s4]]]
+  [[[#'u1, #'s0], [#'s1, #'u1]],
+   [[#'u2, #'s1], [#'s2, #'u2]],
+   [[#'u3, #'s2], [#'s3, #'u3]],
+   [[#'u4, #'s3], [#'s4, #'u4]]]
 
 fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int) :: pc.Pict:
   def placed:
