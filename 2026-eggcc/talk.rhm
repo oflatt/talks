@@ -122,7 +122,7 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // The header's discs sit around y 18..50 and the deck's slide titles start at
 // y 64, which is what the disc and text scales in `header_layout` are chosen
 // against. Retitle a slide higher than that and the two will meet.
-def sections = ["Motivate Effectful E-Graphs", "Extraction Problem",
+def sections = ["Motivate Effectful E-Graphs", "Effectful E-Graphs",
                 "A DP Solution", "It Works!"]
 
 fun section_canvas():
@@ -221,7 +221,12 @@ def chain_s = 1810.0         // ω, ω1 … ω3
 // past every `update` above it, and those are all in one column: from the left
 // the edge has clear air, and from directly above it does not. Two of them still
 // have to bow out into the empty band below the row -- see `chain_frame`.
-fun leaf_x(i :: Int) :: Real: 1090.0 + i * 88.0
+//
+// The row starts where it does to leave a lane at 985 for the extraction pointer,
+// which walks straight down it a layer at a time, and it is spread to the column
+// with what is left: the code box ends at 975 and the column begins at 1450.
+def chain_point_x = 985.0
+fun leaf_x(i :: Int) :: Real: 1075.0 + i * 95.0
 // The node the program's two results meet in, one layer below them: `return` is
 // what groups the value and the state into the tuple the function hands back, and
 // so it is the root the extraction starts from.
@@ -679,8 +684,12 @@ fun slide_12():
         // `+` and the `1 - 1` class, which is the only way through.
         let q = arrow(~on: q, n_plus_r, n_a, ~line_width: 4,
                       ~color: keynote_blue,
-                      ~from_at: pc.Find.top(as_pict(n_plus_r), ~dx: -50, ~dy: -4),
-                      ~to_at: pc.Find.bottom(as_pict(n_a), ~dx: 10, ~dy: 4))
+                      // -19 and -10, not -50 and +10: a node's corners are
+                      // rounded by 30, so an end placed out at the corner lands
+                      // where the box has no edge and the arrow stops short of it.
+                      // Both ends stay on the straight run of their border.
+                      ~from_at: pc.Find.top(as_pict(n_plus_r), ~dx: -19, ~dy: -4),
+                      ~to_at: pc.Find.bottom(as_pict(n_a), ~dx: -10, ~dy: 4))
         shown(eq(q, n_minus, n_plus_r, keynote_blue), [stage_2, stage_3])
     | 4:
         shown(eq(seen(p, [stage_2, stage_3]), n_minus_r, n_zero,
@@ -740,9 +749,22 @@ fun slide_12():
   // background. Not a ring laid over it and not a wash: a ring is a second thing
   // on top of the node, and a translucent green over the box tints the label with
   // it. The node is simply redrawn, in its own place, as picked.
-  fun picked(p :: pc.Pict, spec :: List) :: pc.Pict:
-    def [label, color, x, y] = spec
-    put(p, node(label, ~color: color, ~fill: node_green), x, y)
+  // The picked nodes, built once and kept: the same pict has to be in the frame a
+  // walk ends on *and* in the term it moves into, or `magic_move` has nothing to
+  // recognise and moves nothing. `0433FF` here is the blue *rule*'s colour, which
+  // is what put that node in the graph -- this slide has no state in it for blue
+  // to mean.
+  def green:
+    { #'a: node("a", ~fill: node_green),
+      #'one: node("1", ~fill: node_green),
+      #'plus: node("+", ~fill: node_green),
+      #'zero: node("0", ~color: "FF9300", ~fill: node_green),
+      #'plus_r: node("+", ~color: "0433FF", ~fill: node_green) }
+  def pick_spot:
+    { #'a: [col_l, row_in], #'one: [col_r, row_in], #'plus: [col_l, row_mid],
+      #'zero: [col_far, row_mid], #'plus_r: [col_r, row_out] }
+  fun picked(p :: pc.Pict, key) :: pc.Pict:
+    put(p, green[key], & pick_spot[key])
 
   fun pointing_at(p :: pc.Pict, row_y :: Real) :: pc.Pict:
     put(p, walk_arrow(), 706.0, row_y + nd / 2 - 17.0)
@@ -784,15 +806,18 @@ fun slide_12():
       if merged
       | arrow(~on: ruled, n_plus_r, n_a, ~style: #'line, ~line_style: #'short_dash,
               ~color: rule_green, ~line_width: 4,
-              // The operand arrow between these same two nodes hugs the left of
-              // the gap they both pass through, so this hugs the right: drawn down
-              // the middle they run into each other halfway along.
-              ~from_at: pc.Find.top(as_pict(n_plus_r), ~dx: -5),
-              ~to_at: pc.Find.bottom(as_pict(n_a), ~dx: 40))
+              // The operand arrow between these same two nodes takes the left of
+              // the gap they both pass through, so this takes the right -- drawn
+              // down the middle the two of them run into each other halfway along.
+              // Not so far right that it leaves the region it belongs to, though:
+              // this line has to stay on the blob, which is what says the two nodes
+              // are one class.
+              ~from_at: pc.Find.top(as_pict(n_plus_r), ~dx: 0),
+              ~to_at: pc.Find.bottom(as_pict(n_a), ~dx: 19))
       | ruled
     def marked:
-      for values(q :~ pc.Pict = joined) (spec in picks):
-        picked(q, spec)
+      for values(q :~ pc.Pict = joined) (key in picks):
+        picked(q, key)
     def walked = if point | pointing_at(marked, point) | marked
     if say
     | says(walked, say, ~at: target, ~slot: slot)
@@ -806,60 +831,80 @@ fun slide_12():
   // Two presses per row: the pointer arrives, and then the nodes are picked out of
   // the classes in that row. Both halves are worth a beat -- which classes we are
   // looking at is a step of the algorithm, and which node wins is the decision.
-  // each pick as the node to redraw: its label, its border and where it sits.
-  // `0433FF` here is the blue *rule*'s colour, which is what put that node in the
-  // graph -- this slide has no state in it for blue to mean.
-  def pick_a = ["a", "000000", col_l, row_in]
-  def pick_one = ["1", "000000", col_r, row_in]
-  def pick_plus = ["+", "000000", col_l, row_mid]
-  def pick_zero = ["0", "FF9300", col_far, row_mid]
-  def pick_plus_r = ["+", "0433FF", col_r, row_out]
-  // every class's own cheapest node, and then the ones the root actually reaches
-  def all_picks = [pick_a, pick_one, pick_plus, pick_zero, pick_plus_r]
-  def reached = [pick_a, pick_zero, pick_plus_r]
+  def all_picks = [#'a, #'one, #'plus, #'zero, #'plus_r]
+  def reached = [#'a, #'zero, #'plus_r]
   fun walking(~point: point = #false, ~picks: picks :: List = [],
               ~third: third = #false, ~merged: merged = #false) :: pc.Pict:
     frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot,
           ~point: point, ~picks: picks, ~third: third, ~merged: merged)
 
-  def frames:
+  // The term the walk found, with the e-graph gone: the same green nodes, moved
+  // into the shape of the term they spell out, with the graph and the regions and
+  // the rest of the nodes faded off around them. `bare` is this slide before the
+  // graph arrived -- the title, the input term and the rules -- so what is left
+  // standing is everything that was never part of the e-graph.
+  def bare = explored.snapshot(1, 1.0)
+  fun term(places :: List, ~third: third = #false, ~edges: edges :: List = []) :: pc.Pict:
+    def ruled = if third | put(bare, third_rule, third_rule_x, third_rule_y) | bare
+    def placed:
+      for values(q :~ pc.Pict = ruled) ([key, x, y] in places):
+        put(q, green[key], x, y)
+    for values(q :~ pc.Pict = placed) ([f, t] in edges):
+      arrow(~on: q, green[f], green[t], ~line_width: 4, ~gap: 4)
+  // `a + 0`, as a term: the `+` under the two it is built from, which is the way
+  // round this slide draws everything else.
+  def term_1:
+    term([[#'a, 880.0, 520.0], [#'zero, 1120.0, 520.0], [#'plus_r, 1000.0, 730.0]],
+         ~edges: [[#'plus_r, #'a], [#'plus_r, #'zero]])
+  // and then just `a`
+  def term_2 = term([[#'a, 1000.0, 620.0]], ~third: #true)
+
+  // Each press is a `#'fade` from the picture before it to this one, or a `#'move`
+  // -- a magic move, for going into the term and back out to the graph, where the
+  // green nodes are the same picts on both sides and travel between them.
+  def steps:
     [// the classes, and then the job, each on its own press
-     frame(),
-     walking(),
+     [#'fade, frame()],
+     [#'fade, walking()],
      // down the graph, a row of classes at a time
-     walking(~point: row_in),
-     walking(~point: row_in, ~picks: [pick_a, pick_one]),
-     walking(~point: row_mid, ~picks: [pick_a, pick_one]),
-     walking(~point: row_mid, ~picks: [pick_a, pick_one, pick_plus, pick_zero]),
-     walking(~point: row_out, ~picks: [pick_a, pick_one, pick_plus, pick_zero]),
-     walking(~point: row_out, ~picks: all_picks),
-     // the choices nothing reaches fade, and the bubble that named the job holds
-     // what is left
-     frame(~says: term_says("a + 0"), ~at: n_plus_r, ~slot: task_slot,
-           ~picks: reached),
-     // that extraction is done with, and the rule that changes its answer goes up
-     frame(~third: #true),
+     [#'fade, walking(~point: row_in)],
+     [#'fade, walking(~point: row_in, ~picks: [#'a, #'one])],
+     [#'fade, walking(~point: row_mid, ~picks: [#'a, #'one])],
+     [#'fade, walking(~point: row_mid, ~picks: [#'a, #'one, #'plus, #'zero])],
+     [#'fade, walking(~point: row_out, ~picks: [#'a, #'one, #'plus, #'zero])],
+     [#'fade, walking(~point: row_out, ~picks: all_picks)],
+     // the choices nothing reaches fade, and what is left moves out into the term
+     [#'fade, walking(~picks: reached)],
+     [#'move, term_1],
+     // then back into the graph, where the rule that changes the answer has gone up
+     [#'move, walking(~picks: reached, ~third: #true)],
      // and fires: `a` is now in the root class, and the two regions are one
-     frame(~third: #true, ~merged: #true),
+     [#'fade, frame(~third: #true, ~merged: #true)],
      // the same walk again, down the same rows
-     walking(~third: #true, ~merged: #true, ~point: row_in),
-     walking(~third: #true, ~merged: #true, ~point: row_in,
-             ~picks: [pick_a, pick_one]),
-     walking(~third: #true, ~merged: #true, ~point: row_mid,
-             ~picks: [pick_a, pick_one]),
-     walking(~third: #true, ~merged: #true, ~point: row_mid,
-             ~picks: [pick_a, pick_one, pick_plus, pick_zero]),
+     [#'fade, walking(~third: #true, ~merged: #true, ~point: row_in)],
+     [#'fade, walking(~third: #true, ~merged: #true, ~point: row_in,
+                      ~picks: [#'a, #'one])],
+     [#'fade, walking(~third: #true, ~merged: #true, ~point: row_mid,
+                      ~picks: [#'a, #'one])],
+     [#'fade, walking(~third: #true, ~merged: #true, ~point: row_mid,
+                      ~picks: [#'a, #'one, #'plus, #'zero])],
      // the root class holds `a` itself now, so its own cheapest node is one we
-     // already have and this press adds no ring, only the pointer
-     walking(~third: #true, ~merged: #true, ~point: row_out,
-             ~picks: [pick_a, pick_one, pick_plus, pick_zero]),
-     // and this time nothing else is reached at all
-     frame(~third: #true, ~merged: #true, ~picks: [pick_a],
-           ~says: term_says("a"), ~at: n_a, ~slot: answer_slot)]
+     // already have and this press adds no pick, only the pointer
+     [#'fade, walking(~third: #true, ~merged: #true, ~point: row_out,
+                      ~picks: [#'a, #'one, #'plus, #'zero])],
+     // and this time nothing else is reached at all, and the term is one node
+     [#'fade, frame(~third: #true, ~merged: #true, ~picks: [#'a])],
+     [#'move, term_2]]
+
+  fun press(prev :: pc.Pict, [kind, next]) :: pc.Pict:
+    if kind == #'move
+    | pc.magic_move(prev, next, ~other: #'fade, ~extent: 1.2).time_pad(~after: -1)
+    | pc.cross_fade(prev, next)
 
   pc.switch(explored,
-            & for List (i in 0..frames.length()):
-                pc.cross_fade(if i == 0 | settled | frames[i - 1], frames[i]))
+            & for List (i in 0..steps.length()):
+                press(if i == 0 | settled | (steps[i - 1] :~ List)[1],
+                      steps[i]))
 
 // -------------------------------------------------------------------------------------
 // slide_20: slide_2 again, marking which of those tools need effects.
@@ -1158,6 +1203,69 @@ fun chain_nodes(~picked: picked :: List = []) :: Map:
 // in a row at the top with the others: from the top, the edge down to a later
 // `update` is a shallow diagonal that cuts through whatever lies between, and
 // staggering the inputs is what keeps those edges clear.
+// The chain as data, so that an extraction over it can be worked out rather than
+// written down: each node's class, the classes its arguments come from, and which
+// layer it sits on. The rule's two unions are here and nowhere else -- `v2` is in
+// `x`'s class and `ω2` is in `ω1`'s -- so what follows from them follows
+// automatically.
+//
+//   [key, class, argument classes, layer]
+def chain_graph:
+  [[#'s0, #'k_s0, [], 0], [#'a, #'k_a, [], 0], [#'x, #'k_x, [], 0],
+   [#'b, #'k_b, [], 0], [#'y, #'k_y, [], 0],
+   [#'u1, #'k_u1, [#'k_a, #'k_x, #'k_s0], 1],
+   [#'v1, #'k_v1, [#'k_u1], 2], [#'s1, #'k_s1, [#'k_u1], 2],
+   [#'u2, #'k_u2, [#'k_a, #'k_x, #'k_s1], 3],
+   [#'v2, #'k_x, [#'k_u2], 4], [#'s2, #'k_s1, [#'k_u2], 4],
+   [#'u3, #'k_u3, [#'k_b, #'k_y, #'k_s1], 5],
+   [#'v3, #'k_v3, [#'k_u3], 6], [#'s3, #'k_s3, [#'k_u3], 6],
+   [#'ret, #'k_ret, [#'k_x, #'k_s3], 7]]
+def chain_layers = 8
+
+// The cheapest node in each class. A node costs one plus the cost of the classes
+// it takes, and a class costs what its cheapest node does; the nodes are listed in
+// the order the data flows, so one pass down the list settles all of them.
+fun chain_best() :: Map:
+  for values(best :~ Map = {}) ([key, cls, args, _] in chain_graph):
+    def cost:
+      for values(c = 1) (a in args):
+        c + ((best[a] :~ List)[1] :~ Int)
+    if !best.has_key(cls) || cost < ((best[cls] :~ List)[1] :~ Int)
+    | best ++ { cls: [key, cost] }
+    | best
+
+// What each node takes, and where each one sits, by key.
+def chain_args:
+  for values(m :~ Map = {}) ([key, _, args, _] in chain_graph): m ++ { key: args }
+def chain_layer_of:
+  for values(m :~ Map = {}) ([key, _, _, layer] in chain_graph): m ++ { key: layer }
+
+// The classes the root reaches, following the cheapest node out of each.
+fun chain_reached(~root: root) :: List:
+  def best = chain_best()
+  recur walk(cls = root, seen :~ List = []):
+    if seen.contains(cls)
+    | seen
+    | block:
+        def key = ((best[cls] :~ List)[0])
+        for values(acc :~ List = seen ++ [cls]) (a in chain_args[key]):
+          walk(a, acc)
+
+// The picks an extraction makes, as the walk reaches them: everything chosen on
+// layer `layer` or above. A layer whose classes were all decided higher up adds
+// nothing, which is what the redundant `update` looks like from here.
+fun chain_picks(~upto: upto :: Int) :: List:
+  def best = chain_best()
+  for List (cls in best.keys()):
+    def key = ((best[cls] :~ List)[0])
+    keep_when chain_layer_of[key] <= upto
+    key
+
+// and the ones that survive, which is the program the root asked for
+fun chain_kept(~root: root) :: List:
+  def best = chain_best()
+  for List (cls in chain_reached(~root: root)): ((best[cls] :~ List)[0])
+
 def chain_steps:
   [[[#'s0, chain_s, chain_y(0), "ω"], [#'a, leaf_x(0), chain_y(0), "a"],
     [#'x, leaf_x(1), chain_y(0), "x"],
@@ -1190,51 +1298,60 @@ def chain_state_edges:
    [[#'u3, #'s2], [#'s3, #'u3]],
    [[#'ret, #'s3]]]
 
+// Three kinds of edge. A plain one runs border to border. `#'up` comes up under
+// the variable it points at, so it passes below the row rather than clipping the
+// boxes along it. A number bows the edge out into the empty band below the row and
+// left of the column, for the runs a straight line cannot make without crossing an
+// `update` on the way -- the number is how far it bows. The fourth element pulls an
+// end apart from its neighbour: two `update`s reaching the same variable arrive at
+// the same point from almost the same angle, and two bows leaving the same border
+// at the same place run down each other for most of their length.
+fun chain_wire(q :: pc.Pict, n :~ Map, es :~ List,
+               ~color: color = "black", ~line_width: lw :: Real = 4) :~ pc.Pict:
+  for values(acc :~ pc.Pict = q) (e :~ List in es):
+    def mode = if e.length() > 2 | e[2] | #false
+    def off = if e.length() > 3 | e[3] | 0.0
+    cond
+    | mode == #'up:
+        arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4,
+              ~to_at: pc.Find.bottom(as_pict(n[e[1]]), ~dx: off, ~dy: 5))
+    | mode is_a Real:
+        pc.connect(~on: acc,
+                   pc.Find.left(as_pict(n[e[0]]), ~dy: off),
+                   pc.Find.bottom(as_pict(n[e[1]]), ~dy: 5),
+                   ~style: #'arrow, ~line: color, ~line_width: lw,
+                   ~arrow_size: 4 * lw,
+                   ~start_angle: math.pi, ~end_angle: math.pi / 2,
+                   ~start_pull: mode, ~end_pull: mode)
+    | ~else:
+        arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4)
+
+// The nodes at their places and the edges between them, with the nodes drawn twice:
+// as ghosts, so that the edges have something to be found and aimed at, and then
+// for real over the finished edges. An edge that passes a box it is not attached to
+// should go behind it, and a line drawn onto a picture is drawn in front of
+// everything already in it. `under` draws what belongs over the edges and under the
+// nodes -- the e-class regions, which would otherwise wash the boxes they enclose.
+fun chain_picture(base :: pc.Pict, n :~ Map, places :~ List,
+                  ~values: value_es :~ List, ~states: state_es :~ List,
+                  ~under: under :: Function.of_arity(1) = fun (p): p) :: pc.Pict:
+  def group:
+    group_pict(~width: slide_width, ~height: slide_height,
+               & (for List ([key, x, y, tag] in places): at(x, y, ~tag: tag, n[key])))
+  def ghosted = put(base, as_pict(group).ghost(), 0.0, 0.0)
+  // values thin and black, the state chain thick and in Keynote's blue
+  def wired:
+    chain_wire(chain_wire(ghosted, n, value_es, ~line_width: 4),
+               n, state_es, ~line_width: 6, ~color: keynote_blue)
+  put(under(wired), group, 0.0, 0.0)
+
 fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int,
                 ~under: under :: Function.of_arity(1) = fun (p): p) :: pc.Pict:
-  def placed:
-    for List (k in 0..upto):
-      each [key, x, y, tag] in chain_steps[k]
-      at(x, y, ~tag: tag, n[key])
-  def group = group_pict(~width: slide_width, ~height: slide_height, & placed)
-  // The nodes go on twice: as ghosts, so that the edges have something to be
-  // found and aimed at, and then for real over the finished edges. An edge that
-  // passes a box it is not attached to should go behind it, and a line drawn onto
-  // a picture is drawn in front of everything already in it.
-  def p = put(base, as_pict(group).ghost(), 0.0, 0.0)
-  // Three kinds of edge. A plain one runs border to border. `#'up` comes up under
-  // the variable it points at, so it passes below the row rather than clipping the
-  // boxes along it. A number bows the edge out into the empty band below the row
-  // and left of the column, for the two runs that a straight line cannot make
-  // without crossing an `update` on the way -- the number is how far it bows.
-  fun wire_edges(q :: pc.Pict, es :~ List,
-                 ~color: color = "black", ~line_width: lw :: Real = 4) :~ pc.Pict:
-    for values(acc :~ pc.Pict = q) (e :~ List in es):
-      def mode = if e.length() > 2 | e[2] | #false
-      def off = if e.length() > 3 | e[3] | 0.0
-      cond
-      | mode == #'up:
-          arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4,
-                ~to_at: pc.Find.bottom(as_pict(n[e[1]]), ~dx: off, ~dy: 5))
-      | mode is_a Real:
-          pc.connect(~on: acc,
-                     pc.Find.left(as_pict(n[e[0]]), ~dy: off),
-                     pc.Find.bottom(as_pict(n[e[1]]), ~dy: 5),
-                     ~style: #'arrow, ~line: color, ~line_width: lw,
-                     ~arrow_size: 4 * lw,
-                     ~start_angle: math.pi, ~end_angle: math.pi / 2,
-                     ~start_pull: mode, ~end_pull: mode)
-      | ~else:
-          arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4)
-  // The two kinds of edge, in the weights and colours Keynote gave them: values
-  // thin and black, the state chain thick and in its blue.
-  def wired:
-    for values(q :~ pc.Pict = p) (k in 0..upto):
-      wire_edges(wire_edges(q, chain_value_edges[k], ~line_width: 4),
-                 chain_state_edges[k], ~line_width: 6, ~color: keynote_blue)
-  // `under` draws what belongs over the edges and under the nodes -- the e-class
-  // regions, which would otherwise wash the boxes they enclose.
-  put(under(wired), group, 0.0, 0.0)
+  chain_picture(base, n,
+                List.append(& for List (k in 0..upto): chain_steps[k]),
+                ~values: List.append(& for List (k in 0..upto): chain_value_edges[k]),
+                ~states: List.append(& for List (k in 0..upto): chain_state_edges[k]),
+                ~under: under)
 
 // -------------------------------------------------------------------------------------
 // slide_update: the four `update`s, what one does, and where the states come in.
@@ -1431,8 +1548,8 @@ fun slide_rue():
   def parts = code_parts()
   def code = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
 
-  // Where each node sits, so that a root can be ringed and the tubes can be run
-  // through the middles of the nodes they hold.
+  // Where each node sits, so that the tubes can be run through the middles of the
+  // nodes they hold.
   def spot:
     { #'s0: [chain_s, chain_y(0)],
       #'a: [leaf_x(0), chain_y(0)], #'x: [leaf_x(1), chain_y(0)],
@@ -1445,32 +1562,29 @@ fun slide_rue():
       #'v3: [chain_v, chain_y(6)], #'s3: [chain_s, chain_y(6)],
       #'ret: [chain_ret, chain_y(7)] }
 
-  // The root is the tuple the program returns, and the pointer is what says so:
-  // it starts there before it walks, which is all a bubble was saying.
-  fun root_ring(p :: pc.Pict, key) :: pc.Pict:
-    def [x, y] = spot[key]
-    def q :~ pc.Pict = as_pict(chain_nodes()[key])
-    put(p, pc.rectangle(~width: q.width + 30.0, ~height: q.height + 30.0,
-                        ~fill: #false, ~line: talk_blue, ~line_width: 7,
-                        ~rounded: -0.3),
-        x - 15.0, y - 15.0)
+  // The pointer walks one layer per press, down its own lane left of the graph --
+  // every layer, so it passes nothing without stopping at it.
   fun pointing_at(p :: pc.Pict, layer :: Int) :: pc.Pict:
-    put(p, walk_arrow(), chain_op - 88.0, chain_y(layer) + 32.0 - 17.0)
-  // The bubble speaks for the extraction, as it does on the background slide, but
-  // without a spike: every clear patch near the roots is small enough that a body
-  // pinned there would cover a node. It sits under the rule instead, in the column
-  // the code and the rule are already in.
-  fun says(p :: pc.Pict, content :: pc.Pict) :: pc.Pict:
-    put(p, make_bubble(~color: talk_blue, ~padding: 22.0, content), rule_x, 920.0)
-  def outcome = prose([["two ", #'bold], ["updates, not three", #'plain]])
+    put(p, walk_arrow(), chain_point_x, chain_y(layer) + 32.0 - 17.0)
+
+  // What the extraction is asked for, said where it is asked: a bubble on the
+  // `return`, which is the class the walk starts from.
+  def m_ask = blank(1.0, 1.0)
+  // `n` is the frame's own node map: the bubble has to point at the very `return`
+  // that frame placed, since that is the one it can find in the picture.
+  fun asking(p :: pc.Pict, n :~ Map) :: pc.Pict:
+    multi_callout(~on: put(p, m_ask, 1290.0, 985.0),
+                  ~place: as_pict(m_ask), ~at: [as_pict(n[#'ret])],
+                  ~color: talk_blue, ~padding: 18.0,
+                  prose([["extract", #'bold]]))
 
   // One press of the slide. The nodes are rebuilt for each, because a picked node
   // *is* a node with a green background rather than a mark laid over one, so which
   // nodes are picked changes what the graph is drawn from.
-  fun scene(~rule: rule = #false, ~union: union = #false, ~roots: roots = #false,
+  fun scene(~rule: rule = #false, ~union: union = #false, ~ask: ask = #false,
             ~picks: picks :: List = [], ~point: point = #false,
-            ~says: content = #false) :: pc.Pict:
-    def n = chain_nodes(~picked: picks)
+            ~nodes: nodes :: maybe(Map) = #false) :: pc.Pict:
+    def n :~ Map = nodes || chain_nodes(~picked: picks)
     // The two classes the rule makes, drawn under the nodes they hold. The states
     // are one above the other in their own column, so that tube is straight. `x`
     // and `v2` are neither in a column nor in a row -- `x` is an input along the
@@ -1495,48 +1609,58 @@ fun slide_rue():
       | put(mark_line(mark_line(graph, parts, 0), parts, 1),
             fit_width(update_rule(), rule_w), rule_x, rule_y)
       | graph
-    def rooted:
-      if roots | root_ring(ruled, #'ret) | ruled
-    def walked = if point | pointing_at(rooted, point) | rooted
-    if content | says(walked, content) | walked
+    def walked = if point | pointing_at(ruled, point) | ruled
+    if ask | asking(walked, n) | walked
 
-  // Every class gets a pick, in the order the data flows: one `update` and what it
-  // takes and returns at a time. Two presses each -- the pointer arrives, and then
-  // the nodes are picked. The second `update` adds only itself, because the value
-  // it returns is in `x`'s class and the state it returns is in `ω1`'s, and both of
-  // those were picked on the press before. That is the whole point of the rule.
-  def step1 = [#'s0, #'a, #'x, #'u1, #'v1, #'s1]
-  def step2 = step1 ++ [#'u2]
-  def step3 = step2 ++ [#'b, #'y, #'u3, #'v3, #'s3]
-  def step4 = step3 ++ [#'ret]
-  // and then what the root reaches: no second `update`, and neither of the values
-  // nothing reads
-  def reached = [#'ret, #'s0, #'a, #'x, #'u1, #'s1, #'b, #'y, #'u3, #'s3]
-
-  fun walking(~picks: picks :: List = [], ~point: point = #false,
-              ~says: content = #false) :: pc.Pict:
-    scene(~rule: #true, ~union: #true, ~roots: #true,
-          ~picks: picks, ~point: point, ~says: content)
-
+  // The program that comes out, with the e-graph gone: the same green nodes, moved
+  // up into the chain they now form -- two `update`s where there were three, and
+  // the value the program returns taken straight from `x`. Its nodes come from the
+  // frame the walk ends on, since `magic_move` moves what it recognises on both
+  // sides and a rebuilt node is a different pict.
+  def root = #'k_ret
+  def kept = chain_kept(~root: root)
+  def n_kept = chain_nodes(~picked: kept)
+  def term_places:
+    [[#'s0, chain_s, chain_y(0), "ω"], [#'a, leaf_x(0), chain_y(0), "a"],
+     [#'x, leaf_x(1), chain_y(0), "x"], [#'b, leaf_x(2), chain_y(0), "b"],
+     [#'y, leaf_x(3), chain_y(0), "y"],
+     [#'u1, chain_op, chain_y(1), "update"], [#'s1, chain_s, chain_y(2), "ω1"],
+     [#'u3, chain_op, chain_y(3), "update (3)"], [#'s3, chain_s, chain_y(4), "ω3"],
+     [#'ret, chain_ret, chain_y(5), "return"]]
+  def term_values:
+    [[#'u1, #'a, #'up, -14.0], [#'u1, #'x, #'up, 14.0],
+     [#'u3, #'b, #'up, -14.0], [#'u3, #'y, 0.42, 0.0],
+     // the returned value is `x` itself now, which is a long way up
+     [#'ret, #'x, 0.6, 0.0]]
+  def term_states:
+    [[#'u1, #'s0], [#'s1, #'u1], [#'u3, #'s1], [#'s3, #'u3], [#'ret, #'s3]]
+  def term:
+    chain_picture(put(canvas, code_pict(parts, ~states: #true), code_x, code_y),
+                  n_kept, term_places,
+                  ~values: term_values, ~states: term_states)
   def frames:
-    [// the graph, then the rule, then the classes it makes
+    [// the graph, then the rule, then the classes it makes, then the asking
      scene(),
      scene(~rule: #true),
      scene(~rule: #true, ~union: #true),
-     // the pointer arrives at the tuple the program returns, which is the class
-     // the walk starts from
-     walking(~point: 7),
-     // and walks up the chain, an `update` and its classes per pair of presses
-     walking(~point: 1), walking(~point: 1, ~picks: step1),
-     walking(~point: 3, ~picks: step1), walking(~point: 3, ~picks: step2),
-     walking(~point: 5, ~picks: step2), walking(~point: 5, ~picks: step3),
-     walking(~point: 7, ~picks: step4),
-     // the choices nothing reaches fade, and what is left is the program
-     walking(~picks: reached, ~says: outcome)]
+     scene(~rule: #true, ~union: #true, ~ask: #true),
+     // down the graph, a layer at a time
+     & List.append(
+         & for List (layer in 0..chain_layers):
+             [scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
+                    ~picks: chain_picks(~upto: layer - 1)),
+              scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
+                    ~picks: chain_picks(~upto: layer))]),
+     // and the choices nothing reaches fade
+     scene(~rule: #true, ~union: #true, ~ask: #true, ~picks: kept, ~nodes: n_kept)]
 
+  // Every press cross-fades to the next picture, and then the last one is a magic
+  // move: the green nodes travel up into the term and everything else goes.
   pc.switch(frames[0],
             & for List (i in 1..frames.length()):
-                pc.cross_fade(frames[i - 1], frames[i]))
+                pc.cross_fade(frames[i - 1], frames[i]),
+            pc.magic_move(frames[frames.length() - 1], term,
+                          ~other: #'fade, ~extent: 1.2).time_pad(~after: -1))
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
