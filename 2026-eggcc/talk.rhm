@@ -157,12 +157,9 @@ fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
     def extra = wire(pc.overlay(~horiz: #'left, ~vert: #'top, base.ghost(), as_pict(st)), k)
     fade_in(p, extra, ~horiz: #'left, ~vert: #'top)
 
-// The two kinds of edge in the effectful e-graph pictures, in the weights and
-// colours Keynote gave them: value edges thin and black, state edges thick and
-// in its blue.
+// Keynote's blue, which the state parts of the e-graph are drawn in: the state
+// nodes' borders and the edges between them. See `chain_frame`.
 def keynote_blue = draw.Color(4, 51, 255)
-fun value_edges(p, edges): arrows(~on: p, edges, ~line_width: 4)
-fun state_edges(p, edges): arrows(~on: p, edges, ~line_width: 6, ~color: keynote_blue)
 
 // Keynote's centred one-line text box, which the deck has forty-one of. Every one
 // of them spelled out `~anchor: #'center` and `~wrap: #false` again; they say it
@@ -175,40 +172,63 @@ fun state_edges(p, edges): arrows(~on: p, edges, ~line_width: 6, ~color: keynote
 fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
   textbox(~width: w, ~height: h, ~anchor: #'center, ~wrap: #false, & paras, ~& kws)
 
-// An e-class, drawn as the region round the nodes it holds. Keynote drew these
-// freehand, one blob per slide, so they had to be redrawn by hand whenever the
-// graph moved. The members of these ones share a column, and a capsule down that
-// column says the same thing while following the layout.
-fun eclass(w :: Real, h :: Real):
-  shape_pict(~width: w, ~height: h,
-             ~geom: preset_geom("roundRect", [pair("adj", "val 50000")]),
-             ~fill: hex("929292", ~alpha: 0.4))
 
-// The `update` chain that `slide_egraph` builds and `slide_rue` rewrites. It
-// grows downwards: what is on screen never moves, it only gets longer.
+// ---------------------------------------------------------------------------
+// Where the `update` example sits: the program across the top, the graph built
+// from it underneath. `slide_update`, `slide_egraph` and `slide_rue` all use
+// these, so the code box lands in one place and stays put across the cuts.
 //
-// Inputs on top and results underneath. Each leaf sits one layer above the update
-// that first uses it, in one of two columns on the left; the updates run down the
-// middle and the state chain down the right. That is what keeps the three long
-// edges -- `a` and `x` into the second update, `v2` into the fourth -- clear of
-// every box they pass.
+//    fun foo(a, x, b, y, c, ω):
+//      (v1, ω1) = update(a, x, ω)                    the rule, on `slide_rue`
+//      ...
 //
-//   layer 0  a  x                 ω
-//   layer 1        update
-//   layer 2            v1     ω1
-//   layer 3        update
-//   layer 4  b  y      v2     ω2
-//   layer 5        update
-//   layer 6  c         v3     ω3
-//   layer 7        update
-//   layer 8            v4     ω4
-def chain_row = 92.0
-fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
-def chain_leaf_l = 1000.0    // a, b, c
-def chain_leaf_r = 1180.0    // x, y
-def chain_op = 1322.0        // the update boxes, which are 180.242 wide
-def chain_v = 1590.0         // v1 … v4
-def chain_s = 1780.0         // ω, ω1 … ω4
+//         ω     a     x     b     y     c            inputs
+//
+//      update ω1 update ω2 update ω3 update ω4       the statewalk
+//        v1        v2        v3        v4            what each one returns
+//
+// A wide slide is the wrong shape for a nine-layer column, which is what this
+// was: the graph took the right-hand third, the code overflowed its own box into
+// it, and the bottom left was empty. Read across instead and the shape of the
+// picture is the shape of the thing -- the state passing from one `update` to the
+// next along a row, which is the statewalk the paper names.
+//
+// Inputs on top, so an operand is above the operator that takes it and every edge
+// points the way the data goes. That also keeps the long edges clear by
+// construction: every edge out of the input row lands on the *top* border of a box
+// in the op row, so it stays above that row the whole way across and cannot cross
+// anything in it -- which is what the two-column leaf layout was working around.
+def code_size = 40.0
+def code_x = 95.0            // the deck's left margin, where the titles start
+def code_y = 240.0
+def code_row = 70.0          // a line of the box: 60pt of ink at 40pt, plus leading
+def code_inset = 20.0
+
+def node_w = 64.0            // a leaf, a value or a state
+def node_h = 63.486
+def op_w = 180.242           // an `update`
+def op_h = 64.0
+
+def leaf_y = 672.0           // the input row, just below the code box
+def leaf_x0 = 140.0
+def leaf_pitch = 150.0
+def op_y = 820.0             // the statewalk
+def op_x0 = 140.0
+def op_gap = 60.0
+def val_y = 1006.0           // what each `update` returns
+
+// The op row alternates `update` and the state it produces, left to right.
+fun op_x(k :: Int) :: Real: op_x0 + k * (op_w + node_w + 2 * op_gap)
+fun state_x(k :: Int) :: Real: op_x(k) + op_w + op_gap
+// A value sits centred under the `update` that returns it, an input in the row
+// above, in the order the signature names them.
+fun val_x(k :: Int) :: Real: op_x(k) + (op_w - node_w) / 2
+fun leaf_x(i :: Int) :: Real: leaf_x0 + i * leaf_pitch
+
+// The rule box on `slide_rue`, in the space the code box leaves beside it.
+def rule_x = 1130.0
+def rule_y = 270.0
+def rule_w = slide_width - 40.0 - rule_x
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -782,19 +802,20 @@ fun slide_20():
 // fade in, while `v`, its subscript, `= update(a, x` and the closing paren are
 // the *same* picts in both forms and slide to make room. `code_parts` builds
 // every piece once, for both layouts, which is what `magic_move` matches on.
-def code_face = draw.Font(~name: code_font, ~size: 50.0)
-def math_face = draw.Font(~name: math_font, ~size: 50.0)
+//
+// The signature moves with them. It is what says which names come from outside:
+// the plain form takes `a`, `x`, `b`, `y` and `c`, and the state form grows a
+// `, ω`, because making the state an argument like any other is the whole point
+// of the slide. The parameters are in the order the graph's input row uses them,
+// so the row above the graph reads the same as the line above the code.
+def code_face = draw.Font(~name: code_font, ~size: code_size)
+def math_face = draw.Font(~name: math_font, ~size: code_size)
 fun code(s :: String) :: pc.Pict: pc.text(s, ~font: code_face)
 fun code_sub(s :: String) :: pc.Pict: code(s).scale(0.6)
 // the Greek is set in the notation face, as everywhere else in the deck: PT Mono
 // has none
 fun greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face)
-def code_x = 32.458
-def code_y = 358.853
-def code_w = 940.0         // room for `(v2, ω2) = update(a, x, ω1)` at 50pt
-def code_h = 380.0
-def code_row = 90.0        // 150% spacing at 50pt, the room Keynote's box gave a line
-def code_inset = 16.0
+def code_indent = code("  ").width    // the body, inside the signature
 
 // A bordered box. The runtime's shape rather than pict's `rectangle`: a pict
 // outline borrows the pen *style* of the surface it lands on, and the canvas
@@ -806,7 +827,14 @@ fun frame_box(w :: Real, h :: Real, ~rounded: r = #false) :: pc.Pict:
                      ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
 
 fun code_parts() :: Map:
-  def frame = frame_box(code_w, code_h)
+  // The signature. `fun foo(a, x, b, y, c` and `):` are the same picts in both
+  // forms, so they are what the move slides along; the `, ω` between them belongs
+  // to the state form alone and fades in.
+  def sig_head = code("fun foo(a, x, b, y, c")
+  def sig_close = code("):")
+  def header:
+    {#'plain: pc.beside(~vert: #'bottom, sig_head, sig_close),
+     #'states: pc.beside(~vert: #'bottom, sig_head, code(", "), greek("ω"), sig_close)}
   def lines:
     for List (i in 1..5):
       // the call up to its last argument, then the state it takes, then `)`
@@ -826,14 +854,26 @@ fun code_parts() :: Map:
        #'states: pc.beside(~vert: #'bottom, code("("), v, i_sub, code(", "), omega,
                            code_sub(to_string(i)), code(")"), & head, & state_in, close),
        #'omega: omega}
-  {#'frame: frame, #'lines: lines}
+  // The frame is measured, and measured against the *state* form: a box sized to
+  // the plain form would have to grow as the code moves into the state form, and
+  // one sized by hand is how the code came to overflow its own border.
+  def body_w:
+    for values(m :~ Real = 0.0) (l :~ Map in lines):
+      math.max(m, (l[#'states] :~ pc.Pict).width)
+  def content_w = math.max((header[#'states] :~ pc.Pict).width, code_indent + body_w)
+  def frame = frame_box(content_w + 2 * code_inset,
+                        (1 + lines.length()) * code_row + 2 * code_inset)
+  {#'frame: frame, #'header: header, #'lines: lines}
 
-// The box with its four lines, in one form or the other.
+// The box with its five lines -- the signature, then one per `update` -- in one
+// form or the other.
 fun code_pict(parts :~ Map, ~states: states :: Boolean) :: pc.Pict:
-  for values(p :~ pc.Pict = parts[#'frame]) (line :~ Map in parts[#'lines], k in 0..):
-    def q :~ pc.Pict = if states | line[#'states] | line[#'plain]
+  fun pick(m :~ Map) :~ pc.Pict: if states | m[#'states] | m[#'plain]
+  def rows :~ List = [pick(parts[#'header]), & for List (l in parts[#'lines]): pick(l)]
+  for values(p :~ pc.Pict = parts[#'frame]) (q :~ pc.Pict in rows, k in 0..):
     pc.overlay(~horiz: #'left, ~vert: #'top,
-               ~dx: code_inset, ~dy: 10.0 + code_row * k + (code_row - q.height) / 2,
+               ~dx: code_inset + (if k == 0 | 0.0 | code_indent),
+               ~dy: code_inset + code_row * k + (code_row - q.height) / 2,
                p, q)
 
 // A pict at (x, y) on `base`, top-left corner; `p` may be one of the runtime's picts.
@@ -841,12 +881,18 @@ fun put(base :: pc.Pict, p, x :: Real, y :: Real) :: pc.Pict:
   pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, as_pict(p))
 
 // The line of the code box naming the `update` just put into the e-graph, marked
-// as with a highlighter: a translucent band over it. `k` counts lines from 0.
+// as with a highlighter: a translucent band over it. `k` counts the `update`
+// lines from 0, so the signature above them is not one of them.
 def highlight = draw.Color(38, 132, 235, 0.25)
-fun mark_line(p :: pc.Pict, k :: Int) :: pc.Pict:
-  def band = pc.rectangle(~width: code_w - 24.0, ~height: code_row - 22.0,
+fun mark_line(p :: pc.Pict, parts :~ Map, k :: Int) :: pc.Pict:
+  def frame :~ pc.Pict = parts[#'frame]
+  def band = pc.rectangle(~width: frame.width - 2 * code_inset, ~height: code_row - 12.0,
                           ~fill: highlight, ~line: #false, ~rounded: -0.3)
-  put(p, band, code_x + 12.0, code_y + 21.0 + code_row * k)
+  put(p, band, code_x + code_inset, code_y + code_inset + code_row * (k + 1) + 6.0)
+
+// A pict scaled down, but only if it is wider than the room it has.
+fun fit_width(p :: pc.Pict, w :: Real) :: pc.Pict:
+  if p.width <= w | p | p.scale(w / p.width)
 
 // A sentence for a bubble, in the deck's Helvetica Neue: each item is a string
 // and how it is set, `#'plain`, `#'bold` or `#'sub`.
@@ -859,6 +905,12 @@ fun prose(items :: List) :: pc.Pict:
                 | #'bold: pc.text(s, ~font: prose_bold)
                 | #'sub: pc.text(s, ~font: prose_face).scale(0.6)
                 | ~else: pc.text(s, ~font: prose_face))
+
+// Several of those, stacked. A bubble beside the code box has the slide's right
+// half to live in, and a sentence long enough to need more than that is broken
+// across lines here rather than left to run off the edge.
+fun prose_stack(rows :: List) :: pc.Pict:
+  pc.stack(~sep: 4.0, ~horiz: #'left, & for List (r in rows): prose(r))
 
 // A slide with the deck's title at the deck's place, and nothing else yet.
 fun titled(title :: String) :: pc.Pict:
@@ -929,22 +981,39 @@ fun chain_nodes() :: Map:
    #'v1: value(1), #'v2: value(2), #'v3: value(3), #'v4: value(4),
    #'u1: op(), #'u2: op(), #'u3: op(), #'u4: op()}
 
-// What each `update` brings with it: its node, the leaves it is the first to use,
-// and the value and state it produces -- placed on the layout above -- and its
-// edges. `chain_frame` draws the first `upto` of them on `base`.
+// What each `update` brings with it: its own box, the inputs it is the first to
+// use, and the value and state it returns, each at [key, x, y, tag].
+// `chain_frame` draws the first `upto` of these groups, so the picture grows one
+// `update` per press, rightwards, and nothing already on screen moves.
+//
+// The inputs appear in the row above in signature order, each one where it is
+// first used: `a` and `x` with the first `update`, `b` and `y` with the third,
+// `c` with the fourth. Ordering them by first use is also what keeps the row
+// clear of its own edges -- an input's edges all run down and to the right, so
+// they pass under the inputs that come after it rather than through them.
 def chain_steps:
-  [[[chain_s, 0, "ω", #'s0], [chain_leaf_l, 0, "a", #'a], [chain_leaf_r, 0, "x", #'x],
-    [chain_op, 1, "update", #'u1], [chain_s, 2, "ω1", #'s1], [chain_v, 2, "v1", #'v1]],
-   [[chain_op, 3, "update (2)", #'u2], [chain_s, 4, "ω2", #'s2], [chain_v, 4, "v2", #'v2]],
-   [[chain_leaf_l, 4, "b", #'b], [chain_leaf_r, 4, "y", #'y],
-    [chain_op, 5, "update (3)", #'u3], [chain_s, 6, "ω3", #'s3], [chain_v, 6, "v3", #'v3]],
-   [[chain_leaf_l, 6, "c", #'c],
-    [chain_op, 7, "update (4)", #'u4], [chain_s, 8, "ω4", #'s4], [chain_v, 8, "v4", #'v4]]]
+  [[[#'s0, leaf_x(0), leaf_y, "ω"], [#'a, leaf_x(1), leaf_y, "a"],
+    [#'x, leaf_x(2), leaf_y, "x"],
+    [#'u1, op_x(0), op_y, "update"], [#'s1, state_x(0), op_y, "ω1"],
+    [#'v1, val_x(0), val_y, "v1"]],
+   [[#'u2, op_x(1), op_y, "update (2)"], [#'s2, state_x(1), op_y, "ω2"],
+    [#'v2, val_x(1), val_y, "v2"]],
+   [[#'b, leaf_x(3), leaf_y, "b"], [#'y, leaf_x(4), leaf_y, "y"],
+    [#'u3, op_x(2), op_y, "update (3)"], [#'s3, state_x(2), op_y, "ω3"],
+    [#'v3, val_x(2), val_y, "v3"]],
+   [[#'c, leaf_x(5), leaf_y, "c"],
+    [#'u4, op_x(3), op_y, "update (4)"], [#'s4, state_x(3), op_y, "ω4"],
+    [#'v4, val_x(3), val_y, "v4"]]]
+// An edge is [from, to], or [from, to, shift] to slide it sideways off something
+// it would otherwise graze.
 def chain_value_edges:
   [[[#'a, #'u1], [#'x, #'u1], [#'u1, #'v1]],
    [[#'a, #'u2], [#'x, #'u2], [#'u2, #'v2]],
    [[#'b, #'u3], [#'y, #'u3], [#'u3, #'v3]],
-   [[#'c, #'u4], [#'v2, #'u4], [#'u4, #'v4]]]
+   // `v2` is four boxes left of the `update` that takes it, so this edge runs a
+   // long way just under the op row; shifted, it passes clear of the state box at
+   // the end of that run instead of grazing its corner.
+   [[#'c, #'u4], [#'v2, #'u4, 22.0], [#'u4, #'v4]]]
 def chain_state_edges:
   [[[#'s0, #'u1], [#'u1, #'s1]],
    [[#'s1, #'u2], [#'u2, #'s2]],
@@ -954,12 +1023,20 @@ def chain_state_edges:
 fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int) :: pc.Pict:
   def placed:
     for List (k in 0..upto):
-      each [x, layer, tag, key] in chain_steps[k]
-      at(x, chain_y(layer), ~tag: tag, n[key])
+      each [key, x, y, tag] in chain_steps[k]
+      at(x, y, ~tag: tag, n[key])
   def p = put(base, group_pict(~width: slide_width, ~height: slide_height, & placed), 0.0, 0.0)
-  fun pairs(es :~ List): for List ([f, t] in es): [n[f], n[t]]
+  // One at a time rather than through `arrows`, so that an edge may carry a shift
+  // of its own.
+  fun wire_edges(q :: pc.Pict, es :~ List, ~& kws) :~ pc.Pict:
+    for values(acc :~ pc.Pict = q) (e :~ List in es):
+      arrow(~on: acc, n[e[0]], n[e[1]],
+            ~shift: (if e.length() > 2 | e[2] | 0.0), ~& kws)
+  // The two kinds of edge, in the weights and colours Keynote gave them: values
+  // thin and black, the state chain thick and in its blue.
   for values(q :~ pc.Pict = p) (k in 0..upto):
-    state_edges(value_edges(q, pairs(chain_value_edges[k])), pairs(chain_state_edges[k]))
+    wire_edges(wire_edges(q, chain_value_edges[k], ~line_width: 4),
+               chain_state_edges[k], ~line_width: 6, ~color: keynote_blue)
 
 // -------------------------------------------------------------------------------------
 // slide_update: the four `update`s, what one does, and where the states come in.
@@ -971,7 +1048,6 @@ fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int) :: pc.Pict:
 fun slide_update():
   def canvas = titled("Update")
   def parts = code_parts()
-  def lines :~ List = parts[#'lines]
   def plain = put(canvas, code_pict(parts, ~states: #false), code_x, code_y)
   def with_states = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   // The bubbles are a layer of their own over the code, pinned at measured
@@ -979,25 +1055,33 @@ fun slide_update():
   // pinned by a finder does not survive that. Kept apart, the layer can fade out
   // as the move runs and the next one fade in, which is what should happen anyway.
   def blank_layer = pc.blank(~width: slide_width, ~height: slide_height)
-  def (rx, ry) = pc.Find.right((lines[0] :~ Map)[#'plain]).in(plain)
+  // Both bubbles reach in from the right, at the height of the first line and off
+  // the box's own edge -- not off the end of the line's text, which is inside the
+  // box, and not from above, where the signature now is. The second replaces the
+  // first in place, so the eye stays on the line they are both about.
+  def (fx, _) = pc.Find.right(parts[#'frame]).in(plain)
+  def first_line_y = code_y + code_inset + code_row * 1.5
+  def at_first_line = pc.Find.abs(fx, first_line_y)
   def explain:
-    callout(~on: blank_layer, ~at: pc.Find.abs(rx, ry), ~spike: #'w,
-            prose([["Write ", #'plain], ["x", #'bold], [" to address ", #'plain], ["a", #'bold],
-                   [", return the previous value at ", #'plain], ["a", #'bold]]))
-  def (ox, oy) = pc.Find.top((lines[0] :~ Map)[#'omega]).in(with_states)
+    callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
+            prose_stack([[["Write ", #'plain], ["x", #'bold], [" to address ", #'plain],
+                          ["a", #'bold], [",", #'plain]],
+                         [["return the previous value at ", #'plain], ["a", #'bold]]]))
   def name_state:
-    // body up and to the right of the ω: centred over it, it would run off the slide
-    callout(~on: blank_layer, ~at: pc.Find.abs(ox, oy), ~spike: #'sw,
-            prose([["ω", #'plain], ["1", #'sub],
-                   [" is the state of memory after the update", #'plain]]))
+    callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
+            prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
+                         [["after the update", #'plain]]]))
   def explained = put(plain, explain, 0.0, 0.0)
   def extent = 1.2
+  // One bubble out, then the other in -- not both at once. They are two different
+  // sentences in the same place, and crossing them leaves the middle of the move
+  // showing the two of them printed over each other at half strength.
   def moving:
     pc.overlay(~horiz: #'left, ~vert: #'top,
                pc.magic_move(plain, with_states, ~other: #'fade, ~extent: extent)
                  .time_pad(~after: -1),
-               pc.animate(~extent: extent, fun (t): explain.alpha(1.0 - t)),
-               pc.animate(~extent: extent, fun (t): name_state.alpha(t)))
+               pc.animate(~extent: extent, fun (t): explain.alpha(clamp01(1.0 - 2.0 * t))),
+               pc.animate(~extent: extent, fun (t): name_state.alpha(clamp01(2.0 * t - 1.0))))
   pc.switch(plain, pc.cross_fade(plain, explained), moving)
 
 // -------------------------------------------------------------------------------------
@@ -1006,23 +1090,32 @@ fun slide_update():
 // pictures, since the highlight moves and a reveal could only add.
 fun slide_egraph():
   def canvas = with_icon(titled("The Effectful E-Graph"))
-  def code = put(canvas, code_pict(code_parts(), ~states: #true), code_x, code_y)
+  def parts = code_parts()
+  def code = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   def n = chain_nodes()
   def frames:
     for List (k in 0..5):
-      if k == 0 | code | mark_line(chain_frame(code, n, k), k - 1)
+      if k == 0 | code | mark_line(chain_frame(code, n, k), parts, k - 1)
   pc.switch(frames[0], & for List (k in 1..5): pc.cross_fade(frames[k - 1], frames[k]))
 
 // -------------------------------------------------------------------------------------
 // slide_rue: a rule over `update`, and the rule applied.
 //
 // The second `update(a, x)` writes what the first already wrote: it returns `x`
-// and leaves the state alone. A press states that under the code, as the paper's
+// and leaves the state alone. A press states that beside the code, as the paper's
 // overview figure does -- the two `update`s over a long horizontal line, what they
 // make equal under it -- with the two code lines it is about marked; the next one
-// does the union in the e-graph: `ω2` joins `ω1`'s class, drawn as the capsule
-// down the state column, and `v2` joins `x`'s, drawn as the dashed line between
-// them.
+// does the union in the e-graph.
+//
+// The union is drawn as a halo behind each member, in the colour the rule writes
+// that equality in, rather than as a region around both or a dashed line between
+// them. The members of these two classes are a row and a column apart -- the state
+// chain runs along the op row, and the value it equals is an input up in the row
+// above -- so a region round both would have to swallow everything between them,
+// and a straight line between them would cross the second `update`. Sharing a
+// colour says the same thing and follows the layout.
+def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
+def value_class = draw.Color(211, 24, 118)    // v2 ≡ x
 def rule_font = code_face with (size = 36.0)
 fun rule_code(s :: String) :: pc.Pict: pc.text(s, ~font: rule_font)
 fun rule_greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face with (size = 36.0))
@@ -1036,11 +1129,15 @@ fun update_rule() :: pc.Pict:
   def premise2 = rule_line(rule_code("(v"), rule_sub("2"), rule_code(", "), rule_greek("ω"),
                            rule_sub("2"), rule_code(") = update(a, x, "), rule_greek("ω"),
                            rule_sub("1"), rule_code(")"))
-  def same = pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
+  fun same(): pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
+  // Each equality in the colour its halo is drawn in, which is what ties the two
+  // statements to the two places in the graph they land.
   def conclusion:
     pc.beside(~sep: 72.0, ~vert: #'bottom,
-              rule_line(rule_greek("ω"), rule_sub("1"), same, rule_greek("ω"), rule_sub("2")),
-              rule_line(rule_code("v"), rule_sub("2"), same, rule_code("x")))
+              rule_line(rule_greek("ω"), rule_sub("1"), same(), rule_greek("ω"), rule_sub("2"))
+                .colorize(state_class),
+              rule_line(rule_code("v"), rule_sub("2"), same(), rule_code("x"))
+                .colorize(value_class))
   def w = math.max(premise1.width, math.max(premise2.width, conclusion.width))
   def bar = pc.rectangle(~width: w, ~height: 3.0, ~fill: "black", ~line: #false)
   def body = pc.stack(~sep: 14.0, ~horiz: #'center, premise1, premise2, bar, conclusion)
@@ -1050,19 +1147,37 @@ fun update_rule() :: pc.Pict:
                        ~fill: hex("E2E2E2"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
   pc.overlay(box, body)
 
+// Nodes marked as sharing an e-class: a ring around each, in the class's own
+// colour, drawn over the picture.
+//
+// A ring rather than a filled capsule, and over rather than under. Under is
+// invisible: a slide carries its own white background, so anything behind it is
+// behind that too. Over, a translucent fill would tint the node's border and
+// label -- the state boxes are already blue -- while a ring outside the box
+// leaves both alone and still reads as one thing enclosing another, which is what
+// an e-class is.
+fun halos(p :: pc.Pict, marks :: List) :: pc.Pict:
+  def pad = 11.0
+  for values(acc :~ pc.Pict = p):
+    each [node, color] in marks
+    def q :~ pc.Pict = as_pict(node)
+    def (x, y) = pc.Find.top_left(q).in(p)
+    def ring = pc.rectangle(~width: q.width + 2 * pad, ~height: q.height + 2 * pad,
+                            ~fill: #false, ~line: color, ~line_width: 7, ~rounded: -0.5)
+    put(acc, ring, x - pad, y - pad)
+
 fun slide_rue():
   def canvas = with_icon(titled("Redundant Update Elimination"))
-  def code = put(canvas, code_pict(code_parts(), ~states: #true), code_x, code_y)
+  def parts = code_parts()
+  def code = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   def n = chain_nodes()
   def graph = chain_frame(code, n, 4)
   def stated:
-    put(mark_line(mark_line(graph, 0), 1), update_rule(), code_x, code_y + code_h + 30.0)
-  def pad = 12.0
+    put(mark_line(mark_line(graph, parts, 0), parts, 1),
+        fit_width(update_rule(), rule_w), rule_x, rule_y)
   def unioned:
-    let p = put(stated, eclass(64.0 + 2 * pad, chain_y(4) + 63.486 - chain_y(2) + 2 * pad),
-                chain_s - pad, chain_y(2) - pad)
-    arrows(~on: p, [[n[#'s1], n[#'s2]], [n[#'x], n[#'v2]]],
-           ~style: #'line, ~line_style: #'short_dash, ~line_width: 4)
+    halos(stated, [[n[#'s1], state_class], [n[#'s2], state_class],
+                   [n[#'x], value_class], [n[#'v2], value_class]])
   pc.switch(graph, pc.cross_fade(graph, stated), pc.cross_fade(stated, unioned))
 
 // -------------------------------------------------------------------------------------
