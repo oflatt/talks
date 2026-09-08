@@ -528,7 +528,11 @@ fun slide_12():
   def col_l = 806.429
   def col_r = 1029.766
   def col_far = 1190.919
-  def flow_x = 700.0
+  // The data-flow arrow, left of the graph. It sits out at 620 rather than just
+  // off the graph's edge to leave the lane at 706 free: that is where the
+  // extraction pointer walks down, and the two of them side by side is the point
+  // -- extraction reads the classes the way the data flows.
+  def flow_x = 620.0
 
   def base_canvas:
     slide_canvas(
@@ -605,37 +609,6 @@ fun slide_12():
     group_pict(~width: slide_width, ~height: slide_height,
                at(col_far, row_mid, ~tag: "0", n_zero))
 
-  // nothing new to draw: the last step is the equivalence `wire` adds at k = 4
-  def stage_5:
-    group_pict(~width: slide_width, ~height: slide_height, at(0.0, 0.0, ~tag: "nothing", blank()))
-
-  // The edges, as `arrow`s from border to border rather than Keynote connectors.
-  // Stage `k` brings the edges of the nodes it adds. Solid arrows are operands
-  // feeding an operator; a dashed line with no head is an e-class, saying two
-  // nodes are the same value rather than that anything flows between them.
-
-  // The e-classes drawn as regions round the nodes they hold. Both are centred on
-  // the graph's own middle, so flipping the rows top-for-bottom leaves them where
-  // Keynote put them.
-  def stage_6:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(1018.857, 655.145, ~tag: "Shape",
-                  shape_pict(~width: 300.944, ~height: 140.827,
-                             ~geom: custom_geom(
-                                                [[[#'move, pair(30, 9560)], [#'curve, pair(100, 12968), pair(23, 16369), pair(1256, 18605)], [#'curve, pair(2488, 20840), pair(4215, 20426), pair(5891, 19465)], [#'curve, pair(7265, 18677), pair(8719, 17626), pair(10192, 17550)], [#'curve, pair(12232, 17444), pair(14240, 19292), pair(16150, 19391)], [#'curve, pair(18623, 19518), pair(20717, 16947), pair(21155, 12007)], [#'curve, pair(21506, 8052), pair(20580, 4523), pair(19141, 2378)], [#'curve, pair(17156, -580), pair(14452, -760), pair(11937, 1738)], [#'curve, pair(11230, 2439), pair(10558, 3411), pair(9769, 3538)], [#'curve, pair(8817, 3691), pair(7951, 2610), pair(7049, 1982)], [#'curve, pair(5679, 1029), pair(4247, 1091), pair(2842, 1517)], [#'curve, pair(1927, 1794), pair(1042, 2238), pair(505, 3647)], [#'curve, pair(-94, 5220), pair(-15, 7409), pair(30, 9560)], [#'close]]],
-                                                21230, 20239), ~fill: hex("0076BA", ~alpha: 0.4))),
-               at(783.351, 463.479, ~tag: "Shape (2)",
-                  shape_pict(~width: 367.991, ~height: 524.05, ~flip_v: #true,
-                             ~geom: custom_geom(
-                                               [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
-                                               21451, 21147), ~fill: hex("D31876", ~alpha: 0.4))))
-
-  // Only the slot: what is drawn here is a callout, and `wire` builds it, because
-  // a callout needs to see the node it points at and a stage only sees itself.
-  def stage_7:
-    group_pict(~width: slide_width, ~height: slide_height,
-               at(1370.0, 800.0, ~tag: "Extraction Problem", m_extract))
-
   fun eq(p, x, y, col):
     arrow(~on: p, x, y, ~style: #'line, ~line_style: #'short_dash,
           ~color: col, ~line_width: 4)
@@ -670,46 +643,180 @@ fun slide_12():
                                       para(~align: #'center,
                                            run("data flow", ~font: prose_font,
                                                ~size: 40.0, ~color: hex("787878"))))),
-              ~label_dx: -80, ~label_dy: 0)
+              // far enough left that the label clears the line it names, which is
+              // now at 620 rather than 700
+              ~label_dx: -120, ~label_dy: 0)
     | 3:
         let q = seen(p, [stage_2])
         let q = arrows(~on: q, [[n_minus_r, n_plus_r], [n_one, n_minus_r]],
                        ~line_width: 4, ~gap: 4, ~color: keynote_blue)
-        // `a` is both an operand of this `+` and in its e-class, so this arrow and
-        // the dashed line at k = 5 would lie exactly on top of each other. The
-        // operand arrow is the one that steps aside: the dashed line has to stay on
-        // the centre of the pink region, because that region *is* the e-class it
-        // names, and a dashed line drawn beside it reads as joining something else.
+        // `a` is both an operand of this `+` and, once the last rule fires, in its
+        // e-class -- so this arrow and that rule's dashed line would lie exactly on
+        // top of each other. The operand arrow is the one that steps aside: the
+        // dashed line has to stay on the centre of the class region, because that
+        // region *is* the class it names, and a dashed line drawn beside it reads
+        // as joining something else.
         let q = arrow(~on: q, n_a, n_plus_r, ~line_width: 4, ~gap: 4,
                       ~color: keynote_blue, ~shift: -30)
         eq(q, n_minus, n_plus_r, keynote_blue)
     | 4: eq(seen(p, [stage_2, stage_3]), n_minus_r, n_zero, draw.Color(255, 147, 0))
-    | 5:
-        // Unshifted, so it runs down the middle of the pink e-class; the operand
-        // arrow it would otherwise lie under was moved aside at k = 3.
-        arrow(~on: seen(p, [stage_2, stage_3, stage_4]), n_plus_r, n_a,
-              ~style: #'line, ~line_style: #'short_dash, ~color: draw.Color(0, 143, 0),
-              ~line_width: 4)
-    | 7:
-        // A bubble rather than a caption in the margin: it has to say *which*
-        // e-class the term comes out of, and the spike is what says it. It sits
-        // in the empty bottom-right corner, below the rules, so the spike reaches
-        // the root e-class without crossing the graph.
-        multi_callout(~on: seen(p, [stage_2, stage_3, stage_4, stage_6]),
-                      ~place: as_pict(m_extract), ~at: [as_pict(n_plus_r)],
-                      ~color: talk_red, ~padding: 12.0,
-                      as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center,
-                                      ~autofit: #'grow,
-                                      ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                      para(~align: #'center,
-                                           run("extract", ~font: prose_font,
-                                               ~size: 48.0, ~bold: #true),
-                                           run(" a resulting term",
-                                               ~font: prose_font, ~size: 48.0)))))
     | ~else: p
 
-  staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5, stage_6, stage_7],
-         ~wire: wire)
+  // The space explored: four presses, each adding to the last.
+  def explored = staged(base_canvas, [stage_1, stage_2, stage_3, stage_4], ~wire: wire)
+  def settled = explored.snapshot(explored.duration - 1, 1.0)
+
+  // ----------------------------------------------------------------- extraction
+  // Then what extraction does with it. Every frame from here on takes something
+  // away as well as adding -- the pointer moves on, the marks on the nodes that
+  // are no longer in the term go, and at the end two classes become one -- so
+  // they are built whole from `settled` and cross-faded, which a reveal cannot
+  // do.
+  def nd = 100.0                              // the node size `node` builds
+  def eclass_pad = 12.0
+  def eclass_fill = draw.Color(146, 146, 146, 0.3)
+  // The pointer and the outline it carries are drawn in the same red as the
+  // bubble that names the job, since they are all one thing happening. Two
+  // spellings of it, because the outline goes on a pict and the arrow and the
+  // freehand region are the runtime's shapes.
+  def visiting = talk_red
+  def visiting_hex = "FF0000"
+  def picked_line = draw.Color(79, 143, 0)    // the green the paper fills a term with
+
+  // A class, drawn as the region round the nodes it holds -- the box its members
+  // span, grown a little. The two classes with two members each have both of them
+  // side by side in a row, which is what lets a rectangle say it.
+  fun region(p :: pc.Pict, x :: Real, y :: Real, w :: Real, h :: Real,
+             ~current: current = #false) :: pc.Pict:
+    def rw = w + 2 * eclass_pad
+    def rh = h + 2 * eclass_pad
+    // A line width with no line to draw is a contract violation, so the outlined
+    // one is its own call rather than one call with two conditional arguments.
+    def shape:
+      if current
+      | pc.rectangle(~width: rw, ~height: rh, ~fill: eclass_fill,
+                     ~line: visiting, ~line_width: 5, ~rounded: -0.35)
+      | pc.rectangle(~width: rw, ~height: rh, ~fill: eclass_fill,
+                     ~line: #false, ~rounded: -0.35)
+    put(p, shape, x - eclass_pad, y - eclass_pad)
+
+  // The class `a` joins when the last rule fires. No rectangle around its three
+  // members can draw it: `+` is a class of its own sitting between `a` and the
+  // root in the same column, and this shape threads between `+` and the `1 - 1`
+  // class to get past it. It is Keynote's own freehand blob, kept for that reason
+  // and recoloured to match the rest.
+  fun root_region(~current: current = #false):
+    shape_pict(~width: 367.991, ~height: 524.05, ~flip_v: #true,
+               ~geom: custom_geom(
+                                 [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
+                                 21451, 21147),
+               ~fill: hex("929292", ~alpha: 0.3),
+               ~line: if current | make_stroke(hex(visiting_hex), ~width: 5.0) | #false)
+
+  // The classes as they stand, before and after that merge. `current` names the
+  // one being visited, which is drawn with an outline: the pointer says which row
+  // we are on, and the outline says which class in it.
+  fun classes(p :: pc.Pict, ~current: current = #false,
+              ~merged: merged = #false) :: pc.Pict:
+    fun r(q, key, x, y, w, h): region(q, x, y, w, h, ~current: current == key)
+    let p = r(p, #'one, col_r, row_in, nd, nd)
+    let p = r(p, #'plus, col_l, row_mid, nd, nd)
+    let p = r(p, #'zero, col_r, row_mid, col_far + nd - col_r, nd)
+    if merged
+    | put(p, root_region(~current: current == #'root), 783.351, 463.479)
+    | block:
+        let p = r(p, #'a, col_l, row_in, nd, nd)
+        r(p, #'root, col_l, row_out, col_r + nd - col_l, nd)
+
+  // A node picked out of its class: the nodes picked are the term that comes out.
+  fun picked(p :: pc.Pict, x :: Real, y :: Real) :: pc.Pict:
+    put(p, pc.rectangle(~width: nd + 10.0, ~height: nd + 10.0,
+                        ~fill: picked_line with (alpha = 0.35),
+                        ~line: picked_line, ~line_width: 6, ~rounded: -0.3),
+        x - 5.0, y - 5.0)
+
+  // The pointer that walks down the graph, a row per press. It sits left of the
+  // graph, right of the data-flow arrow, and travels the same way that arrow
+  // points -- extraction reads the classes in the order the data flows.
+  def walk_arrow:
+    shape_pict(~width: 80.0, ~height: 34.0,
+               ~geom: preset_geom("rightArrow",
+                                  [pair("adj1", "val 45000"), pair("adj2", "val 60000")]),
+               ~fill: hex(visiting_hex))
+  fun pointing_at(p :: pc.Pict, row_y :: Real) :: pc.Pict:
+    put(p, walk_arrow, 706.0, row_y + nd / 2 - 17.0)
+
+  // What came out, written under the input term it came from.
+  fun extracted(term :: String) :: pc.Pict:
+    as_pict(textbox(~width: 320.0, ~height: 228.28, ~autofit: #'shrink,
+                    ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                    para(~line_spacing: pair(#'percent, 0.8),
+                         run("Extracted:", ~font: prose_font, ~size: 60.0, ~spacing: -2.01)),
+                    para(~line_spacing: pair(#'percent, 0.8), run("", ~size: 60.0)),
+                    para(~line_spacing: pair(#'percent, 0.8),
+                         run("  " ++ term, ~font: prose_font, ~size: 60.0, ~spacing: -2.01))))
+
+  // Keynote's bubble naming the job, which is now the label for the walk that
+  // does it. It sits in the empty bottom-right corner, below the rules, so the
+  // spike reaches the root class without crossing the graph.
+  fun with_callout(p :: pc.Pict) :: pc.Pict:
+    multi_callout(~on: put(p, m_extract, 1370.0, 800.0),
+                  ~place: as_pict(m_extract), ~at: [as_pict(n_plus_r)],
+                  ~color: talk_red, ~padding: 12.0,
+                  as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center,
+                                  ~autofit: #'grow,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("extract", ~font: prose_font,
+                                           ~size: 48.0, ~bold: #true),
+                                       run(" a resulting term",
+                                           ~font: prose_font, ~size: 48.0)))))
+
+  fun frame(~current: current = #false, ~point: point = #false,
+            ~picks: picks :: List = [], ~term: term = #false,
+            ~merged: merged = #false) :: pc.Pict:
+    def base = classes(settled, ~current: current, ~merged: merged)
+    // the last rule's own equivalence, drawn with the merge it causes. Unshifted,
+    // so it runs down the middle of the class it joins; the operand arrow it
+    // would otherwise lie under was moved aside at k = 3.
+    def joined:
+      if merged
+      | arrow(~on: base, n_plus_r, n_a, ~style: #'line, ~line_style: #'short_dash,
+              ~color: picked_line, ~line_width: 4)
+      | base
+    def marked:
+      for values(q :~ pc.Pict = joined) ([x, y] in picks):
+        picked(q, x, y)
+    def walked = if point | pointing_at(marked, point) | marked
+    def told = if term | put(walked, extracted(term), 95.0, 600.0) | walked
+    with_callout(told)
+
+  // The walk: `a` out of its own class, then `0` rather than the `1 - 1` it is
+  // equal to, then `a + 0` rather than the `(a + 1) - 1` it is equal to -- each
+  // the smallest term in its class. `1` and `+` are never picked, which is the
+  // point: the graph holds more than the answer needs.
+  def pick_a = [col_l, row_in]
+  def pick_zero = [col_far, row_mid]
+  def pick_plus_r = [col_r, row_out]
+  def f_classes = frame()
+  def f_a = frame(~current: #'a, ~point: row_in, ~picks: [pick_a])
+  def f_zero = frame(~current: #'zero, ~point: row_mid, ~picks: [pick_a, pick_zero])
+  def f_root = frame(~current: #'root, ~point: row_out,
+                     ~picks: [pick_a, pick_zero, pick_plus_r], ~term: "a + 0")
+  // the last rule fires: `a` is now in the root class, and the two regions are one
+  def f_merged = frame(~merged: #true, ~picks: [pick_a, pick_zero, pick_plus_r],
+                       ~term: "a + 0")
+  // so the same walk comes back with `a` itself
+  def f_final = frame(~merged: #true, ~current: #'root, ~point: row_out,
+                      ~picks: [pick_a], ~term: "a")
+
+  pc.switch(explored,
+            pc.cross_fade(settled, f_classes),
+            pc.cross_fade(f_classes, f_a),
+            pc.cross_fade(f_a, f_zero),
+            pc.cross_fade(f_zero, f_root),
+            pc.cross_fade(f_root, f_merged),
+            pc.cross_fade(f_merged, f_final))
 
 // -------------------------------------------------------------------------------------
 // slide_20: slide_2 again, marking which of those tools need effects.
