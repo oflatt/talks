@@ -174,61 +174,52 @@ fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
 
 
 // ---------------------------------------------------------------------------
-// Where the `update` example sits: the program across the top, the graph built
-// from it underneath. `slide_update`, `slide_egraph` and `slide_rue` all use
-// these, so the code box lands in one place and stays put across the cuts.
+// Where the `update` example sits: the program down the left, the graph built
+// from it down the right, side by side. `slide_update`, `slide_egraph` and
+// `slide_rue` all use these, so the code box lands in one place and stays put
+// across the cuts.
 //
-//    fun foo(a, x, b, y, c, ω):
-//      (v1, ω1) = update(a, x, ω)                    the rule, on `slide_rue`
-//      ...
+//    fun foo(a, x, b, y, c, ω):        a  x            ω
+//      (v1, ω1) = update(a, x, ω)            update
+//      (v2, ω2) = update(a, x, ω1)                v1     ω1
+//      (v3, ω3) = update(b, y, ω2)           update
+//      (v4, ω4) = update(c, v2, ω3)    b  y      v2     ω2
+//                                            update
+//    the rule, on `slide_rue`          c         v3     ω3
+//                                            update
+//                                               v4     ω4
 //
-//         ω     a     x     b     y     c            inputs
+// Data flows down: an operand is above the operator that takes it, and every edge
+// points the way the data goes. Each input sits one layer above the `update` that
+// first uses it, in one of two columns on the left; the updates run down the
+// middle and the state chain down the right. That is what keeps the three long
+// edges -- `a` and `x` into the second update, `v2` into the fourth -- clear of
+// every box they pass, so the columns are spaced the way they are on purpose:
+// move one and those edges start crossing boxes.
 //
-//      update ω1 update ω2 update ω3 update ω4       the statewalk
-//        v1        v2        v3        v4            what each one returns
-//
-// A wide slide is the wrong shape for a nine-layer column, which is what this
-// was: the graph took the right-hand third, the code overflowed its own box into
-// it, and the bottom left was empty. Read across instead and the shape of the
-// picture is the shape of the thing -- the state passing from one `update` to the
-// next along a row, which is the statewalk the paper names.
-//
-// Inputs on top, so an operand is above the operator that takes it and every edge
-// points the way the data goes. That also keeps the long edges clear by
-// construction: every edge out of the input row lands on the *top* border of a box
-// in the op row, so it stays above that row the whole way across and cannot cross
-// anything in it -- which is what the two-column leaf layout was working around.
-def code_size = 40.0
+// The code is set at 36pt because the two have to fit beside each other. At 40 the
+// box runs to 1082 and the graph, whose spacing is fixed by those edges, will not
+// fit in what is left; at 50 -- what Keynote had -- the box alone is 1224 wide,
+// which is why the text used to overflow its own border into the graph.
+def code_size = 36.0
 def code_x = 95.0            // the deck's left margin, where the titles start
 def code_y = 240.0
-def code_row = 70.0          // a line of the box: 60pt of ink at 40pt, plus leading
+def code_row = 63.0          // a line of the box: 54pt of ink at 36pt, plus leading
 def code_inset = 20.0
 
-def node_w = 64.0            // a leaf, a value or a state
-def node_h = 63.486
-def op_w = 180.242           // an `update`
-def op_h = 64.0
+def chain_row = 92.0
+fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
+def chain_leaf_l = 1030.0    // a, b, c
+def chain_leaf_r = 1210.0    // x, y
+def chain_op = 1352.0        // the update boxes, which are 180.242 wide
+def chain_v = 1620.0         // v1 … v4
+def chain_s = 1810.0         // ω, ω1 … ω4
 
-def leaf_y = 672.0           // the input row, just below the code box
-def leaf_x0 = 140.0
-def leaf_pitch = 150.0
-def op_y = 820.0             // the statewalk
-def op_x0 = 140.0
-def op_gap = 60.0
-def val_y = 1006.0           // what each `update` returns
-
-// The op row alternates `update` and the state it produces, left to right.
-fun op_x(k :: Int) :: Real: op_x0 + k * (op_w + node_w + 2 * op_gap)
-fun state_x(k :: Int) :: Real: op_x(k) + op_w + op_gap
-// A value sits centred under the `update` that returns it, an input in the row
-// above, in the order the signature names them.
-fun val_x(k :: Int) :: Real: op_x(k) + (op_w - node_w) / 2
-fun leaf_x(i :: Int) :: Real: leaf_x0 + i * leaf_pitch
-
-// The rule box on `slide_rue`, in the space the code box leaves beside it.
-def rule_x = 1130.0
-def rule_y = 270.0
-def rule_w = slide_width - 40.0 - rule_x
+// The rule box on `slide_rue`, under the code it is about, in the space the graph
+// leaves beside it.
+def rule_x = 95.0
+def rule_y = 650.0
+def rule_w = chain_leaf_l - 40.0 - rule_x
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -580,13 +571,18 @@ fun slide_12():
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.8),
                                              run("Rules:", ~font: prose_font, ~size: 60.0,
-                                                 ~spacing: -2.0)))),
-                             at(90.294, 334.196, ~tag: "α + 0 → α",
-                                linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
-                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                                        para(
-                                             run("α + 0 → α", ~font: math_font, ~size: 60.0,
-                                                 ~color: hex("4F8F00"))))))))
+                                                 ~spacing: -2.0)))))))
+
+  // The third rule is held back: it is the one that makes the difference to what
+  // extraction can find, so the slide extracts a term without it first and only
+  // then puts it up. Its place in the list is where it sat inside the group.
+  def third_rule:
+    linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
+            ~insets: insets(4.0, 4.0, 4.0, 4.0),
+            para(run("α + 0 → α", ~font: math_font, ~size: 60.0,
+                     ~color: hex("4F8F00"))))
+  def third_rule_x = 1170.567 + 90.294
+  def third_rule_y = 252.964 + 334.196
 
   // adds '+', 'a', '1', '−'
   // adds the leaves and the term's own two operators
@@ -675,65 +671,46 @@ fun slide_12():
   def nd = 100.0                              // the node size `node` builds
   def eclass_pad = 12.0
   def eclass_fill = draw.Color(146, 146, 146, 0.3)
-  // The pointer and the outline it carries are drawn in the same red as the
-  // bubble that names the job, since they are all one thing happening. Two
-  // spellings of it, because the outline goes on a pict and the arrow and the
-  // freehand region are the runtime's shapes.
-  def visiting = talk_red
-  def visiting_hex = "FF0000"
-  def picked_line = draw.Color(79, 143, 0)    // the green the paper fills a term with
+  def walk_hex = "2684EB"                     // `talk_blue`, as the runtime spells it
+  def picked_line = draw.Color(79, 143, 0)    // the green of the rule that needs it
 
   // A class, drawn as the region round the nodes it holds -- the box its members
   // span, grown a little. The two classes with two members each have both of them
   // side by side in a row, which is what lets a rectangle say it.
-  fun region(p :: pc.Pict, x :: Real, y :: Real, w :: Real, h :: Real,
-             ~current: current = #false) :: pc.Pict:
-    def rw = w + 2 * eclass_pad
-    def rh = h + 2 * eclass_pad
-    // A line width with no line to draw is a contract violation, so the outlined
-    // one is its own call rather than one call with two conditional arguments.
-    def shape:
-      if current
-      | pc.rectangle(~width: rw, ~height: rh, ~fill: eclass_fill,
-                     ~line: visiting, ~line_width: 5, ~rounded: -0.35)
-      | pc.rectangle(~width: rw, ~height: rh, ~fill: eclass_fill,
-                     ~line: #false, ~rounded: -0.35)
-    put(p, shape, x - eclass_pad, y - eclass_pad)
+  fun region(p :: pc.Pict, x :: Real, y :: Real, w :: Real, h :: Real) :: pc.Pict:
+    put(p, pc.rectangle(~width: w + 2 * eclass_pad, ~height: h + 2 * eclass_pad,
+                        ~fill: eclass_fill, ~line: #false, ~rounded: -0.35),
+        x - eclass_pad, y - eclass_pad)
 
-  // The class `a` joins when the last rule fires. No rectangle around its three
+  // The class `a` joins when the third rule fires. No rectangle around its three
   // members can draw it: `+` is a class of its own sitting between `a` and the
   // root in the same column, and this shape threads between `+` and the `1 - 1`
   // class to get past it. It is Keynote's own freehand blob, kept for that reason
   // and recoloured to match the rest.
-  fun root_region(~current: current = #false):
+  def root_region:
     shape_pict(~width: 367.991, ~height: 524.05, ~flip_v: #true,
                ~geom: custom_geom(
                                  [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
                                  21451, 21147),
-               ~fill: hex("929292", ~alpha: 0.3),
-               ~line: if current | make_stroke(hex(visiting_hex), ~width: 5.0) | #false)
+               ~fill: hex("929292", ~alpha: 0.3))
 
-  // The classes as they stand, before and after that merge. `current` names the
-  // one being visited, which is drawn with an outline: the pointer says which row
-  // we are on, and the outline says which class in it.
-  fun classes(p :: pc.Pict, ~current: current = #false,
-              ~merged: merged = #false) :: pc.Pict:
-    fun r(q, key, x, y, w, h): region(q, x, y, w, h, ~current: current == key)
-    let p = r(p, #'one, col_r, row_in, nd, nd)
-    let p = r(p, #'plus, col_l, row_mid, nd, nd)
-    let p = r(p, #'zero, col_r, row_mid, col_far + nd - col_r, nd)
+  fun classes(p :: pc.Pict, ~merged: merged = #false) :: pc.Pict:
+    let p = region(p, col_r, row_in, nd, nd)
+    let p = region(p, col_l, row_mid, nd, nd)
+    let p = region(p, col_r, row_mid, col_far + nd - col_r, nd)
     if merged
-    | put(p, root_region(~current: current == #'root), 783.351, 463.479)
+    | put(p, root_region, 783.351, 463.479)
     | block:
-        let p = r(p, #'a, col_l, row_in, nd, nd)
-        r(p, #'root, col_l, row_out, col_r + nd - col_l, nd)
+        let p = region(p, col_l, row_in, nd, nd)
+        region(p, col_l, row_out, col_r + nd - col_l, nd)
 
-  // A node picked out of its class: the nodes picked are the term that comes out.
+  // A node picked out of its class. A ring rather than a wash: a translucent green
+  // laid over the box tints its label too, and a green `a` reads as some other
+  // thing rather than as this node, marked.
   fun picked(p :: pc.Pict, x :: Real, y :: Real) :: pc.Pict:
-    put(p, pc.rectangle(~width: nd + 10.0, ~height: nd + 10.0,
-                        ~fill: picked_line with (alpha = 0.35),
-                        ~line: picked_line, ~line_width: 6, ~rounded: -0.3),
-        x - 5.0, y - 5.0)
+    put(p, pc.rectangle(~width: nd + 16.0, ~height: nd + 16.0, ~fill: #false,
+                        ~line: picked_line, ~line_width: 7, ~rounded: -0.3),
+        x - 8.0, y - 8.0)
 
   // The pointer that walks down the graph, a row per press. It sits left of the
   // graph, right of the data-flow arrow, and travels the same way that arrow
@@ -742,54 +719,53 @@ fun slide_12():
     shape_pict(~width: 80.0, ~height: 34.0,
                ~geom: preset_geom("rightArrow",
                                   [pair("adj1", "val 45000"), pair("adj2", "val 60000")]),
-               ~fill: hex(visiting_hex))
+               ~fill: hex(walk_hex))
   fun pointing_at(p :: pc.Pict, row_y :: Real) :: pc.Pict:
     put(p, walk_arrow, 706.0, row_y + nd / 2 - 17.0)
 
-  // What came out, written under the input term it came from.
-  fun extracted(term :: String) :: pc.Pict:
-    as_pict(textbox(~width: 320.0, ~height: 228.28, ~autofit: #'shrink,
-                    ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                    para(~line_spacing: pair(#'percent, 0.8),
-                         run("Extracted:", ~font: prose_font, ~size: 60.0, ~spacing: -2.01)),
-                    para(~line_spacing: pair(#'percent, 0.8), run("", ~size: 60.0)),
-                    para(~line_spacing: pair(#'percent, 0.8),
-                         run("  " ++ term, ~font: prose_font, ~size: 60.0, ~spacing: -2.01))))
+  // The bubble extraction speaks through: it names the job while the walk runs,
+  // and then holds the term that came out, pointing at the node that term is
+  // rooted at. `slot` is where its body goes, since the first answer is rooted at
+  // the bottom of the graph and the second at the top -- the bubble follows the
+  // answer rather than staying put and reaching across the picture for it.
+  def task_slot = [1370.0, 800.0]
+  def answer_slot = [620.0, 300.0]
+  fun says(p :: pc.Pict, content :: pc.Pict, ~at: target, ~slot: slot :: List) :: pc.Pict:
+    def [sx, sy] = slot
+    multi_callout(~on: put(p, m_extract, sx, sy),
+                  ~place: as_pict(m_extract), ~at: [as_pict(target)],
+                  ~color: talk_red, ~padding: 18.0, content)
 
-  // Keynote's bubble naming the job, which is now the label for the walk that
-  // does it. It sits in the empty bottom-right corner, below the rules, so the
-  // spike reaches the root class without crossing the graph.
-  fun with_callout(p :: pc.Pict) :: pc.Pict:
-    multi_callout(~on: put(p, m_extract, 1370.0, 800.0),
-                  ~place: as_pict(m_extract), ~at: [as_pict(n_plus_r)],
-                  ~color: talk_red, ~padding: 12.0,
-                  as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center,
-                                  ~autofit: #'grow,
-                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                  para(~align: #'center,
-                                       run("extract", ~font: prose_font,
-                                           ~size: 48.0, ~bold: #true),
-                                       run(" a resulting term",
-                                           ~font: prose_font, ~size: 48.0)))))
+  def task_says:
+    as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center, ~autofit: #'grow,
+                    ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                    para(~align: #'center,
+                         run("extract", ~font: prose_font, ~size: 48.0, ~bold: #true),
+                         run(" a resulting term", ~font: prose_font, ~size: 48.0))))
+  // the term itself, set in the face the node labels are set in
+  fun term_says(s :: String) :: pc.Pict:
+    pc.text(s, ~font: draw.Font(~name: node_font, ~size: 64.0))
 
-  fun frame(~current: current = #false, ~point: point = #false,
-            ~picks: picks :: List = [], ~term: term = #false,
-            ~merged: merged = #false) :: pc.Pict:
-    def base = classes(settled, ~current: current, ~merged: merged)
-    // the last rule's own equivalence, drawn with the merge it causes. Unshifted,
-    // so it runs down the middle of the class it joins; the operand arrow it
-    // would otherwise lie under was moved aside at k = 3.
+  fun frame(~point: point = #false, ~picks: picks :: List = [],
+            ~says: say = #false, ~at: target = #false, ~slot: slot = #false,
+            ~third: third = #false, ~merged: merged = #false) :: pc.Pict:
+    def based = classes(settled, ~merged: merged)
+    def ruled = if third | put(based, third_rule, third_rule_x, third_rule_y) | based
+    // the third rule's own equivalence, drawn with the merge it makes. Unshifted,
+    // so it runs down the middle of the class it joins; the operand arrow it would
+    // otherwise lie under was moved aside at k = 3.
     def joined:
       if merged
-      | arrow(~on: base, n_plus_r, n_a, ~style: #'line, ~line_style: #'short_dash,
+      | arrow(~on: ruled, n_plus_r, n_a, ~style: #'line, ~line_style: #'short_dash,
               ~color: picked_line, ~line_width: 4)
-      | base
+      | ruled
     def marked:
       for values(q :~ pc.Pict = joined) ([x, y] in picks):
         picked(q, x, y)
     def walked = if point | pointing_at(marked, point) | marked
-    def told = if term | put(walked, extracted(term), 95.0, 600.0) | walked
-    with_callout(told)
+    if say
+    | says(walked, say, ~at: target, ~slot: slot)
+    | walked
 
   // The walk: `a` out of its own class, then `0` rather than the `1 - 1` it is
   // equal to, then `a + 0` rather than the `(a + 1) - 1` it is equal to -- each
@@ -798,25 +774,30 @@ fun slide_12():
   def pick_a = [col_l, row_in]
   def pick_zero = [col_far, row_mid]
   def pick_plus_r = [col_r, row_out]
-  def f_classes = frame()
-  def f_a = frame(~current: #'a, ~point: row_in, ~picks: [pick_a])
-  def f_zero = frame(~current: #'zero, ~point: row_mid, ~picks: [pick_a, pick_zero])
-  def f_root = frame(~current: #'root, ~point: row_out,
-                     ~picks: [pick_a, pick_zero, pick_plus_r], ~term: "a + 0")
-  // the last rule fires: `a` is now in the root class, and the two regions are one
-  def f_merged = frame(~merged: #true, ~picks: [pick_a, pick_zero, pick_plus_r],
-                       ~term: "a + 0")
+  def f_classes = frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot)
+  def f_a = frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot,
+                  ~point: row_in, ~picks: [pick_a])
+  def f_zero = frame(~says: task_says, ~at: n_plus_r, ~slot: task_slot,
+                     ~point: row_mid, ~picks: [pick_a, pick_zero])
+  // the last pick, and the bubble that named the job now holds what came out of it
+  def f_root = frame(~says: term_says("a + 0"), ~at: n_plus_r, ~slot: task_slot,
+                     ~point: row_out, ~picks: [pick_a, pick_zero, pick_plus_r])
+  // that extraction is done with, and the rule that changes its answer goes up
+  def f_third = frame(~third: #true)
+  // and fires: `a` is now in the root class, and the two regions are one
+  def f_merged = frame(~third: #true, ~merged: #true)
   // so the same walk comes back with `a` itself
-  def f_final = frame(~merged: #true, ~current: #'root, ~point: row_out,
-                      ~picks: [pick_a], ~term: "a")
+  def f_again = frame(~third: #true, ~merged: #true, ~point: row_out, ~picks: [pick_a],
+                      ~says: term_says("a"), ~at: n_a, ~slot: answer_slot)
 
   pc.switch(explored,
             pc.cross_fade(settled, f_classes),
             pc.cross_fade(f_classes, f_a),
             pc.cross_fade(f_a, f_zero),
             pc.cross_fade(f_zero, f_root),
-            pc.cross_fade(f_root, f_merged),
-            pc.cross_fade(f_merged, f_final))
+            pc.cross_fade(f_root, f_third),
+            pc.cross_fade(f_third, f_merged),
+            pc.cross_fade(f_merged, f_again))
 
 // -------------------------------------------------------------------------------------
 // slide_20: slide_2 again, marking which of those tools need effects.
@@ -1091,36 +1072,30 @@ fun chain_nodes() :: Map:
 // What each `update` brings with it: its own box, the inputs it is the first to
 // use, and the value and state it returns, each at [key, x, y, tag].
 // `chain_frame` draws the first `upto` of these groups, so the picture grows one
-// `update` per press, rightwards, and nothing already on screen moves.
+// `update` per press, downwards, and nothing already on screen moves.
 //
-// The inputs appear in the row above in signature order, each one where it is
-// first used: `a` and `x` with the first `update`, `b` and `y` with the third,
-// `c` with the fourth. Ordering them by first use is also what keeps the row
-// clear of its own edges -- an input's edges all run down and to the right, so
-// they pass under the inputs that come after it rather than through them.
+// Each input arrives one layer above the `update` that first uses it rather than
+// in a row at the top with the others: from the top, the edge down to a later
+// `update` is a shallow diagonal that cuts through whatever lies between, and
+// staggering the inputs is what keeps those edges clear.
 def chain_steps:
-  [[[#'s0, leaf_x(0), leaf_y, "ω"], [#'a, leaf_x(1), leaf_y, "a"],
-    [#'x, leaf_x(2), leaf_y, "x"],
-    [#'u1, op_x(0), op_y, "update"], [#'s1, state_x(0), op_y, "ω1"],
-    [#'v1, val_x(0), val_y, "v1"]],
-   [[#'u2, op_x(1), op_y, "update (2)"], [#'s2, state_x(1), op_y, "ω2"],
-    [#'v2, val_x(1), val_y, "v2"]],
-   [[#'b, leaf_x(3), leaf_y, "b"], [#'y, leaf_x(4), leaf_y, "y"],
-    [#'u3, op_x(2), op_y, "update (3)"], [#'s3, state_x(2), op_y, "ω3"],
-    [#'v3, val_x(2), val_y, "v3"]],
-   [[#'c, leaf_x(5), leaf_y, "c"],
-    [#'u4, op_x(3), op_y, "update (4)"], [#'s4, state_x(3), op_y, "ω4"],
-    [#'v4, val_x(3), val_y, "v4"]]]
-// An edge is [from, to], or [from, to, shift] to slide it sideways off something
-// it would otherwise graze.
+  [[[#'s0, chain_s, chain_y(0), "ω"], [#'a, chain_leaf_l, chain_y(0), "a"],
+    [#'x, chain_leaf_r, chain_y(0), "x"],
+    [#'u1, chain_op, chain_y(1), "update"],
+    [#'s1, chain_s, chain_y(2), "ω1"], [#'v1, chain_v, chain_y(2), "v1"]],
+   [[#'u2, chain_op, chain_y(3), "update (2)"],
+    [#'s2, chain_s, chain_y(4), "ω2"], [#'v2, chain_v, chain_y(4), "v2"]],
+   [[#'b, chain_leaf_l, chain_y(4), "b"], [#'y, chain_leaf_r, chain_y(4), "y"],
+    [#'u3, chain_op, chain_y(5), "update (3)"],
+    [#'s3, chain_s, chain_y(6), "ω3"], [#'v3, chain_v, chain_y(6), "v3"]],
+   [[#'c, chain_leaf_l, chain_y(6), "c"],
+    [#'u4, chain_op, chain_y(7), "update (4)"],
+    [#'s4, chain_s, chain_y(8), "ω4"], [#'v4, chain_v, chain_y(8), "v4"]]]
 def chain_value_edges:
   [[[#'a, #'u1], [#'x, #'u1], [#'u1, #'v1]],
    [[#'a, #'u2], [#'x, #'u2], [#'u2, #'v2]],
    [[#'b, #'u3], [#'y, #'u3], [#'u3, #'v3]],
-   // `v2` is four boxes left of the `update` that takes it, so this edge runs a
-   // long way just under the op row; shifted, it passes clear of the state box at
-   // the end of that run instead of grazing its corner.
-   [[#'c, #'u4], [#'v2, #'u4, 22.0], [#'u4, #'v4]]]
+   [[#'c, #'u4], [#'v2, #'u4], [#'u4, #'v4]]]
 def chain_state_edges:
   [[[#'s0, #'u1], [#'u1, #'s1]],
    [[#'s1, #'u2], [#'u2, #'s2]],
@@ -1133,12 +1108,9 @@ fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int) :: pc.Pict:
       each [key, x, y, tag] in chain_steps[k]
       at(x, y, ~tag: tag, n[key])
   def p = put(base, group_pict(~width: slide_width, ~height: slide_height, & placed), 0.0, 0.0)
-  // One at a time rather than through `arrows`, so that an edge may carry a shift
-  // of its own.
   fun wire_edges(q :: pc.Pict, es :~ List, ~& kws) :~ pc.Pict:
-    for values(acc :~ pc.Pict = q) (e :~ List in es):
-      arrow(~on: acc, n[e[0]], n[e[1]],
-            ~shift: (if e.length() > 2 | e[2] | 0.0), ~& kws)
+    for values(acc :~ pc.Pict = q) ([f, t] in es):
+      arrow(~on: acc, n[f], n[t], ~& kws)
   // The two kinds of edge, in the weights and colours Keynote gave them: values
   // thin and black, the state chain thick and in its blue.
   for values(q :~ pc.Pict = p) (k in 0..upto):
