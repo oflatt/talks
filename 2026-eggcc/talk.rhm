@@ -197,29 +197,38 @@ fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
 // every box they pass, so the columns are spaced the way they are on purpose:
 // move one and those edges start crossing boxes.
 //
-// The code is set at 36pt because the two have to fit beside each other. At 40 the
-// box runs to 1082 and the graph, whose spacing is fixed by those edges, will not
-// fit in what is left; at 50 -- what Keynote had -- the box alone is 1224 wide,
-// which is why the text used to overflow its own border into the graph.
-def code_size = 36.0
+// The code is set at 32pt because the two have to fit beside each other, and the
+// graph needs its variables left of the `update` column as well as above it. At
+// 40 the box runs to 1082 and there is no room for either; at 50 -- what Keynote
+// had -- the box alone is 1224 wide, which is why the text used to overflow its
+// own border into the graph.
+def code_size = 32.0
 def code_x = 95.0            // the deck's left margin, where the titles start
 def code_y = 240.0
-def code_row = 63.0          // a line of the box: 54pt of ink at 36pt, plus leading
+def code_row = 56.0          // a line of the box: 48pt of ink at 32pt, plus leading
 def code_inset = 20.0
 
 def chain_row = 92.0
 fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
-def chain_leaf_l = 1030.0    // a, b, c
-def chain_leaf_r = 1210.0    // x, y
 def chain_op = 1352.0        // the update boxes, which are 180.242 wide
 def chain_v = 1620.0         // v1 … v4
 def chain_s = 1810.0         // ω, ω1 … ω4
+// The variables in a row along the top, in the order the signature names them,
+// with the incoming state at the end of the row above its own column. They are
+// the inputs, so they belong together and above everything that reads them.
+//
+// The row sits entirely *left* of the `update` column, which is what makes the
+// long edges drawable. An `update` far down the chain has to reach a variable
+// past every `update` above it, and those are all in one column: from the left
+// the edge has clear air, and from directly above it does not. Two of them still
+// have to bow out into the empty band below the row -- see `chain_frame`.
+fun leaf_x(i :: Int) :: Real: 935.0 + i * 86.0
 
 // The rule box on `slide_rue`, under the code it is about, in the space the graph
 // leaves beside it.
 def rule_x = 95.0
 def rule_y = 650.0
-def rule_w = chain_leaf_l - 40.0 - rule_x
+def rule_w = leaf_x(0) - 40.0 - rule_x
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -673,15 +682,13 @@ fun slide_12():
   // they are built whole from `settled` and cross-faded, which a reveal cannot
   // do.
   def nd = 100.0                              // the node size `node` builds
-  def eclass_pad = 12.0
-  def eclass_fill = draw.Color(146, 146, 146, 0.3)
+  def eclass_fill = eclass_grey
   def walk_hex = "2684EB"                     // `talk_blue`, as the runtime spells it
   // Two colours, not one: the green belongs to the third rule -- it is the colour
   // that rule is written in, so its dashed equivalence is drawn in it too -- and a
   // picked node needs to be something else, or the mark on a node and the rule
   // that changes which node gets marked read as the same thing.
   def rule_green = draw.Color(79, 143, 0)
-  def picked_line = draw.Color(214, 22, 130)
 
   // A class, drawn as the region round the nodes it holds -- the box its members
   // span, grown a little. The two classes with two members each have both of them
@@ -1104,26 +1111,30 @@ fun chain_nodes() :: Map:
 // `update` is a shallow diagonal that cuts through whatever lies between, and
 // staggering the inputs is what keeps those edges clear.
 def chain_steps:
-  [[[#'s0, chain_s, chain_y(0), "ω"], [#'a, chain_leaf_l, chain_y(0), "a"],
-    [#'x, chain_leaf_r, chain_y(0), "x"],
+  [[[#'s0, chain_s, chain_y(0), "ω"], [#'a, leaf_x(0), chain_y(0), "a"],
+    [#'x, leaf_x(1), chain_y(0), "x"],
     [#'u1, chain_op, chain_y(1), "update"],
     [#'s1, chain_s, chain_y(2), "ω1"], [#'v1, chain_v, chain_y(2), "v1"]],
    [[#'u2, chain_op, chain_y(3), "update (2)"],
     [#'s2, chain_s, chain_y(4), "ω2"], [#'v2, chain_v, chain_y(4), "v2"]],
-   [[#'b, chain_leaf_l, chain_y(4), "b"], [#'y, chain_leaf_r, chain_y(4), "y"],
+   [[#'b, leaf_x(2), chain_y(0), "b"], [#'y, leaf_x(3), chain_y(0), "y"],
     [#'u3, chain_op, chain_y(5), "update (3)"],
     [#'s3, chain_s, chain_y(6), "ω3"], [#'v3, chain_v, chain_y(6), "v3"]],
-   [[#'c, chain_leaf_l, chain_y(6), "c"],
+   [[#'c, leaf_x(4), chain_y(0), "c"],
     [#'u4, chain_op, chain_y(7), "update (4)"],
     [#'s4, chain_s, chain_y(8), "ω4"], [#'v4, chain_v, chain_y(8), "v4"]]]
 // An edge runs from a node to the ones it is built from: an `update` points at
 // its arguments, and the value and state it returns point back at it. Data still
 // flows down the picture; the arrowheads say what contains what.
+// `#'up` aims the arrowhead at the variable's bottom edge rather than at the
+// point on its border facing the `update`: the edge then stays under the row all
+// the way across and cannot clip the variables it passes beneath. A number
+// instead means the edge bows -- see `chain_frame`.
 def chain_value_edges:
-  [[[#'u1, #'a], [#'u1, #'x], [#'v1, #'u1]],
-   [[#'u2, #'a], [#'u2, #'x], [#'v2, #'u2]],
-   [[#'u3, #'b], [#'u3, #'y], [#'v3, #'u3]],
-   [[#'u4, #'c], [#'u4, #'v2], [#'v4, #'u4]]]
+  [[[#'u1, #'a, #'up], [#'u1, #'x, #'up], [#'v1, #'u1]],
+   [[#'u2, #'a, #'up], [#'u2, #'x, #'up], [#'v2, #'u2]],
+   [[#'u3, #'b, #'up], [#'u3, #'y, 0.42], [#'v3, #'u3]],
+   [[#'u4, #'c, 0.55], [#'u4, #'v2], [#'v4, #'u4]]]
 def chain_state_edges:
   [[[#'u1, #'s0], [#'s1, #'u1]],
    [[#'u2, #'s1], [#'s2, #'u2]],
@@ -1136,9 +1147,29 @@ fun chain_frame(base :: pc.Pict, n :~ Map, upto :: Int) :: pc.Pict:
       each [key, x, y, tag] in chain_steps[k]
       at(x, y, ~tag: tag, n[key])
   def p = put(base, group_pict(~width: slide_width, ~height: slide_height, & placed), 0.0, 0.0)
-  fun wire_edges(q :: pc.Pict, es :~ List, ~& kws) :~ pc.Pict:
-    for values(acc :~ pc.Pict = q) ([f, t] in es):
-      arrow(~on: acc, n[f], n[t], ~& kws)
+  // Three kinds of edge. A plain one runs border to border. `#'up` comes up under
+  // the variable it points at, so it passes below the row rather than clipping the
+  // boxes along it. A number bows the edge out into the empty band below the row
+  // and left of the column, for the two runs that a straight line cannot make
+  // without crossing an `update` on the way -- the number is how far it bows.
+  fun wire_edges(q :: pc.Pict, es :~ List,
+                 ~color: color = "black", ~line_width: lw :: Real = 4) :~ pc.Pict:
+    for values(acc :~ pc.Pict = q) (e :~ List in es):
+      def mode = if e.length() > 2 | e[2] | #false
+      cond
+      | mode == #'up:
+          arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4,
+                ~to_at: pc.Find.bottom(as_pict(n[e[1]]), ~dy: 5))
+      | mode is_a Real:
+          pc.connect(~on: acc,
+                     pc.Find.left(as_pict(n[e[0]])),
+                     pc.Find.bottom(as_pict(n[e[1]]), ~dy: 5),
+                     ~style: #'arrow, ~line: color, ~line_width: lw,
+                     ~arrow_size: 4 * lw,
+                     ~start_angle: math.pi, ~end_angle: math.pi / 2,
+                     ~start_pull: mode, ~end_pull: mode)
+      | ~else:
+          arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4)
   // The two kinds of edge, in the weights and colours Keynote gave them: values
   // thin and black, the state chain thick and in its blue.
   for values(q :~ pc.Pict = p) (k in 0..upto):
@@ -1221,8 +1252,13 @@ fun slide_egraph():
 // above -- so a region round both would have to swallow everything between them,
 // and a straight line between them would cross the second `update`. Sharing a
 // colour says the same thing and follows the layout.
+// The two equalities the rule states, each in its own colour, and the colour a
+// picked node is ringed in. Three separate jobs, so three colours that cannot be
+// read for each other: the deck's rule green and rule orange for the equalities,
+// and a magenta that nothing else on either slide uses for the picks.
 def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
-def value_class = draw.Color(211, 24, 118)    // v2 ≡ x
+def value_class = draw.Color(255, 147, 0)     // v2 ≡ x
+def picked_line = draw.Color(214, 22, 130)
 def rule_font = code_face with (size = 36.0)
 fun rule_code(s :: String) :: pc.Pict: pc.text(s, ~font: rule_font)
 fun rule_greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face with (size = 36.0))
@@ -1263,15 +1299,51 @@ fun update_rule() :: pc.Pict:
 // label -- the state boxes are already blue -- while a ring outside the box
 // leaves both alone and still reads as one thing enclosing another, which is what
 // an e-class is.
-fun halos(p :: pc.Pict, marks :: List) :: pc.Pict:
-  def pad = 11.0
-  for values(acc :~ pc.Pict = p):
-    each [node, color] in marks
-    def q :~ pc.Pict = as_pict(node)
-    def (x, y) = pc.Find.top_left(q).in(p)
-    def ring = pc.rectangle(~width: q.width + 2 * pad, ~height: q.height + 2 * pad,
-                            ~fill: #false, ~line: color, ~line_width: 7, ~rounded: -0.5)
-    put(acc, ring, x - pad, y - pad)
+// An e-class, drawn the way the background slide draws one: a translucent grey
+// region round the nodes it holds, with a dashed line between them saying they
+// are the same value.
+//
+// `rects` is one or more [x, y, w, h] in slide coordinates, and they are drawn as
+// subpaths of a single path and filled once. That matters where a class needs
+// more than a box to enclose it: two rounded rectangles and a bar joining them
+// overlap, and two translucent shapes laid over each other would show the seam
+// where they meet, while one path filled once is an even wash over the union.
+def eclass_pad = 12.0
+def eclass_grey = draw.Color(146, 146, 146, 0.3)
+fun eclass_blob(p :: pc.Pict, rects :: List) :: pc.Pict:
+  def path = draw.Path()
+  for ([x, y, w, h] in rects):
+    path.rounded_rectangle([x, y, w, h], -0.35)
+  def r = path.bounding_box()
+  def shape:
+    pc.dc(fun (target :: draw.DC, dx, dy):
+            target.path(path, ~dx: dx - r.x, ~dy: dy - r.y),
+          ~width: r.width, ~height: r.height,
+          ~fill: eclass_grey, ~line: #false)
+  put(p, shape, r.x, r.y)
+
+// The box a node sits in, grown by `eclass_pad`, as one of those rects.
+fun node_rect(node, x :: Real, y :: Real) :: List:
+  def q :~ pc.Pict = as_pict(node)
+  [x - eclass_pad, y - eclass_pad, q.width + 2 * eclass_pad, q.height + 2 * eclass_pad]
+
+// A dashed line with no head, which is what says two nodes are the same value
+// rather than that anything flows between them.
+//
+// `~around` bends it round the same corner its region turns: down out of the
+// first node and in from the left of the second. A straight line between those
+// two would cross the `update` that stands between them, which is the one node in
+// the picture that this equality is about not needing.
+fun same_value(p :: pc.Pict, from, to, ~color: color,
+               ~around: around = #false) :: pc.Pict:
+  if around
+  | pc.connect(~on: p, pc.Find.bottom(as_pict(from)), pc.Find.left(as_pict(to)),
+               ~style: #'line, ~line_style: #'short_dash,
+               ~line: color, ~line_width: 4,
+               ~start_angle: -math.pi / 2, ~end_angle: 0,
+               ~start_pull: 0.5, ~end_pull: 0.5)
+  | arrow(~on: p, from, to, ~style: #'line, ~line_style: #'short_dash,
+          ~color: color, ~line_width: 4)
 
 fun slide_rue():
   def canvas = with_icon(titled("Redundant Update Elimination"))
@@ -1282,10 +1354,73 @@ fun slide_rue():
   def stated:
     put(mark_line(mark_line(graph, parts, 0), parts, 1),
         fit_width(update_rule(), rule_w), rule_x, rule_y)
+
+  // The two classes the rule makes. The states are one above the other in their
+  // own column, so a single region covers them both. The value pair is not: `x`
+  // is an input up in the top row and `v2` is four layers down in the value
+  // column, so its region is drawn as the two of them joined round the corner,
+  // through the empty band left of the `update` column and along the empty row
+  // under it.
+  def state_blob:
+    [[chain_s - eclass_pad, chain_y(2) - eclass_pad,
+      64.0 + 2 * eclass_pad,
+      chain_y(4) + 63.486 - chain_y(2) + 2 * eclass_pad]]
+  def x_cx = leaf_x(1) + 32.0        // the tube runs down the middle of `x`
+  def v2_cy = chain_y(4) + 31.7      // and along the middle of `v2`
+  def tube = 44.0
+  def value_blob:
+    [node_rect(n[#'x], leaf_x(1), chain_y(0)),
+     [x_cx - tube / 2, chain_y(0) + 40.0, tube, v2_cy - chain_y(0) - 40.0 + tube / 2],
+     [x_cx, v2_cy - tube / 2, chain_v + 40.0 - x_cx, tube],
+     node_rect(n[#'v2], chain_v, chain_y(4))]
+
   def unioned:
-    halos(stated, [[n[#'s1], state_class], [n[#'s2], state_class],
-                   [n[#'x], value_class], [n[#'v2], value_class]])
-  pc.switch(graph, pc.cross_fade(graph, stated), pc.cross_fade(stated, unioned))
+    let p = eclass_blob(stated, state_blob)
+    let p = eclass_blob(p, value_blob)
+    let p = same_value(p, n[#'s1], n[#'s2], ~color: state_class)
+    same_value(p, n[#'x], n[#'v2], ~color: value_class, ~around: #true)
+
+  // Then extraction, in the same terms the background slide put it: a pointer
+  // down the state chain, and the node picked out of each class ringed. The
+  // second `update` is the one that is not picked -- its state class is already
+  // represented by `ω1` and its value class by `x` -- which is the whole point of
+  // the rule.
+  def program = [[#'s0, chain_s, chain_y(0)], [#'a, leaf_x(0), chain_y(0)],
+                 [#'x, leaf_x(1), chain_y(0)], [#'u1, chain_op, chain_y(1)],
+                 [#'v1, chain_v, chain_y(2)], [#'s1, chain_s, chain_y(2)],
+                 [#'b, leaf_x(2), chain_y(0)], [#'y, leaf_x(3), chain_y(0)],
+                 [#'u3, chain_op, chain_y(5)], [#'v3, chain_v, chain_y(6)],
+                 [#'s3, chain_s, chain_y(6)],
+                 [#'c, leaf_x(4), chain_y(0)], [#'u4, chain_op, chain_y(7)],
+                 [#'v4, chain_v, chain_y(8)], [#'s4, chain_s, chain_y(8)]]
+  fun picked_all(p :: pc.Pict, upto :: Int) :: pc.Pict:
+    for values(q :~ pc.Pict = p) (i in 0..upto):
+      def [key, x, y] = program[i]
+      put(q, pc.rectangle(~width: (as_pict(n[key]) :~ pc.Pict).width + 16.0,
+                          ~height: (as_pict(n[key]) :~ pc.Pict).height + 16.0,
+                          ~fill: #false, ~line: picked_line, ~line_width: 7,
+                          ~rounded: -0.3),
+          x - 8.0, y - 8.0)
+  // The bubble speaks for the extraction, as it does on the background slide, but
+  // without a spike: what it is about is the whole picked run down the graph, and
+  // every clear patch near the root is small enough that a body pinned there
+  // would cover a node or a curve. It sits under the rule instead, in the column
+  // the code and the rule are already in.
+  fun says(p :: pc.Pict, content :: pc.Pict) :: pc.Pict:
+    put(p, make_bubble(~color: talk_blue, ~padding: 22.0, content), rule_x, 920.0)
+  def task = prose([["extract", #'bold], [" a program", #'plain]])
+  def outcome = prose([["three ", #'bold], ["updates, not four", #'plain]])
+
+  def asked = says(unioned, task)
+  def half = says(picked_all(unioned, 6), task)
+  def whole = says(picked_all(unioned, program.length()), outcome)
+
+  pc.switch(graph,
+            pc.cross_fade(graph, stated),
+            pc.cross_fade(stated, unioned),
+            pc.cross_fade(unioned, asked),
+            pc.cross_fade(asked, half),
+            pc.cross_fade(half, whole))
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
