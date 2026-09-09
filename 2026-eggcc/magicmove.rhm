@@ -9,6 +9,10 @@ export:
   magic_still
   magic_press
   magic_slide
+  band_below
+  band_edges
+  band_nodes
+  band_above
 
 // -------------------------------------------------------------------------------------
 // A magic move over what is on the slide, rather than over two finished pictures
@@ -59,6 +63,14 @@ export:
 class Frame(~picts: picts :: Map = {},
             ~edges: edges :: List = [])
 
+// The bands, named: what a pict's fourth element is for. Anything is allowed, and
+// these four are what a graph needs -- a class region under its nodes, the edges
+// under them too, and a bubble or a rule over the top.
+def band_below = -2
+def band_edges = -1
+def band_nodes = 0
+def band_above = 1
+
 fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
 fun as_pict(q) :: pc.Pict: if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 fun grab(m :~ Map, key): if m.has_key(key) | m[key] | #false
@@ -107,7 +119,7 @@ fun draws_between(a :: Frame, b :: Frame, t :: Real) :: List:
 // The moment `t` of the way from `a` to `b`, over a `base` no press touches.
 fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                   ~wire: wire :: Function.of_arity(3) = fun (layer, specs, at): layer,
-                  ~edge_band: edge_band :: Int = -1) :: pc.Pict:
+                  ~edge_band: edge_band :: Int = band_edges) :: pc.Pict:
   def blank = pc.blank(~width: base.width, ~height: base.height)
   def draws :~ List = draws_between(a, b, t)
   def at :~ Map = picts_between(a, b)

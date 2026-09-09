@@ -159,7 +159,8 @@ fun in_section(k :: Int, mk):
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
   for values(p = base) (st in stages, k in 1..):
-    def extra = wire(pc.overlay(~horiz: #'left, ~vert: #'top, base.ghost(), as_pict(st)), k)
+    def extra:
+      wire(pc.overlay(~horiz: #'left, ~vert: #'top, base.ghost(), as_pict(st)), k)
     fade_in(p, extra, ~horiz: #'left, ~vert: #'top)
 
 // Keynote's blue, which the state parts of the e-graph are drawn in: the state
@@ -192,13 +193,12 @@ fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
 //                                            update
 //    the rule, on `slide_rue`                     v3     ω3
 //
-// Data flows down: an operand is above the operator that takes it, and every edge
-// points the way the data goes. Each input sits one layer above the `update` that
-// first uses it, in one of two columns on the left; the updates run down the
-// middle and the state chain down the right. That is what keeps the three long
-// edges -- `a` and `x` into the second update, `v2` into the fourth -- clear of
-// every box they pass, so the columns are spaced the way they are on purpose:
-// move one and those edges start crossing boxes.
+// Data flows down, and every edge points the way the data goes. The inputs are in
+// a row along the top, the `update`s run down the middle, the value each one
+// returns sits beside it and the state chain runs down the right. The columns are
+// spaced the way they are on purpose: the long edges -- an `update` reaching back
+// up to a variable, a state reaching left to the `update` that reads it -- thread
+// gaps between boxes, and moving a column puts them through one.
 //
 // The code and the graph have to fit beside each other, and the graph needs its
 // variables left of the `update` column as well as above it, so the three of them
@@ -724,10 +724,10 @@ fun slide_12():
                                                       ~size: 40.0, ~color: hex("787878"))))),
                      // far enough left that the label clears the line it names
                      ~label_dx: -120, ~label_dy: 0),
-               0.0, 0.0, 1] }
+               0.0, 0.0, band_above] }
 
-  def rules_over = { #'rules: [rules_group, 0.0, 0.0, 1] }
-  def third_over = { #'third: [third_rule, third_rule_x, third_rule_y, 1] }
+  def rules_over = { #'rules: [rules_group, 0.0, 0.0, band_above] }
+  def third_over = { #'third: [third_rule, third_rule_x, third_rule_y, band_above] }
 
   // The class `a` joins when the third rule fires. No rectangle around its three
   // members can draw it: `+` is a class of its own sitting between `a` and the
@@ -749,13 +749,13 @@ fun slide_12():
   fun region(x :: Real, y :: Real, w :: Real, h :: Real) :: List:
     [pc.rectangle(~width: w + 2 * eclass_pad, ~height: h + 2 * eclass_pad,
                   ~fill: eclass_grey, ~line: #false, ~rounded: -0.35),
-     x - eclass_pad, y - eclass_pad, -2]
+     x - eclass_pad, y - eclass_pad, band_below]
   def r_one = region(col_r, row_in, nd, nd)
   def r_plus = region(col_l, row_mid, nd, nd)
   def r_row = region(col_r, row_mid, col_far + nd - col_r, nd)
   def r_a = region(col_l, row_in, nd, nd)
   def r_out = region(col_l, row_out, col_r + nd - col_l, nd)
-  def r_blob = [root_region, 783.351, 463.479, -2]
+  def r_blob = [root_region, 783.351, 463.479, band_below]
   def classes_under:
     { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row,
       #'r_a: r_a, #'r_out: r_out }
@@ -779,21 +779,17 @@ fun slide_12():
   // would blink. What it points at is a laundered ghost of the region, placed where
   // the region goes: the callout needs something to aim at, and a second copy of
   // the region itself would be a second thing to find.
-  fun task_layer(klass :~ List) :: Map:
-    def marker = blank(460.0, 150.0)
-    def target = as_pict(klass[0]).launder().ghost()
-    def probe:
-      put(put(blank_slide, marker, 1370.0, 800.0), target, klass[1], klass[2])
+  def task_over:
     def content:
       as_pict(textbox(~width: 436.0, ~height: 126.0, ~anchor: #'center, ~autofit: #'grow,
                       ~insets: insets(0.0, 0.0, 0.0, 0.0),
                       para(~align: #'center,
                            run("extract", ~font: prose_font, ~size: 48.0, ~bold: #true),
                            run(" a resulting term", ~font: prose_font, ~size: 48.0))))
-    { #'task: [multi_callout(~on: probe, ~place: as_pict(marker), ~at: [target],
-                             ~color: talk_blue, ~padding: 18.0, content),
-               0.0, 0.0, 1] }
-  def task_over = task_layer(r_out)
+    { #'task: [bubble_at(r_out[0], ~spot: [r_out[1], r_out[2]],
+                         ~body: [1370.0, 800.0], ~color: talk_blue,
+                         ~content: content),
+               0.0, 0.0, band_above] }
 
   // The pointer walks a row of classes per press, down its own lane. It is one
   // pict under one key, so it travels down the rows rather than jumping.
@@ -1090,12 +1086,25 @@ fun band_of(parts :~ Map, k :: Int) :: List:
                           ~fill: highlight, ~line: #false, ~rounded: -0.3)
   [band, code_x + code_inset, code_y + code_inset + code_row * (k + 1) + 6.0]
 
-// A pict scaled down, but only if it is wider than the room it has.
-fun fit_width(p :: pc.Pict, w :: Real) :: pc.Pict:
-  if p.width <= w | p | p.scale(w / p.width)
-
 // A pict scaled to exactly the width it is given, up or down.
 fun fill_width(p :: pc.Pict, w :: Real) :: pc.Pict: p.scale(w / p.width)
+
+// A bubble pointing at a node, on a transparent layer of its own.
+//
+// Built once and handed to every press that shows it: a bubble rebuilt per press is
+// a new pict each time, and a new pict fades in over the old one instead of staying
+// put. What it points at is a laundered ghost of the node placed where that node
+// goes -- the callout needs something to aim at, and a second copy of the node
+// itself would be a second thing to find. `~body` is where the bubble's own corner
+// lands; the spike is worked out from there.
+fun bubble_at(node, ~spot: spot :~ List, ~body: body :~ List,
+              ~color: color, ~content: content :: pc.Pict) :: pc.Pict:
+  def marker = pc.blank(~width: 1.0, ~height: 1.0)
+  def target = as_pict(node).launder().ghost()
+  def probe:
+    put(put(blank_slide, marker, body[0], body[1]), target, spot[0], spot[1])
+  multi_callout(~on: probe, ~place: marker, ~at: [target],
+                ~color: color, ~padding: 18.0, content)
 
 // A sentence for a bubble, in the deck's Helvetica Neue: each item is a string
 // and how it is set, `#'plain`, `#'bold` or `#'sub`.
@@ -1202,10 +1211,8 @@ fun chain_nodes(~picked: picked :: List = [],
 // `chain_spots_upto` reads the first `upto` of these groups, so the picture grows
 // one `update` per press, downwards, and nothing already on screen moves.
 //
-// Each input arrives one layer above the `update` that first uses it rather than
-// in a row at the top with the others: from the top, the edge down to a later
-// `update` is a shallow diagonal that cuts through whatever lies between, and
-// staggering the inputs is what keeps those edges clear.
+// The inputs all arrive with the first `update` that uses them, since they go in
+// the row along the top rather than beside the `update` that reads them.
 // The chain as data, so that an extraction over it can be worked out rather than
 // written down: each node's class, the classes its arguments come from, and which
 // layer it sits on. The rule's unions are here and nowhere else, so what follows
@@ -1385,7 +1392,7 @@ fun chain_wire(q :: pc.Pict, n :~ Map, es :~ List,
         arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4)
 
 // -------------------------------------------------------------------------------------
-// slide_update: the four `update`s, what one does, and where the states come in.
+// slide_update: the three `update`s, what one does, and where the states come in.
 //
 // A press explains the operation. The next one magic-moves each line into its
 // `(v, ω) = update(...)` form: the pieces already on screen slide right to make
@@ -1440,7 +1447,7 @@ fun slide_egraph():
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   // one band per `update` line, each built once so the press that brings the next
   // one only has that band to fade
-  def bands: for List (k in 0..4): band_of(parts, k) ++ [1]
+  def bands: for List (k in 0..4): band_of(parts, k) ++ [band_above]
   chain_slide(
     page,
     for List (k in 0..5):
@@ -1457,16 +1464,6 @@ fun slide_egraph():
 // make equal under it -- with the two code lines it is about marked; the next one
 // does the union in the e-graph.
 //
-// The union is drawn as a halo behind each member, in the colour the rule writes
-// that equality in, rather than as a region around both or a dashed line between
-// them. The members of these two classes are a row and a column apart -- the state
-// chain runs along the op row, and the value it equals is an input up in the row
-// above -- so a region round both would have to swallow everything between them,
-// and a straight line between them would cross the second `update`. Sharing a
-// colour says the same thing and follows the layout.
-// The two equalities the rule states, each in its own colour: the deck's rule
-// green and rule orange, which cannot be read for one another or for the green a
-// picked node's background is filled with.
 // A node of an e-graph: a rounded box with a label in the middle. Both graphs in
 // the deck draw their nodes with this, which is what lets a node picked by
 // extraction be drawn as *the same node with a green background* -- a ring is a
@@ -1648,6 +1645,93 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
 fun chain_slide(page :: pc.Pict, frames :~ List) :: pc.Pict:
   magic_slide(page, frames, ~wire: chain_wire_specs)
 
+// The class the extraction starts from: `return` is what groups the value and the
+// state the program hands back.
+def chain_root = #'k_ret
+
+// The classes the rules make, each on a layer of its own under the nodes it holds.
+// Both rules put the two states in one class; only the rule that also states the
+// value puts `v2` in `x`'s.
+def state_class_under:
+  def s1_mid = node_middle(chain_plain[#'s1], & chain_spots[#'s1])
+  def s2_mid = node_middle(chain_plain[#'s2], & chain_spots[#'s2])
+  // one above the other in their own column, so this tube is straight
+  { #'state_class: [eclass_tube(blank_slide, s1_mid, s1_mid, s2_mid, s2_mid,
+                                ~dash: state_class),
+                    0.0, 0.0, band_below] }
+def value_class_under:
+  def x_mid = node_middle(chain_plain[#'x], & chain_spots[#'x])
+  def v2_mid = node_middle(chain_plain[#'v2], & chain_spots[#'v2])
+  // `x` and `v2` are neither in a column nor in a row -- `x` is an input along the
+  // top and `v2` is two layers down in the value column -- so this tube goes down
+  // out of `x`, dips below the variable row, and comes in from the left of `v2`,
+  // which is the way round the `update` between them
+  def dip_y = 550.0
+  def swing_x = chain_op - 48.0
+  { #'value_class: [eclass_tube(blank_slide, x_mid, [x_mid[0], dip_y],
+                                [swing_x, v2_mid[1]], v2_mid, ~dash: value_class),
+                    0.0, 0.0, band_below] }
+
+// What the extraction is asked for, said where it is asked: a bubble on the
+// `return`, which is the class the walk starts from.
+def chain_ask_over:
+  { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
+                      ~body: [1276.0, 928.0], ~color: talk_blue,
+                      ~content: prose([["extract", #'bold]])),
+            0.0, 0.0, band_above] }
+
+// The rule, beside the code it is about, with a band over each of the two lines it
+// speaks for. It is scaled to the code box's own measured width, so the two of them
+// share a right edge.
+//
+// Bind the result once per slide and hand that around: these are picts, and a frame
+// naming a rebuilt one is naming a different thing, which fades out and in over
+// itself instead of staying where it is.
+fun chain_rule_over(parts :~ Map, ~value: value :: Boolean) :: Map:
+  { #'rule: [fill_width(update_rule(~value: value),
+                        (parts[#'frame] :~ pc.Pict).width),
+             rule_x, rule_y, band_above],
+    #'band0: band_of(parts, 0) ++ [band_above],
+    #'band1: band_of(parts, 1) ++ [band_above] }
+
+// The presses both extraction slides share, in order: the graph, the rule, the
+// classes the rule makes, the asking, then the walk -- two presses a layer, the
+// pointer arriving and then the picks landing -- and last the choices nothing
+// reaches fading, which leaves what the root asked for.
+//
+// The two slides differ in the rule they state, and so in the graph the walk runs
+// over and the answer it arrives at. Each of them adds its own last press, which is
+// where that answer goes: one gets a program, the other gets two copies of memory.
+fun chain_walk_frames(~graph: graph :~ List,
+                      ~rule: rule_over :~ Map,
+                      ~classes: classes :~ Map,
+                      ~kept: kept :~ List,
+                      ~ask: ask_over :~ Map = chain_ask_over) :: List:
+  // The pointer visits every layer, so it passes nothing without stopping at it.
+  // It is one pict under one key, so it travels between the layers rather than
+  // being taken away and put back one row down.
+  fun scene(~rule: rule = #false, ~union: union = #false, ~ask: ask = #false,
+            ~picks: picks :: List = [], ~point: point = #false) :: Frame:
+    Frame(~picts: chain_node_picts(chain_spots, picks)
+                    ++ (if point == #false
+                        | {}
+                        | { #'point: [chain_pointer, & chain_point_at(point)] })
+                    ++ (if union | classes | {})
+                    ++ (if rule | rule_over | {})
+                    ++ (if ask | ask_over | {}),
+          ~edges: chain_edges(4))
+  [scene(),
+   scene(~rule: #true),
+   scene(~rule: #true, ~union: #true),
+   scene(~rule: #true, ~union: #true, ~ask: #true),
+   & List.append(
+       & for List (layer in 0..chain_layers):
+           [scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
+                  ~picks: chain_picks(graph, ~upto: layer - 1)),
+            scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
+                  ~picks: chain_picks(graph, ~upto: layer))]),
+   scene(~rule: #true, ~union: #true, ~ask: #true, ~picks: kept)]
+
 fun slide_rue():
   // The page under the graph, drawn once and never animated: the title, the icon
   // and the code. A press draws only what it changes over this, which is why
@@ -1655,72 +1739,15 @@ fun slide_rue():
   def canvas = with_icon(titled("Redundant Update Elimination"))
   def parts = code_parts()
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
-
-  // What stating the rule puts on the page: the rule itself, and a band over each
-  // of the two code lines it is about. Band 1 is over the graph, band -2 under it.
-  def rule_over:
-    { #'rule: [fill_width(update_rule(), (parts[#'frame] :~ pc.Pict).width),
-               rule_x, rule_y, 1],
-      #'band0: band_of(parts, 0) ++ [1], #'band1: band_of(parts, 1) ++ [1] }
-
-  // The two classes the rule makes, on a layer under the nodes they hold. The
-  // states are one above the other in their own column, so that tube is straight.
-  // `x` and `v2` are neither in a column nor in a row -- `x` is an input along the
-  // top and `v2` is two layers down in the value column -- so theirs goes down out
-  // of `x` and comes in from the left of `v2`, which is the way round the `update`
-  // between them.
-  def union_under:
-    def s1_mid = node_middle(chain_plain[#'s1], & chain_spots[#'s1])
-    def s2_mid = node_middle(chain_plain[#'s2], & chain_spots[#'s2])
-    def x_mid = node_middle(chain_plain[#'x], & chain_spots[#'x])
-    def v2_mid = node_middle(chain_plain[#'v2], & chain_spots[#'v2])
-    def tube1 = eclass_tube(blank_slide, s1_mid, s1_mid, s2_mid, s2_mid,
-                            ~dash: state_class)
-    def tube2 = eclass_tube(tube1, x_mid, [x_mid[0], 550.0], [1350.0, v2_mid[1]],
-                            v2_mid, ~dash: value_class)
-    { #'tubes: [tube2, 0.0, 0.0, -2] }
-
-  // What the extraction is asked for, said where it is asked: a bubble on the
-  // `return`, which is the class the walk starts from. It is built once, as a layer
-  // of its own, and the same layer is handed to every press that shows it -- a
-  // bubble rebuilt per press is a new pict each time and would blink. What it
-  // points at is a laundered ghost of the `return` node placed where that node
-  // goes: the callout needs something to aim at, and a second copy of the node
-  // itself would be a second thing to find.
-  def ask_over:
-    def marker = blank(1.0, 1.0)
-    def target = as_pict(chain_plain[#'ret]).launder().ghost()
-    def probe = put(put(blank_slide, marker, 1276.0, 928.0), target,
-                    & chain_spots[#'ret])
-    { #'ask: [multi_callout(~on: probe, ~place: as_pict(marker), ~at: [target],
-                            ~color: talk_blue, ~padding: 18.0,
-                            prose([["extract", #'bold]])),
-              0.0, 0.0, 1] }
-
-  // A moment of the slide: the whole graph, and which of the rule, its classes and
-  // the asking are on the page, where the pointer is, and what has been picked.
-  // The pointer walks one layer per press, down its own lane left of the graph --
-  // every layer, so it passes nothing without stopping at it. It is one pict under
-  // one key, so it travels between the layers rather than jumping.
-  fun scene(~rule: rule = #false, ~union: union = #false, ~ask: ask = #false,
-            ~picks: picks :: List = [], ~point: point = #false) :: Frame:
-    Frame(~picts: chain_node_picts(chain_spots, picks)
-                    ++ (if point == #false
-                        | {}
-                        | { #'point: [chain_pointer, & chain_point_at(point)] })
-                    ++ (if union | union_under | {})
-                    ++ (if rule | rule_over | {})
-                    ++ (if ask | ask_over | {}),
-          ~edges: chain_edges(4))
+  def rule_over = chain_rule_over(parts, ~value: #true)
+  def kept = chain_kept(chain_graph, ~root: chain_root)
 
   // The program that comes out, with the e-graph gone: the same nodes, still green,
   // in the chain they now form -- two `update`s where there were three, and the
-  // value the program returns taken straight from `x`. It is a scene like any
+  // value the program returns taken straight from `x`. It is a frame like any
   // other, so the press into it moves each node from where the graph had it to
   // where the term wants it and redraws the edges as they go; the nodes and edges
   // the term has no use for fade, and so do the rule and its classes.
-  def root = #'k_ret
-  def kept = chain_kept(chain_graph, ~root: root)
   def term_spots:
     { #'s0: [chain_s, chain_y(0)], #'a: [leaf_x(0), chain_y(0)],
       #'x: [leaf_x(1), chain_y(0)], #'b: [leaf_x(2), chain_y(0)],
@@ -1729,11 +1756,11 @@ fun slide_rue():
       #'u3: [chain_op, chain_y(3)], #'s3: [chain_s, chain_y(4)],
       #'ret: [chain_ret, chain_y(5)] }
   // The edges the term keeps are written exactly as the graph writes them, so that
-  // each one is the same edge in both scenes and travels with its ends instead of
+  // each one is the same edge in both frames and travels with its ends instead of
   // being swapped for another. Two of them are new: the state now comes to the
   // third `update` from ω1, and the value returned is `x` itself.
   def term_edges:
-    [[#'v, #'u1, #'a, #'up, -14.0], [#'v, #'u1, #'x, #'up, -14.0],
+    [[#'v, #'u1, #'a, #'up, -18.0], [#'v, #'u1, #'x, #'up, -18.0],
      [#'v, #'u3, #'b, 0.25, -13.0], [#'v, #'u3, #'y, 0.52, 13.0],
      [#'v, #'ret, #'x, 0.6, 0.0],
      [#'s, #'u1, #'s0], [#'s, #'s1, #'u1], [#'s, #'u3, #'s1],
@@ -1742,21 +1769,11 @@ fun slide_rue():
 
   chain_slide(
     page,
-    [// the graph, then the rule, then the classes it makes, then the asking
-     scene(),
-     scene(~rule: #true),
-     scene(~rule: #true, ~union: #true),
-     scene(~rule: #true, ~union: #true, ~ask: #true),
-     // down the graph, a layer at a time
-     & List.append(
-         & for List (layer in 0..chain_layers):
-             [scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
-                    ~picks: chain_picks(chain_graph, ~upto: layer - 1)),
-              scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
-                    ~picks: chain_picks(chain_graph, ~upto: layer))]),
-     // the choices nothing reaches fade, and what is left moves out into the term
-     scene(~rule: #true, ~union: #true, ~ask: #true, ~picks: kept),
-     term])
+    chain_walk_frames(~graph: chain_graph,
+                      ~rule: rule_over,
+                      ~classes: state_class_under ++ value_class_under,
+                      ~kept: kept)
+      ++ [term])
 
 // -------------------------------------------------------------------------------------
 // slide_fork: the same e-graph, a weaker rule, and the extraction that breaks.
@@ -1780,62 +1797,22 @@ fun slide_fork():
 
   // The whole slide runs on the weak rule, and everything it shows -- what the
   // walk picks, what survives, which state is read twice -- is worked out from it.
-  def g = chain_graph_state
-  def root = #'k_ret
-  def kept = chain_kept(g, ~root: root)
-  def forks = chain_forks(g, ~root: root)
+  def graph = chain_graph_state
+  def rule_over = chain_rule_over(parts, ~value: #false)
+  def kept = chain_kept(graph, ~root: chain_root)
+  def forks = chain_forks(graph, ~root: chain_root)
   def fork_key = ((forks[0] :~ List)[1])                 // the state read twice
   def readers: for List (f :~ List in forks): f[0]       // and what reads it
-
-  def rule_over:
-    { #'rule: [fill_width(update_rule(~value: #false),
-                          (parts[#'frame] :~ pc.Pict).width),
-               rule_x, rule_y, 1],
-      #'band0: band_of(parts, 0) ++ [1], #'band1: band_of(parts, 1) ++ [1] }
-
-  // One class this time, and the states are one above the other in their own
-  // column, so its tube is straight.
-  def union_under:
-    def s1_mid = node_middle(chain_plain[#'s1], & chain_spots[#'s1])
-    def s2_mid = node_middle(chain_plain[#'s2], & chain_spots[#'s2])
-    { #'tube: [eclass_tube(blank_slide, s1_mid, s1_mid, s2_mid, s2_mid,
-                           ~dash: state_class),
-               0.0, 0.0, -2] }
-
-  def ask_over:
-    def marker = blank(1.0, 1.0)
-    def target = as_pict(chain_plain[#'ret]).launder().ghost()
-    def probe = put(put(blank_slide, marker, 1276.0, 928.0), target,
-                    & chain_spots[#'ret])
-    { #'ask: [multi_callout(~on: probe, ~place: as_pict(marker), ~at: [target],
-                            ~color: talk_blue, ~padding: 18.0,
-                            prose([["extract", #'bold]])),
-              0.0, 0.0, 1] }
 
   // The problem, said in red where it happens. The bubble goes up beside the title
   // rather than in among the graph: the state column is the right-hand edge of the
   // picture and there is no room next to the node itself, and a spike from
   // anywhere below has the rest of the chain to cross to reach it.
   def fork_over:
-    def marker = blank(1.0, 1.0)
-    def target = as_pict(chain_plain[fork_key]).launder().ghost()
-    def probe = put(put(blank_slide, marker, 1150.0, 80.0), target,
-                    & chain_spots[fork_key])
-    { #'fork: [multi_callout(~on: probe, ~place: as_pict(marker), ~at: [target],
-                             ~color: talk_red, ~padding: 18.0,
-                             prose([["two copies of memory!", #'bold]])),
-               0.0, 0.0, 1] }
-
-  fun scene(~rule: rule = #false, ~union: union = #false, ~ask: ask = #false,
-            ~picks: picks :: List = [], ~point: point = #false) :: Frame:
-    Frame(~picts: chain_node_picts(chain_spots, picks)
-                    ++ (if point == #false
-                        | {}
-                        | { #'point: [chain_pointer, & chain_point_at(point)] })
-                    ++ (if union | union_under | {})
-                    ++ (if rule | rule_over | {})
-                    ++ (if ask | ask_over | {}),
-          ~edges: chain_edges(4))
+    { #'fork: [bubble_at(chain_plain[fork_key], ~spot: chain_spots[fork_key],
+                         ~body: [1150.0, 80.0], ~color: talk_red,
+                         ~content: prose([["two copies of memory!", #'bold]])),
+               0.0, 0.0, band_above] }
 
   // What came out, left where the graph has it: the nodes the root reaches, the
   // ones it does not gone, and the two `update`s that read the forked state joined
@@ -1859,23 +1836,12 @@ fun slide_fork():
 
   chain_slide(
     page,
-    [// the graph, then the rule, then the class it makes, then the asking
-     scene(),
-     scene(~rule: #true),
-     scene(~rule: #true, ~union: #true),
-     scene(~rule: #true, ~union: #true, ~ask: #true),
-     // down the graph, a layer at a time. Nothing is dropped this time: every
-     // layer's classes need a node of their own
-     & List.append(
-         & for List (layer in 0..chain_layers):
-             [scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
-                    ~picks: chain_picks(g, ~upto: layer - 1)),
-              scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
-                    ~picks: chain_picks(g, ~upto: layer))]),
-     // the choices nothing reaches fade
-     scene(~rule: #true, ~union: #true, ~ask: #true, ~picks: kept),
-     // and what is left is a term that reads memory twice
-     term])
+    chain_walk_frames(~graph: graph,
+                      ~rule: rule_over,
+                      // only the states are unioned, so only their class is drawn
+                      ~classes: state_class_under,
+                      ~kept: kept)
+      ++ [term])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.

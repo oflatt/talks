@@ -1,0 +1,55 @@
+#lang rhombus
+import:
+  file("talk.rhm") open
+  pict as pc
+  draw
+  lib("racket/base.rkt") as rkt
+  lib("racket/file.rkt") as rkt_file
+
+// -------------------------------------------------------------------------------------
+// Every frame of the deck as a PNG, for checking that a change changed what it meant
+// to and nothing else.
+//
+//   xvfb-run -a racket snapshot.rhm before
+//   ... edit talk.rhm ...
+//   xvfb-run -a racket snapshot.rhm after
+//   diff -rq before after
+//
+// A refactor should print nothing. A layout change should name the frames it was
+// about and no others -- which is how the last few rounds of edits to the graph
+// slides were checked, and how a stale edge spec that had quietly stopped matching
+// the graph was found.
+//
+// It writes each slide's epochs at rest and the midpoint of each press, since the
+// midpoints are where an animation goes wrong: that is where a pict that should have
+// travelled turns out to have faded instead.
+
+def dir:
+  def args = rkt.#{current-command-line-arguments}()
+  if rkt.#{vector-length}(args) > 0
+  | rkt.#{vector-ref}(args, 0)
+  | "frames"
+
+fun as_pict_of(v) :: pc.Pict:
+  if v is_a pc.Pict | v | pc.Pict.from_handle(v)
+
+// 0.4 of full size: small enough to write 200 of them quickly, big enough that a
+// changed line or a shifted node shows up as a differing file.
+def scale = 0.4
+
+fun save(p :: pc.Pict, epoch :: Int, n :: Real, name :: String):
+  def q = p.snapshot(epoch, n).scale(scale)
+  def bm:
+    draw.Bitmap([math.exact(math.ceiling(q.width)),
+                 math.exact(math.ceiling(q.height))])
+  q.draw(bm.make_dc())
+  bm.write(dir +& "/" +& name, ~kind: #'png)
+
+rkt_file.#{make-directory*}(dir)
+for (mk in all_slides, i in 0..):
+  def p = as_pict_of(mk())
+  for (e in 0..p.duration):
+    save(p, e, 1.0, "s" +& i +& "_e" +& e +& ".png")
+    when e > 0
+    | save(p, e, 0.5, "s" +& i +& "_e" +& e +& "_mid.png")
+println("wrote " +& dir)
