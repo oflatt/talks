@@ -203,20 +203,26 @@ fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
 // The code and the graph have to fit beside each other, and the graph needs its
 // variables left of the `update` column as well as above it, so the three of them
 // share the width: the box takes what is left over once the variable row and the
-// column block have what they need. At 38pt that is 940 of it. At 50 -- what
-// Keynote had -- the box alone is 1224 wide, which is why the text used to
-// overflow its own border into the graph.
-def code_size = 38.0
+// column block have what they need. At 40pt that is 938 of it, and the graph
+// starts 20 further on -- the walk's pointer used to stand between them, and it
+// has gone round to the right of the graph so that the two can sit together. At
+// 50 -- what Keynote had -- the box alone is 1224 wide, which is why the text
+// used to overflow its own border into the graph.
+def code_size = 40.0
 def code_x = 95.0            // the deck's left margin, where the titles start
 def code_y = 240.0
-def code_row = 66.0          // a line of the box: 57pt of ink at 38pt, plus leading
+def code_row = 69.0          // a line of the box: 60pt of ink at 40pt, plus leading
 def code_inset = 20.0
 
 def chain_row = 92.0
 fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
-def chain_op = 1450.0        // the update boxes, which are 180.242 wide
-def chain_v = 1650.0         // v1 … v3
-def chain_s = 1810.0         // ω, ω1 … ω3
+// The column block, whose three spacings are all load-bearing: the ω-to-`update`
+// edge threads the gap between the value column and the state column, a few points
+// above the value node in that row, so closing that gap up puts the edge through
+// the box.
+def chain_op = 1398.0        // the update boxes, which are 180.242 wide
+def chain_v = 1598.0         // v1 … v3
+def chain_s = 1758.0         // ω, ω1 … ω3
 // The variables in a row along the top, in the order the signature names them,
 // with the incoming state at the end of the row above its own column. They are
 // the inputs, so they belong together and above everything that reads them.
@@ -227,25 +233,27 @@ def chain_s = 1810.0         // ω, ω1 … ω3
 // the edge has clear air, and from directly above it does not. Two of them still
 // have to bow out into the empty band below the row -- see `chain_wire`.
 //
-// The row starts where it does to leave a lane at 985 for the extraction pointer,
-// which walks straight down it a layer at a time, and it is spread to the column
-// with what is left: the code box ends at 975, the pointer's lane runs to 1035,
-// and the column begins at 1450. The row takes all of that, since four boxes fed
-// by three `update`s from below make a fan, and the wider the row the less of a
-// thicket the fan is.
-def chain_point_x = 985.0
-fun leaf_x(i :: Int) :: Real: 1045.0 + i * 108.0
+// The row starts 20 past the code box, which ends at 1033, and is spread to the
+// `update` column at 1398 with everything in between: four boxes fed by three
+// `update`s from below make a fan, and the wider the row the less of a thicket the
+// fan is.
+//
+// The extraction pointer walks down the far side, right of the state column, not
+// between the code and the graph. It is 80 wide, and standing it in there cost the
+// slide a lane of white the width of two nodes for the sake of one arrow.
+def chain_point_x = 1846.0
+fun leaf_x(i :: Int) :: Real: 1053.0 + i * 88.0
 // The node the program's two results meet in, one layer below them: `return` is
 // what groups the value and the state into the tuple the function hands back, and
 // so it is the root the extraction starts from.
-def chain_ret = 1672.0
+def chain_ret = 1620.0
 
 // The rule box on `slide_rue`, under the code it is about. It is scaled to the
 // width of the code box, whatever that measures, so the two of them share a right
 // edge and the left of the slide reads as one column with the pointer's lane
 // beside it, rather than as two boxes with a ragged gap to their right.
 def rule_x = 95.0
-def rule_y = 650.0
+def rule_y = 730.0           // under the code box, which is now 454 tall
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -1486,11 +1494,13 @@ fun graph_node(~width: w :: Real, ~height: h :: Real, ~adj: adj :: String,
 // the same thing on either slide; each says where to put it, since the two graphs
 // leave the room for it in different places.
 def walk_hex = "2684EB"                       // `talk_blue`, as the runtime spells it
-fun walk_arrow():
-  shape_pict(~width: 80.0, ~height: 34.0,
-             ~geom: preset_geom("rightArrow",
+fun walk_arrow(~facing: facing :: String = "rightArrow",
+               ~width: w :: Real = 80.0, ~height: h :: Real = 34.0):
+  shape_pict(~width: w, ~height: h,
+             ~geom: preset_geom(facing,
                                 [pair("adj1", "val 45000"), pair("adj2", "val 60000")]),
              ~fill: hex(walk_hex))
+
 
 def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
 def value_class = draw.Color(255, 147, 0)     // v2 ≡ x
@@ -1585,7 +1595,14 @@ def chain_keys: for List ([key, _, _, _] in chain_graph): key
 def chain_plain = chain_nodes()
 def chain_green = chain_nodes(~picked: chain_keys)
 def chain_red = chain_nodes(~forked: chain_keys)
-def chain_pointer = as_pict(walk_arrow())
+// Smaller than the one on the background slide: it stands in the margin right of
+// the state column, so it has to be narrow enough to sit clear of both the class
+// region beside it and the edge of the slide.
+def chain_pointer:
+  as_pict(walk_arrow(~facing: "leftArrow", ~width: 56.0, ~height: 24.0))
+// where it goes for a layer: level with the middle of that row's nodes
+fun chain_point_at(layer :: Int) :: List:
+  [chain_point_x, chain_y(layer) + 32.0 - (chain_pointer :~ pc.Pict).height / 2]
 
 // The nodes of a frame: where each one goes, and which of its three drawings to
 // use -- plain, picked, or picked by two things at once.
@@ -1690,8 +1707,7 @@ fun slide_rue():
     Frame(~picts: chain_node_picts(chain_spots, picks)
                     ++ (if point == #false
                         | {}
-                        | { #'point: [chain_pointer, chain_point_x,
-                                      chain_y(point) + 32.0 - 17.0] })
+                        | { #'point: [chain_pointer, & chain_point_at(point)] })
                     ++ (if union | union_under | {})
                     ++ (if rule | rule_over | {})
                     ++ (if ask | ask_over | {}),
@@ -1815,8 +1831,7 @@ fun slide_fork():
     Frame(~picts: chain_node_picts(chain_spots, picks)
                     ++ (if point == #false
                         | {}
-                        | { #'point: [chain_pointer, chain_point_x,
-                                      chain_y(point) + 32.0 - 17.0] })
+                        | { #'point: [chain_pointer, & chain_point_at(point)] })
                     ++ (if union | union_under | {})
                     ++ (if rule | rule_over | {})
                     ++ (if ask | ask_over | {}),
