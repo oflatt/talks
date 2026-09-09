@@ -22,6 +22,7 @@ import:
   draw
 
 export:
+  workflow_scene
   slide_width
   slide_height
   all_slides
@@ -578,9 +579,6 @@ fun slide_12():
   def row_in = 485.051
   def row_mid = 676.242
   def row_out = 867.432
-  def col_l = 806.429
-  def col_r = 1029.766
-  def col_far = 1190.919
   // The data-flow arrow, left of the graph. It sits out at 620 rather than just
   // off the graph's edge to leave the lane at 706 free: that is where the
   // extraction pointer walks down, and the two of them side by side is the point
@@ -605,24 +603,22 @@ fun slide_12():
             rules_line_1, & rules_line_1_at),
         rules_line_2, & rules_line_2_at)
 
-  // The third rule is held back: it is the one that makes the difference to what
-  // extraction can find, so the slide extracts a term without it first and only
-  // then puts it up. Its place in the list is where it sat inside the group.
-  def third_rule:
-    linebox(~width: 231.832, ~height: 78.0, ~autofit: #'grow,
-            ~insets: insets(4.0, 4.0, 4.0, 4.0),
-            para(run("α + 0 → α", ~font: math_font, ~size: 60.0,
-                     ~color: hex("4F8F00"))))
-  def third_rule_x = 1170.567 + 90.294
-  def third_rule_y = 252.964 + 334.196
-
   // Where the seven of them sit. Inputs on top, the result underneath, so every
   // edge points the way the data goes.
+  //
+  // The columns are staggered rather than square. `1` is read from three places
+  // below it and `a` from two, and every one of those edges has to reach its leaf
+  // without passing behind whatever sits under it: `−` reads `1` straight up its
+  // own column, `+_r` reads `a` straight up its own, and the two that cross the
+  // picture -- `+` to `a` and the pair from `−`(rewritten) to `1` -- are the one
+  // crossing the shape of this graph cannot be drawn without.
   def spot:
-    { #'a: [col_l, row_in], #'one: [col_r, row_in],
-      #'plus: [col_l, row_mid], #'minus_r: [col_r, row_mid],
-      #'zero: [col_far, row_mid],
-      #'minus: [col_l, row_out], #'plus_r: [col_r, row_out] }
+    { #'one: [780.0, row_in], #'a: [1010.0, row_in],
+      #'plus: [860.0, row_mid], #'minus_r: [1140.0, row_mid],
+      #'zero: [1310.0, row_mid],
+      #'minus: [780.0, row_out], #'plus_r: [1010.0, row_out] }
+  fun middle(key) :: List:
+    [(spot[key] :~ List)[0] + nd / 2, (spot[key] :~ List)[1] + nd / 2]
   fun spots_of(keys :~ List, picks :~ List) :: Map:
     for values(m :~ Map = {}) (k in keys):
       m ++ { k: [(if picks.contains(k) | green[k] | plain[k]), & spot[k]] }
@@ -635,6 +631,15 @@ fun slide_12():
   // picked node needs to be something else, or the mark on a node and the rule
   // that changes which node gets marked read as the same thing.
   def rule_green = draw.Color(79, 143, 0)
+
+  // The third rule is held back: it is the one that makes the difference to what
+  // extraction can find, so the slide extracts a term without it first and only
+  // then puts it up. It goes under the other two, in the list they belong to,
+  // rather than beside the graph -- it is a rule, and the rules are in one place.
+  def third_rule = rule_text("α + 0 → α", rule_green)
+  def third_rule_at:
+    [rules_line_2_at[0], rules_line_2_at[1] + rules_line_2.height + 13.0]
+
 
   // The edges, by kind. A solid arrow is an operand feeding an operator, and they
   // all point from the operator up to what it is built from: the arrowheads say
@@ -655,21 +660,17 @@ fun slide_12():
       match e[0]
       | #'op: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4)
       | #'op_blue: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue)
-      // The long climb to `1` arrives at its side rather than under it: the
-      // rewritten `−` sits directly below `1` with two arrowheads of its own
-      // pinned there, and a third between them would read as one of the pair.
-      | #'op_left:
-          arrow(~on: q, from, to, ~line_width: 4, ~gap: 4,
-                ~to_at: pc.Find.left(as_pict(to), ~dx: -1))
       // `1 - 1` takes the same node for both of its operands, so it needs two
       // arrows: one arrow would say the operator takes one thing. The two run side
       // by side, pinned 18 either side of the border's middle -- the two boxes are
       // in one column, so this is a pair of parallel lines.
       | #'op_pair:
-          for values(p :~ pc.Pict = q) (dx in [-18.0, 18.0]):
+          // it comes up from the right, so the two heads are spread down `1`'s side
+          // rather than under it, where the arrow from `−` arrives
+          for values(p :~ pc.Pict = q) (off in [-18.0, 18.0]):
             arrow(~on: p, from, to, ~line_width: 4, ~color: keynote_blue,
-                  ~from_at: pc.Find.top(as_pict(from), ~dx: dx, ~dy: -4),
-                  ~to_at: pc.Find.bottom(as_pict(to), ~dx: dx, ~dy: 4))
+                  ~from_at: pc.Find.left(as_pict(from), ~dx: -4, ~dy: off),
+                  ~to_at: pc.Find.right(as_pict(to), ~dx: 4, ~dy: off))
       | #'eq_blue: eq(q, from, to, keynote_blue)
       | #'eq_orange: eq(q, from, to, draw.Color(255, 147, 0))
       // The third rule's own equivalence, drawn with the merge it makes. `a` is both
@@ -692,14 +693,16 @@ fun slide_12():
                 ~to_at: pc.Find.bottom(as_pict(to), ~dx: -19, ~dy: 4))
 
   def es_plus: [[#'op, #'plus, #'a], [#'op, #'plus, #'one]]
-  def es_minus: [[#'op, #'minus, #'plus], [#'op_left, #'minus, #'one]]
+  def es_minus: [[#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
   def es_term = es_plus ++ es_minus
   def es_rewrite:
     [[#'op_blue, #'plus_r, #'minus_r], [#'op_pair, #'minus_r, #'one],
-     [#'op_blue, #'plus_r, #'a], [#'eq_blue, #'minus, #'plus_r]]
+     [#'op_blue, #'plus_r, #'a]]
+  // what the first rule made equal, until the third rule makes a bigger class of
+  // it and the tube says so instead
+  def es_same: [[#'eq_blue, #'minus, #'plus_r]]
   def es_zero: [[#'eq_orange, #'minus_r, #'zero]]
-  def es_merged: [[#'eq_green, #'plus_r, #'a]]
-  def es_graph = es_term ++ es_rewrite ++ es_zero
+  def es_graph = es_term ++ es_rewrite ++ es_same ++ es_zero
 
   // The data-flow arrow, left of the graph, on a layer of its own: it arrives with
   // the term and stays put, so no press has anything to do to it. It sits out at
@@ -724,7 +727,7 @@ fun slide_12():
                0.0, 0.0, band_above] }
 
   def rules_over = { #'rules: [rules_group, 0.0, 0.0, band_above] }
-  def third_over = { #'third: [third_rule, third_rule_x, third_rule_y, band_above] }
+  def third_over = { #'third: [third_rule, & third_rule_at, band_above] }
 
   // The class `a` joins when the third rule fires. No rectangle around its three
   // members can draw it: `+` is a class of its own sitting between `a` and the
@@ -747,17 +750,30 @@ fun slide_12():
     [pc.rectangle(~width: w + 2 * eclass_pad, ~height: h + 2 * eclass_pad,
                   ~fill: eclass_grey, ~line: #false, ~rounded: -0.35),
      x - eclass_pad, y - eclass_pad, band_below]
-  def r_one = region(col_r, row_in, nd, nd)
-  def r_plus = region(col_l, row_mid, nd, nd)
-  def r_row = region(col_r, row_mid, col_far + nd - col_r, nd)
-  def r_a = region(col_l, row_in, nd, nd)
-  def r_out = region(col_l, row_out, col_r + nd - col_l, nd)
-  def r_blob = [root_region, 783.351, 463.479, band_below]
+  fun region_of(from, to) :: List:
+    def [x0, y0] = spot[from] :~ List
+    def [x1, y1] = spot[to] :~ List
+    region(x0, y0, x1 + nd - x0, y1 + nd - y0)
+  def r_one = region_of(#'one, #'one)
+  def r_plus = region_of(#'plus, #'plus)
+  def r_row = region_of(#'minus_r, #'zero)
+  def r_a = region_of(#'a, #'a)
+  def r_out = region_of(#'minus, #'plus_r)
+  // The class the third rule makes: `a`, and the two roots that are now equal to
+  // it. It is drawn as a tube along the very line that says they are equal, with
+  // the corner turning under `+_r`, which is in both legs -- so the region and the
+  // dashed line agree from end to end by construction, instead of being two shapes
+  // that have to be lined up by hand.
+  def merged_region:
+    def corner = [middle(#'plus_r)[0], middle(#'minus)[1]]
+    [eclass_tube(blank_slide, middle(#'minus), corner, corner, middle(#'a),
+                 ~dash: rule_green, ~thickness: nd + 2 * eclass_pad),
+     0.0, 0.0, band_below]
   def classes_under:
     { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row,
       #'r_a: r_a, #'r_out: r_out }
   def merged_under:
-    { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row, #'blob: r_blob }
+    { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row, #'merged: merged_region }
 
   // The bubble extraction speaks through: it names the job while the walk runs, and
   // it points at the *class* the answer is to come out of, not at a node in it.
@@ -877,7 +893,9 @@ fun slide_12():
                     ++ rules_over ++ flow_over
                     ++ (if third | third_over | {})
                     ++ (if task | task_over | {}),
-          ~edges: es_graph ++ (if merged | es_merged | []))
+          // once the classes merge the tube draws that equality, so the line the
+          // first rule left behind would be a second one down the same lane
+          ~edges: es_term ++ es_rewrite ++ es_zero ++ (if merged | [] | es_same))
   fun walking(~picks: picks :: List = [], ~point: point = #false,
               ~third: third = #false, ~merged: merged = #false) :: Frame:
     frame(~task: #true, ~picks: picks, ~point: point, ~third: third, ~merged: merged)
@@ -1891,6 +1909,9 @@ def eclass_grey = draw.Color(146, 146, 146, 0.3)
 def eclass_width = 64.0 + 2 * eclass_pad     // a node, plus its padding
 fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
                 ~dash: dash_color,
+                // how fat the tube is: a node, plus its padding, and a slide whose
+                // nodes are bigger says so
+                ~thickness: thickness :: Real = eclass_width,
                 ~width: w :: Real = slide_width,
                 ~height: h :: Real = slide_height) :: pc.Pict:
   def path = draw.Path()
@@ -1904,7 +1925,7 @@ fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
             target.path(path, ~dx: dx, ~dy: dy)
             target.restore(),
           ~width: w, ~height: h)
-  let p = put(p, stroked(draw.Pen(~color: eclass_grey, ~width: eclass_width)), 0.0, 0.0)
+  let p = put(p, stroked(draw.Pen(~color: eclass_grey, ~width: thickness)), 0.0, 0.0)
   // `#'show_dash` is this enum's spelling of the short dash the other equivalence
   // lines are drawn with; there is no `#'short_dash` in it.
   put(p, stroked(draw.Pen(~color: dash_color, ~width: 4, ~style: #'show_dash)), 0.0, 0.0)
@@ -2603,21 +2624,22 @@ fun slide_39():
 // -------------------------------------------------------------------------------------
 // The workflow, drawn twice.
 //
-// Section 0 says what an e-graph optimizer is: a program and a pile of rules go in,
-// an e-graph holds every version of the program the rules can reach, and extraction
-// picks one of them out. Section 1 draws the same picture again to say what this
-// work changes about it -- the program is put into a dataflow IR where an effect is
-// a value threaded from one operation to the next, the rules are still written as
-// if nothing had effects, and extraction is the part that has to be taught about
-// them.
+// The first picture says what an e-graph optimizer is: a program and a pile of rules
+// go in, an e-graph holds every version of the program the rules can reach, and
+// extraction picks one of them out. The second draws the same picture again, later,
+// to say what this work changes about it -- the program has effects now, it is put
+// into a dataflow IR where an effect is a value threaded from one operation to the
+// next, the rules are still written as if nothing had effects, and extraction is the
+// part that has to be taught about them.
 //
-// One description draws both, so the second picture is the first with pieces added
-// rather than a second drawing to keep in step with it, and the parts that are the
-// same are in the same place.
+// One description draws both, so the second picture is the first with pieces changed
+// rather than a second drawing to keep in step with it. The second one *opens* on
+// the first, exactly as it was left, and changes a piece at a time: the audience has
+// seen this picture, and what is worth a press is each way it is now different.
 //
 // It is a scene rather than a finished page -- every piece under a key, in the way
 // `magicmove` wants -- for three reasons. The first picture arrives a stage at a
-// time, which is how the audience is walked through it. A press can move one piece
+// time, which is how the audience is walked through it. A press can change one piece
 // and leave the rest alone, which is how the second picture grows out of the first.
 // And the last press of each slide sends the pieces the *next* slide draws to where
 // that slide draws them, at the size it draws them, so the click between the two
@@ -2626,8 +2648,8 @@ fun slide_39():
 
 // A stage of the workflow: a bubble in the deck's own style, named, with the thing
 // itself inside it. The box and its contents are separate picts, since the contents
-// are what travels on.
-def stage_name_face = draw.Font(~name: prose_font, ~size: 40.0, ~weight: #'bold)
+// are what changes and what travels on.
+def stage_name_face = draw.Font(~name: prose_font, ~size: 36.0, ~weight: #'bold)
 def stage_code_face = draw.Font(~name: code_font, ~size: 40.0)
 def stage_greek_face = draw.Font(~name: math_font, ~size: 40.0)
 
@@ -2638,57 +2660,39 @@ fun stage_greek(s :: String) :: pc.Pict: pc.text(s, ~font: stage_greek_face)
 fun stage_sub(s :: String) :: pc.Pict: stage_code(s).scale(0.62)
 fun stage_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
-// `body` is what the box holds; `#false` is a box with only its name in it, for a
-// stage the talk has not opened up yet.
-fun stage_pieces(label :: String, body :: maybe(pc.Pict), at :~ List,
+fun stage_pieces(label :: String, body :: pc.Pict, at :~ List,
                  ~width: w :: maybe(Real) = #false,
                  ~height: h :: maybe(Real) = #false) :: Map:
   def name = pc.text(label, ~font: stage_name_face)
-  def inside = if body | pc.stack(~sep: 18.0, ~horiz: #'center, name, body) | name
+  def inside = pc.stack(~sep: 18.0, ~horiz: #'center, name, body)
   def box:
     as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
-                        (if body
-                         | pc.stack(~sep: 18.0, ~horiz: #'center, name, body.ghost())
-                         | name)))
+                        pc.stack(~sep: 18.0, ~horiz: #'center, name, body.ghost())))
   // where the ghost of the body sits inside that box, so the real one can be drawn
   // over it and can leave without taking the box with it
   def top = at[1] + (box.height - inside.height) / 2
-  { #'box: [box, at[0], at[1], band_below] }
-    ++ (if body
-        | { #'body: [body, at[0] + (box.width - body.width) / 2,
-                     top + name.height + 18.0, band_nodes] }
-        | {})
+  { #'box: [box, at[0], at[1], band_below],
+    #'body: [body, at[0] + (box.width - body.width) / 2,
+             top + name.height + 18.0, band_nodes] }
 
-// The e-graph in the middle of the second picture: the two writes of that section's
-// program, both reading the memory it started with, which is the shape the rest of
-// the talk is about. The first picture leaves the box empty -- the slide after it is
-// where an e-graph is drawn for the first time, and a picture of one here would be
-// asking the audience to read something they have not been told yet.
-fun mini_egraph() :: pc.Pict:
-  fun op(s :: String) :: pc.Pict:
-    as_pict(graph_node(~width: 150.0, ~height: 56.0, ~adj: "33349",
-                       ~line: stateful_hex, ~line_width: 3.0,
-                       run(s, ~font: node_font, ~size: 30.0)))
-  def memory:
-    as_pict(graph_node(~width: 64.0, ~height: 56.0, ~adj: "33878",
-                       ~line: stateful_hex, ~line_width: 3.0,
-                       run("ω", ~font: node_font, ~size: 34.0)))
-  def u1 = op("update")
-  def u2 = op("update")
-  def board = pc.blank(~width: 330.0, ~height: 200.0)
-  def laid = put(put(put(board, memory, 133.0, 0.0), u1, 0.0, 144.0), u2, 180.0, 144.0)
-  arrow(~on: arrow(~on: laid, u1, memory, ~color: keynote_blue, ~line_width: 4, ~gap: 4),
-        u2, memory, ~color: keynote_blue, ~line_width: 4, ~gap: 4)
+// The e-graph is a cog, in both pictures. The slide that draws an e-graph properly
+// comes after the first of them and is the whole of the second's neighbourhood; a
+// small one here would be a picture the audience is asked to read twice, once before
+// they have been told how.
+def flow_gear = make_gear(~size: 190.0, ~teeth: 11)
 
-// The chunky arrow that reads a program back out of the e-graph. Its label is a
-// piece of its own, so that the second picture can rewrite it without the arrow
-// moving: the step is the same step, and what it now has to do is the talk.
-def extract_head:
-  as_pict(shape_pict(~width: 220.0, ~height: 110.0,
-                     ~geom: preset_geom("rightArrow",
-                                        [pair("adj1", "val 45000"),
-                                         pair("adj2", "val 58000")]),
-                     ~fill: hex("2684EB")))
+// The step that reads a program back out, labelled from the inside: it is a stage of
+// the picture like the boxes are, so it is drawn in their clothes. Both pictures give
+// it the same size, so renaming it is a change of words in one place rather than a
+// shape that grows.
+fun extract_arrow(~safe: safe :: Boolean) :: pc.Pict:
+  def face = draw.Font(~name: prose_font, ~size: 34.0, ~weight: #'bold)
+  def label:
+    if safe
+    | pc.stack(~sep: 2.0, ~horiz: #'center,
+               pc.text("effect-safe", ~font: face), pc.text("extraction", ~font: face))
+    | pc.text("extract", ~font: face)
+  as_pict(make_arrow(~width: 300.0, ~height: 200.0, ~color: talk_blue, label))
 
 // Where each stage sits. Both pictures share these, so the second is the first with
 // the IR stage put in the gap the first one leaves between the program and the
@@ -2696,17 +2700,17 @@ def extract_head:
 def flow_program_at = [95.0, 244.0]
 def flow_ir_at = [95.0, 496.0]
 def flow_rules_at = [95.0, 748.0]
-def flow_egraph_at = [760.0, 372.0]
-def flow_arrow_at = [1190.0, 496.0]
-def flow_optimized_at = [1450.0, 456.0]
-def flow_egraph_size = [360.0, 330.0]
+def flow_egraph_at = [730.0, 380.0]
+def flow_arrow_at = [1050.0, 466.0]
+def flow_optimized_at = [1390.0, 466.0]
+def flow_egraph_size = [280.0, 300.0]
 
 // The boxes hold the very picts the next slide draws, at the size it draws them,
-// wherever that fits: the term and the two `update` lines are full size, so the
-// handoff is a move and nothing has to be redrawn in flight. The rules are the one
-// thing too wide for its column at full size.
+// wherever that fits: the term is full size, so its handoff is a move and nothing has
+// to be redrawn in flight. The code and the rules are the two things too wide for
+// their column at full size.
 def flow_rules_scale = 0.8
-def flow_code_scale = 0.6
+def flow_code_scale = 0.54
 
 fun workflow_scene(~section: section :: Int,
                    ~ir: ir :: Boolean = #false,
@@ -2722,22 +2726,15 @@ fun workflow_scene(~section: section :: Int,
   def program = stage_pieces("Input Program", program_body, flow_program_at)
   def rules = stage_pieces("Optimization Rules", rules_body, flow_rules_at)
   def egraph:
-    stage_pieces("E-Graph", (if section == 0 | #false | mini_egraph()),
-                 flow_egraph_at,
+    stage_pieces("E-Graph", flow_gear, flow_egraph_at,
                  ~width: flow_egraph_size[0], ~height: flow_egraph_size[1])
-  // what comes out: the term the rules reduce to, and the program with one write
-  // where the input had two
+  // what comes out: the term the rules reduce to, and the one write the program's
+  // two come to
   def optimized_body:
     if section == 0
     | pc.text("a", ~font: term_font)
-    | pc.stack(~sep: 8.0, ~horiz: #'left,
-               stage_line(stage_code("(v"), stage_sub("1"), stage_code(", "),
-                          stage_greek("ω"), stage_sub("1"),
-                          stage_code(") = update(a, x+1, "), stage_greek("ω"),
-                          stage_code(")")),
-               stage_line(stage_code("return (v"), stage_sub("1"), stage_code(", "),
-                          stage_greek("ω"), stage_sub("1"), stage_code(")")))
-        .scale(0.55)
+    | stage_line(stage_code("return update(a, x+1, "),
+                 stage_greek("ω"), stage_code(")")).scale(0.52)
   def optimized = stage_pieces("Optimized Program", optimized_body, flow_optimized_at)
   def ir_stage:
     stage_pieces("Dataflow IR",
@@ -2746,39 +2743,31 @@ fun workflow_scene(~section: section :: Int,
   // the two rules, one under the other inside their box, so each can be sent to its
   // own place on the slide that states them
   def [_, rules_body_x, rules_body_y, _] = rules[#'body] :~ List
-  def label:
-    if safe
-    | prose_stack([[["effect-safe", #'bold]], [["extraction", #'bold]]])
-    | prose([["extract", #'bold]])
   { #'program_box: program[#'box], #'program: program[#'body],
     #'rules_box: rules[#'box],
     #'rule_1: [rule_1, rules_body_x, rules_body_y, band_nodes],
     #'rule_2: [rule_2, rules_body_x, rules_body_y + rule_1.height + 10.0, band_nodes],
-    #'egraph_box: egraph[#'box],
+    #'egraph_box: egraph[#'box], #'egraph: egraph[#'body],
     #'optimized_box: optimized[#'box], #'optimized: optimized[#'body],
-    #'extract: [extract_head, & flow_arrow_at, band_nodes],
-    // centred over the arrow, whatever it says, and clear of it
-    #'extract_label: [label,
-                      flow_arrow_at[0] + (extract_head.width - label.width) / 2,
-                      flow_arrow_at[1] - label.height - 18.0, band_nodes] }
-    ++ (if section == 0 | {} | { #'egraph: egraph[#'body] })
+    #'extract: [extract_arrow(~safe: safe), & flow_arrow_at, band_nodes] }
     ++ (if ir | { #'ir_box: ir_stage[#'box], #'ir: ir_stage[#'body] } | {})
 
-// The picture arrives a stage at a time: what you write, what else you write, what
-// they are put into, and what comes back out.
+// The first picture arrives a stage at a time: what you write, what else you write,
+// what they are put into, and what comes back out.
 def flow_steps:
   [[#'program_box, #'program],
    [#'rules_box, #'rule_1, #'rule_2],
    [#'egraph_box, #'egraph],
-   [#'extract, #'extract_label, #'optimized_box, #'optimized]]
+   [#'extract, #'optimized_box, #'optimized]]
 fun flow_keys(~upto: upto :: Int, ~ir: ir :: Boolean = #false) :: List:
   List.append(& for List (k in 0..upto): (flow_steps :~ List)[k])
     ++ (if ir | [#'ir_box, #'ir] | [])
+def flow_all = flow_keys(~upto: (flow_steps :~ List).length())
 
 // The program goes into the e-graph, the rules go into the e-graph, and a program
 // comes back out of it. When the IR stage is there the program goes through it on
-// the way in, so that edge is drawn to the IR box instead. An edge waits for both
-// of its ends, so the arrows arrive with the stages they join.
+// the way in, so that edge is drawn to the IR box instead. An edge waits for both of
+// its ends, so the arrows arrive with the stages they join.
 fun workflow_edges(~ir: ir :: Boolean, ~shown: shown :~ List) :: List:
   def wanted:
     (if ir
@@ -2812,11 +2801,13 @@ fun flow_callout(page :: pc.Pict, target :~ List,
                  ~color: color, ~padding: 20.0, content),
    0.0, 0.0, band_above]
 
+def flow_title = "E-Graphs Explore a Big Space"
+
 // -------------------------------------------------------------------------------------
 // slide_40: the workflow, a stage per press, and then the handoff -- the term and
 // the rules fly out of their boxes to the places the next slide draws them.
 fun slide_40():
-  def page = titled("E-Graphs Explore a Big Space")
+  def page = titled(flow_title)
   def scene = workflow_scene(~section: 0)
   def handoff:
     { #'program: [input_line, term_x, term_y, band_nodes],
@@ -2830,19 +2821,20 @@ fun slide_40():
               ~wire: workflow_wire)
 
 // -------------------------------------------------------------------------------------
-// slide_41: the same workflow, and the three things this work changes about it.
+// slide_41: the same workflow, once the program has effects.
 //
-// It opens on the picture section 0 ended with, whole, since the audience has been
-// walked through it once already. Then: the IR stage arrives and says what it does
-// with effects; extraction is renamed and says what that costs; and the rules, which
-// have not moved or changed, get the bubble that says why that matters. The last
-// press hands the program on to the slide that walks through it.
+// It opens on the picture the first one ended with, unchanged, and then says what is
+// different, one press at a time: the program is the one the last few slides have
+// been about, and so is the answer; it goes through a dataflow IR, which is what
+// makes an effect a value; extraction is the part that has to be taught about them;
+// and the rules, which have not moved or changed, are the point of the whole thing.
+// The last press hands the IR's program on to the slide that builds a graph from it.
 fun slide_41():
-  def page = titled("E-Graphs Explore a Big Space")
-  def plain = workflow_scene(~section: 1)
+  def page = titled(flow_title)
+  def pure = workflow_scene(~section: 0)
+  def effectful = workflow_scene(~section: 1)
   def with_ir = workflow_scene(~section: 1, ~ir: #true)
   def safe = workflow_scene(~section: 1, ~ir: #true, ~safe: #true)
-  def all_keys = flow_keys(~upto: (flow_steps :~ List).length())
   def ir_keys = flow_keys(~upto: (flow_steps :~ List).length(), ~ir: #true)
   def threading:
     { #'threading: flow_callout(page, with_ir[#'ir_box], ~body: [746.0, 202.0],
@@ -2852,8 +2844,8 @@ fun slide_41():
                                              [["threading", #'bold],
                                               [" functional objects!", #'plain]]])) }
   def refine:
-    { #'refine: flow_callout(page, safe[#'extract], ~body: [1210.0, 740.0],
-                             ~color: talk_red,
+    { #'refine: flow_callout(page, safe[#'extract], ~body: [1130.0, 740.0],
+                             ~color: talk_green,
                              ~content: prose_stack(
                                          [[["refine the semantics to", #'plain]],
                                           [["only ", #'plain], ["effect-safe", #'bold],
@@ -2863,16 +2855,18 @@ fun slide_41():
                             ~color: talk_blue,
                             ~content: prose_stack([[["write rules", #'bold]],
                                                    [["without worry", #'bold]]])) }
-  // the program, on its way into the box the next slide reads it out of
+  // the program in its threaded form, on its way into the box the next slide builds
+  // its graph from
   def parts = code_parts()
   def handoff:
-    { #'program: [code_updates(parts, ~states: #false), & code_updates_at, band_nodes],
+    { #'ir: [code_updates(parts, ~states: #true), & code_updates_at, band_nodes],
       // everything but those two lines, over the frame and under them
-      #'code_rest: [code_body(parts, ~states: #false, ~only: [0, 3]),
+      #'code_rest: [code_body(parts, ~states: #true, ~only: [0, 3]),
                     code_x, code_y, band_edges],
       #'code_frame: [parts[#'frame], code_x, code_y, band_below] }
   magic_slide(page,
-              [workflow_frame(plain, all_keys),
+              [workflow_frame(pure, flow_all),
+               workflow_frame(effectful, flow_all),
                workflow_frame(with_ir, ir_keys, ~ir: #true, ~over: threading),
                workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading ++ refine),
                workflow_frame(safe, ir_keys, ~ir: #true,
@@ -2887,8 +2881,8 @@ def all_slides:
    in_section(0, slide_2), in_section(0, slide_40), in_section(0, slide_12),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
-   divider(1), in_section(1, slide_41),
-   in_section(1, slide_update), in_section(1, slide_egraph),
+   divider(1), in_section(1, slide_update), in_section(1, slide_41),
+   in_section(1, slide_egraph),
    in_section(1, slide_rue), in_section(1, slide_fork),
    // 3 -- the algorithm
    divider(2),

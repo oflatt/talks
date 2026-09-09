@@ -12,6 +12,8 @@ import:
 
 export:
   make_bubble
+  make_arrow
+  make_gear
   make_flash
   make_node
   outline_to_header
@@ -87,6 +89,93 @@ fun make_bubble(~width: width :: maybe(Real) = #false,
             ~rounded: corner_radius,
             // The original ends in `pin-over`, which keeps the rectangle's
             ~refocus: #false)
+
+// A fat arrow in the same clothes as `make_bubble`: pale fill, saturated border,
+// and whatever it is labelled with written inside its shaft rather than beside it.
+// A step in a diagram that a bubble points at, or that a bubble is, should not have
+// to be drawn as a different kind of thing from the boxes it runs between.
+//
+// The content sets the size of the shaft; `head` is how much of the width the point
+// takes and `shaft` how much of the height the bar is, so the same call gives a
+// stubby arrow or a long one depending only on what is written in it.
+fun make_arrow(~width: width :: maybe(Real) = #false,
+               ~height: height :: maybe(Real) = #false,
+               ~padding: padding :: Real = 24,
+               ~color: color :: draw.Color || String = talk_blue,
+               ~head: head :: Real = 0.36,
+               ~shaft: shaft :: Real = 0.58,
+               child :: Pict, ...) :: Pict:
+  def line_color = as_color(color)
+  def content = gap_stack(child, ...)
+  def w = width || ((content.width + 2 * padding) / (1 - head))
+  def h = height || ((content.height + 2 * padding) / shaft)
+  def hw = w * head                     // the point
+  def sy0 = (h - h * shaft) / 2         // and the bar it grows out of
+  def sy1 = sy0 + h * shaft
+  def path:
+    def p = draw.Path()
+    p.move_to([0, sy0])
+    p.line_to([w - hw, sy0])
+    p.line_to([w - hw, 0])
+    p.line_to([w, h / 2])
+    p.line_to([w - hw, h])
+    p.line_to([w - hw, sy1])
+    p.line_to([0, sy1])
+    p.close()
+    p
+  def shape:
+    dc(fun (target :: draw.DC, dx, dy):
+         target.save()
+         target.pen := draw.Pen(~color: line_color, ~width: border_width)
+         target.brush := draw.Brush(~color: pale(line_color))
+         target.path(path, ~dx: dx, ~dy: dy)
+         target.restore(),
+       ~width: w, ~height: h)
+  // the content sits in the middle of the bar, which is left of the middle of the
+  // arrow by half the point
+  overlay(~horiz: #'left, ~vert: #'top,
+          ~dx: (w - hw - content.width) / 2, ~dy: (h - content.height) / 2,
+          shape, content)
+
+// A cog, for the step of a picture that is a machine rather than a thing: teeth
+// round a pale body, in the same colours as the bubbles.
+fun make_gear(~size: size :: Real = 120,
+              ~teeth: teeth :: Int = 10,
+              ~color: color :: draw.Color || String = talk_blue,
+              ~depth: depth :: Real = 0.24,
+              ~hub: hub :: Real = 0.34) :: Pict:
+  def line_color = as_color(color)
+  def r_out = size / 2
+  def r_in = r_out * (1 - depth)
+  def step = 2 * math.pi / teeth
+  fun at_angle(rad :: Real, a :: Real) :: List:
+    [r_out + rad * math.cos(a), r_out + rad * math.sin(a)]
+  def body:
+    def p = draw.Path()
+    for (i in 0..teeth):
+      def a = i * step
+      // one tooth: out along the top of it, down the far side, and round the root
+      def corners:
+        [[r_out, a], [r_out, a + step * 0.32],
+         [r_in, a + step * 0.5], [r_in, a + step * 0.82]]
+      for ([rad, ang] in corners, k in 0..):
+        def pt = at_angle(rad, ang)
+        if i == 0 && k == 0 | p.move_to(pt) | p.line_to(pt)
+    p.close()
+    p
+  def hole:
+    def p = draw.Path()
+    p.ellipse([r_out - r_out * hub, r_out - r_out * hub, 2 * r_out * hub, 2 * r_out * hub])
+    p
+  dc(fun (target :: draw.DC, dx, dy):
+       target.save()
+       target.pen := draw.Pen(~color: line_color, ~width: border_width)
+       target.brush := draw.Brush(~color: pale(line_color))
+       target.path(body, ~dx: dx, ~dy: dy)
+       target.brush := draw.Brush.none
+       target.path(hole, ~dx: dx, ~dy: dy)
+       target.restore(),
+     ~width: size, ~height: size)
 
 // A starburst. Rhombus's pict has no flash shape, so this lifts `pict/flash`.
 fun flash_shape(w :: Real, h :: Real, color :: draw.Color) :: Pict:
