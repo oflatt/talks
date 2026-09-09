@@ -1,0 +1,163 @@
+#lang rhombus
+import:
+  pict as pc
+  draw
+
+export:
+  Frame
+  magic_between
+  magic_still
+  magic_press
+  magic_slide
+
+// -------------------------------------------------------------------------------------
+// A magic move over what is on the slide, rather than over two finished pictures
+//
+// `pict`'s own `magic_move` compares two finished pictures and animates the picts it
+// can find in both. That is the wrong ground to stand on for a picture of boxes and
+// arrows, for four reasons, each of which was measured rather than guessed:
+//
+//  - A line or a bubble aimed at a pict by a finder does not follow that pict when
+//    it moves. The line is baked into the picture it was drawn onto, and moving the
+//    pict afterwards cannot redraw it -- moving its bounding box does not help
+//    either. Half of a graph is such lines.
+//  - A pict drawn twice counts as absent: finders default to a unique match, and
+//    drawing a pict twice is the ordinary way to have both something to aim an edge
+//    at (a ghost) and a copy over the lines that point at it.
+//  - A fade is applied at the *top* of a subtree, and a subtree is spared only if
+//    something inside it moves. Being in both pictures protects a pict only if no
+//    ancestor of it is faded, and an ancestor is a freshly built composite, which
+//    never is in the other picture. So a press that only adds something fades the
+//    whole slide, static title and all.
+//  - It can only match picts that are pict-library children. Anything inside a pict
+//    that some other library built -- every box a slide generator emits -- is one
+//    opaque leaf to it, however well finders can see inside.
+//
+// So this one is told what is on the slide and matches by *key*:
+//
+//     Frame(~picts: { key: [pict, x, y] or [pict, x, y, band] },
+//           ~edges: [spec, ...])
+//
+// A key both frames have is the same thing. It travels from the one place to the
+// other, and if the two frames draw it differently the two drawings cross-fade
+// where it stands, so a node that has just been picked turns green without moving.
+// A key only one frame has fades in or out. Nothing else is touched, so a page
+// under the picture is never redrawn and cannot dim.
+//
+// Edges are not picts but specs, drawn by the `~wire` the slide passes in. It is
+// handed a transparent layer holding a ghost of every pict at wherever it has got
+// to, the specs to draw, and the picts by key to aim at, and it is called again for
+// every frame of the press -- which is how an arrow follows its nodes instead of
+// being swapped for a different arrow. Edges the two frames share are drawn solid,
+// and the ones only one of them has fade, so a rerouted edge fades over its
+// replacement rather than jumping.
+//
+// `band` orders the drawing, low to high, 0 by default: a class region goes below
+// the nodes, a bubble above them, and the edges land in `~edge_band`. Two things in
+// the same band should not overlap, since their order within it is not fixed.
+
+class Frame(~picts: picts :: Map = {},
+            ~edges: edges :: List = [])
+
+fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
+fun as_pict(q) :: pc.Pict: if q is_a pc.Pict | q | pc.Pict.from_handle(q)
+fun grab(m :~ Map, key): if m.has_key(key) | m[key] | #false
+fun put(base :: pc.Pict, p, x :: Real, y :: Real) :: pc.Pict:
+  pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, as_pict(p))
+
+// A frame's entry for one key: what to draw, where, and in which band.
+fun entry_band(e :~ List) :: Int: if e.length() > 3 | e[3] | 0
+
+fun keys_of(a :: Frame, b :: Frame) :: List: (a.picts ++ b.picts).keys()
+
+// Where each key is at this moment, and which of its two drawings to aim edges at.
+// A key in both frames is on its way from the one place to the other; a key in one
+// frame stays where that frame puts it and fades instead.
+fun spots_between(a :: Frame, b :: Frame, t :: Real) :: Map:
+  for values(m :~ Map = {}) (key in keys_of(a, b)):
+    def ea :~ List = grab(a.picts, key) || []
+    def eb :~ List = grab(b.picts, key) || []
+    m ++ { key: (cond
+                 | ea == []: [eb[1], eb[2]]
+                 | eb == []: [ea[1], ea[2]]
+                 | ~else: [lerp(ea[1], eb[1], t), lerp(ea[2], eb[2], t)]) }
+
+fun picts_between(a :: Frame, b :: Frame) :: Map:
+  for values(m :~ Map = {}) (key in keys_of(a, b)):
+    def ea :~ List = grab(a.picts, key) || grab(b.picts, key)
+    m ++ { key: ea[0] }
+
+// Everything to draw, as [band, pict, x, y, alpha]. A key drawn differently by the
+// two frames yields two of these at one place, the arriving drawing over the
+// leaving one, which reads as the one turning into the other.
+fun draws_between(a :: Frame, b :: Frame, t :: Real) :: List:
+  def spots :~ Map = spots_between(a, b, t)
+  List.append(
+    & for List (key in keys_of(a, b)):
+        def ea :~ List = grab(a.picts, key) || []
+        def eb :~ List = grab(b.picts, key) || []
+        def [x, y] = spots[key]
+        cond
+        | ea == []: [[entry_band(eb), eb[0], x, y, t]]
+        | eb == []: [[entry_band(ea), ea[0], x, y, 1.0 - t]]
+        | ea[0] === eb[0]: [[entry_band(ea), ea[0], x, y, 1.0]]
+        | ~else: [[entry_band(ea), ea[0], x, y, 1.0 - t],
+                  [entry_band(eb), eb[0], x, y, t]])
+
+// The moment `t` of the way from `a` to `b`, over a `base` no press touches.
+fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
+                  ~wire: wire :: Function.of_arity(3) = fun (layer, specs, at): layer,
+                  ~edge_band: edge_band :: Int = -1) :: pc.Pict:
+  def blank = pc.blank(~width: base.width, ~height: base.height)
+  def draws :~ List = draws_between(a, b, t)
+  def at :~ Map = picts_between(a, b)
+  def spots :~ Map = spots_between(a, b, t)
+  // a ghost of every pict where it is now: a ghost draws nothing and is still
+  // findable, so the edges are drawn on a layer of their own, from the current
+  // positions, and each pict is still drawn exactly once
+  def ghosts:
+    for values(q :~ pc.Pict = blank) (key in at.keys()):
+      def [x, y] = spots[key]
+      put(q, as_pict(at[key]).ghost(), x, y)
+  def both_es: for List (e in a.edges): keep_when b.edges.contains(e); e
+  def gone_es: for List (e in a.edges): skip_when b.edges.contains(e); e
+  def new_es: for List (e in b.edges): skip_when a.edges.contains(e); e
+  def edge_layers:
+    for List ([specs, al] in [[both_es, 1.0], [gone_es, 1.0 - t], [new_es, t]]):
+      keep_when specs != [] && al > 0.0
+      wire(ghosts, specs, at).alpha(al)
+  def bands :~ List = (for List (d :~ List in draws): d[0]) ++ [edge_band]
+  def lo = for values(m :~ Int = bands[0]) (v in bands): math.min(m, v)
+  def hi = for values(m :~ Int = bands[0]) (v in bands): math.max(m, v)
+  for values(q :~ pc.Pict = base) (band in lo..hi + 1):
+    // the edges of the band, and then everything placed in it
+    def wired:
+      if band != edge_band
+      | q
+      | for values(q :~ pc.Pict = q) (l in edge_layers): put(q, l, 0.0, 0.0)
+    for values(q :~ pc.Pict = wired) (d :~ List in draws):
+      skip_when d[0] != band || (d[4] :~ Real) == 0.0
+      put(q, as_pict(d[1]).alpha(d[4]), d[2], d[3])
+
+fun magic_still(base :: pc.Pict, f :: Frame, ~& kws) :: pc.Pict:
+  magic_between(base, f, f, 0.0, ~& kws)
+
+// One press. Two frames with no key in common have nothing to move, and the whole
+// picture fades: that is worth saying out loud, since it looks exactly like an
+// ordinary cross-fade and so passes unnoticed.
+fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
+                ~extent: extent :: Real = 1.2, ~& kws) :: pc.Pict:
+  def shared:
+    for values(n :~ Int = 0) (key in a.picts.keys()):
+      if b.picts.has_key(key) | n + 1 | n
+  cond
+  | shared == 0 && a.picts.length() > 0 && b.picts.length() > 0:
+      println("magic_press: the two frames share no key, so the whole picture fades")
+  | ~else: #void
+  pc.animate(~extent: extent, fun (t): magic_between(base, a, b, t, ~& kws))
+
+// A whole slide: the first frame, then a press to each of the rest.
+fun magic_slide(base :: pc.Pict, frames :~ List, ~& kws) :: pc.Pict:
+  pc.switch(magic_still(base, frames[0], ~& kws),
+            & for List (i in 1..frames.length()):
+                magic_press(base, frames[i - 1], frames[i], ~& kws))
