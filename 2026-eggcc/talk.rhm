@@ -648,47 +648,33 @@ fun slide_12():
       match e[0]
       | #'op: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4)
       | #'op_blue: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue)
-      // `a` is both an operand of this `+` and, once the last rule fires, in its
-      // e-class -- so this arrow and that rule's dashed line would lie exactly on
-      // top of each other. The operand arrow is the one that steps aside: the
-      // dashed line has to stay on the centre of the class region, because that
-      // region *is* the class it names, and a dashed line drawn beside it reads as
-      // joining something else.
-      //
-      // It steps aside by moving its two ends along the borders they sit on, rather
-      // than by shifting the whole line sideways: a shifted line keeps its
-      // direction but leaves both ends hanging off the boxes, an arrowhead pointing
-      // at the space beside `a` instead of at `a`. Moved along the borders, it stays
-      // attached at both ends and still threads the gap between `+` and the `1 - 1`
-      // class, which is the only way through.
-      //
-      // -19 and -10, not -50 and +10: a node's corners are rounded by 30, so an end
-      // placed out at the corner lands where the box has no edge and the arrow stops
-      // short of it. Both ends stay on the straight run of their border.
-      | #'op_aside:
-          arrow(~on: q, from, to, ~line_width: 4, ~color: keynote_blue,
-                ~from_at: pc.Find.top(as_pict(from), ~dx: -19, ~dy: -4),
-                ~to_at: pc.Find.bottom(as_pict(to), ~dx: -10, ~dy: 4))
       | #'eq_blue: eq(q, from, to, keynote_blue)
       | #'eq_orange: eq(q, from, to, draw.Color(255, 147, 0))
-      // The third rule's own equivalence, drawn with the merge it makes. The operand
-      // arrow between these same two nodes takes the left of the gap they both pass
-      // through, so this takes the right -- drawn down the middle, the two of them
-      // run into each other halfway along. Not so far right that it leaves the
-      // region it belongs to, though: this line has to stay on the blob, which is
-      // what says the two nodes are one class.
+      // The third rule's own equivalence, drawn with the merge it makes. `a` is both
+      // an operand of this `+` and, once that rule fires, in its e-class, so this
+      // line and that operand arrow join the same two boxes and would lie on top of
+      // each other. This is the one that steps aside, and the arrow keeps the route
+      // the helper gives it: an arrow has a head, and a head is a claim about which
+      // box it points at, so an arrow is the wrong thing to nudge off centre.
+      //
+      // It steps aside along the borders rather than by shifting the whole line
+      // sideways, which would leave both of its ends hanging in space. 19 and not
+      // 40: a node's corners are rounded by 30, so an end out at the corner lands
+      // where the box has no edge, and both ends stay on the straight run of their
+      // border. That also keeps it on the blob, which is what says the two nodes are
+      // one class.
       | ~else:
           arrow(~on: q, from, to, ~style: #'line, ~line_style: #'short_dash,
                 ~color: rule_green, ~line_width: 4,
-                ~from_at: pc.Find.top(as_pict(from), ~dx: 0),
-                ~to_at: pc.Find.bottom(as_pict(to), ~dx: 19))
+                ~from_at: pc.Find.top(as_pict(from), ~dx: -19, ~dy: -4),
+                ~to_at: pc.Find.bottom(as_pict(to), ~dx: -19, ~dy: 4))
 
   def es_plus: [[#'op, #'plus, #'a], [#'op, #'plus, #'one]]
   def es_minus: [[#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
   def es_term = es_plus ++ es_minus
   def es_rewrite:
     [[#'op_blue, #'plus_r, #'minus_r], [#'op_blue, #'minus_r, #'one],
-     [#'op_aside, #'plus_r, #'a], [#'eq_blue, #'minus, #'plus_r]]
+     [#'op_blue, #'plus_r, #'a], [#'eq_blue, #'minus, #'plus_r]]
   def es_zero: [[#'eq_orange, #'minus_r, #'zero]]
   def es_merged: [[#'eq_green, #'plus_r, #'a]]
   def es_graph = es_term ++ es_rewrite ++ es_zero
@@ -910,7 +896,7 @@ fun slide_12():
     Frame(~picts: { #'a: [green[#'a], 880.0, 520.0],
                     #'zero: [green[#'zero], 1120.0, 520.0],
                     #'plus_r: [green[#'plus_r], 1000.0, 730.0] } ++ rules_over,
-          ~edges: [[#'op_aside, #'plus_r, #'a], [#'op_blue, #'plus_r, #'zero]])
+          ~edges: [[#'op_blue, #'plus_r, #'a], [#'op_blue, #'plus_r, #'zero]])
   // and then just `a`
   def term_2:
     Frame(~picts: { #'a: [green[#'a], 1000.0, 620.0] } ++ rules_over ++ third_over)
@@ -1956,16 +1942,6 @@ fun slide_fork():
   def fork_key = ((forks[0] :~ List)[1])                 // the state read twice
   def readers: for List (f :~ List in forks): f[0]       // and what reads it
 
-  // The problem, said in red where it happens. The bubble goes up beside the title
-  // rather than in among the graph: the state column is the right-hand edge of the
-  // picture and there is no room next to the node itself, and a spike from
-  // anywhere below has the rest of the chain to cross to reach it.
-  def fork_over:
-    { #'fork: [bubble_at(chain_plain[fork_key], ~spot: chain_spots[fork_key],
-                         ~body: [1150.0, 80.0], ~color: talk_red,
-                         ~content: prose([["two copies of memory!", #'bold]])),
-               0.0, 0.0, band_above] }
-
   // What came out, left where the graph has it: the nodes the root reaches, the
   // ones it does not gone, and the two `update`s that read the forked state joined
   // to the very node the class settled on -- in red, since that is the answer and
@@ -1987,7 +1963,7 @@ fun slide_fork():
   def fork_red = [fork_key] ++ readers
   def term:
     Frame(~picts: chain_node_picts(term_spots, kept, ~red: fork_red)
-                    ++ rule_over ++ fork_over,
+                    ++ rule_over,
           ~edges: term_edges)
 
   // Then the same term again, laid out to show what shape it is: two paths out of
@@ -2009,9 +1985,11 @@ fun slide_fork():
       #'u2: [1350.0, chain_y(3)], #'u3: [1670.0, chain_y(3)],  // the two branches
       #'v2: [1408.0, chain_y(4)], #'s3: [1728.0, chain_y(4)],
       #'ret: [1510.0, chain_y(5)] }                            // where they meet
-  // The bubble comes down beside the apex, and on two lines: from above it would
-  // have to cross the `update` the state comes out of, which is always directly
-  // over it, and on one line it is wide enough to sit on the apex itself.
+  // The one bubble on the slide, and it waits for the diamond: the red term is
+  // worth a beat on its own, and the words land better once the shape is there to
+  // point at. Beside the apex and on two lines, since from above a spike has to
+  // cross the `update` the state comes out of, which is always directly over it,
+  // and on one line the bubble is wide enough to sit on the apex itself.
   def diamond_fork_over:
     { #'fork: [bubble_at(chain_plain[fork_key], ~spot: diamond_spots[fork_key],
                          ~body: [1053.0, 360.0], ~color: talk_red,
