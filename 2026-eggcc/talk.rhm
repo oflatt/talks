@@ -648,6 +648,15 @@ fun slide_12():
       match e[0]
       | #'op: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4)
       | #'op_blue: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue)
+      // `1 - 1` takes the same node for both of its operands, so it needs two
+      // arrows: one arrow would say the operator takes one thing. The two run side
+      // by side, pinned 18 either side of the border's middle -- the two boxes are
+      // in one column, so this is a pair of parallel lines.
+      | #'op_pair:
+          for values(p :~ pc.Pict = q) (dx in [-18.0, 18.0]):
+            arrow(~on: p, from, to, ~line_width: 4, ~color: keynote_blue,
+                  ~from_at: pc.Find.top(as_pict(from), ~dx: dx, ~dy: -4),
+                  ~to_at: pc.Find.bottom(as_pict(to), ~dx: dx, ~dy: 4))
       | #'eq_blue: eq(q, from, to, keynote_blue)
       | #'eq_orange: eq(q, from, to, draw.Color(255, 147, 0))
       // The third rule's own equivalence, drawn with the merge it makes. `a` is both
@@ -673,7 +682,7 @@ fun slide_12():
   def es_minus: [[#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
   def es_term = es_plus ++ es_minus
   def es_rewrite:
-    [[#'op_blue, #'plus_r, #'minus_r], [#'op_blue, #'minus_r, #'one],
+    [[#'op_blue, #'plus_r, #'minus_r], [#'op_pair, #'minus_r, #'one],
      [#'op_blue, #'plus_r, #'a], [#'eq_blue, #'minus, #'plus_r]]
   def es_zero: [[#'eq_orange, #'minus_r, #'zero]]
   def es_merged: [[#'eq_green, #'plus_r, #'a]]
