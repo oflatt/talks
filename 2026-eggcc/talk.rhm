@@ -1076,6 +1076,23 @@ fun frame_box(w :: Real, h :: Real, ~rounded: r = #false) :: pc.Pict:
                      ~geom: if r | preset_geom("roundRect", [pair("adj", "val " +& r)]) | #false,
                      ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
 
+// A line built from its pieces, in the order they are written. A piece with a role
+// is one that stands for a node in the graph; `#false` is punctuation.
+fun segs_pict(segs :~ List) :: pc.Pict:
+  pc.beside(~vert: #'bottom,
+            & List.append(& for List ([role, ps] in segs): ps))
+
+// The named pieces of a line, as [role, pict, x offset from the line's left].
+fun segs_pieces(segs :~ List) :: List:
+  def values(out, _):
+    for values(acc :~ List = [], dx :~ Real = 0.0) ([role, ps] in segs):
+      def w: for values(t :~ Real = 0.0) (p :~ pc.Pict in ps): t + (p :~ pc.Pict).width
+      values((if role == #false
+              | acc
+              | acc ++ [[role, pc.beside(~vert: #'bottom, & ps), dx]]),
+             dx + w)
+  out
+
 fun code_parts() :: Map:
   // The signature. `fun foo(a, x, b, y` and `):` are the same picts in both
   // forms, so they are what the move slides along; the `, ω` between them belongs
@@ -1087,20 +1104,39 @@ fun code_parts() :: Map:
      #'states: pc.beside(~vert: #'bottom, sig_head, code(", "), greek("ω"), sig_close)}
   def updates:
     for List (i in 1..4):
-      // the call up to its last argument, then the state it takes, then `)`
-      def head = [code(" = update" ++ ["(a, x", "(a, x", "(b, y"][i - 1])]
-      def state_in:
-        if i == 1
-        | [code(", "), greek("ω")]
-        | [code(", "), greek("ω"), code_sub(to_string(i - 1))]
-      def close = code(")")
+      // Every piece of the line that stands for something in the graph is its own
+      // pict, so that `slide_egraph` can lift it out and turn it into that node.
+      // The pieces both forms of the line have in common are built once and used
+      // twice, which is what `slide_update`'s move slides along.
       def v = code("v")
-      def i_sub = code_sub(to_string(i))
-      def omega = greek("ω")
-      {#'plain: pc.beside(~vert: #'bottom, v, i_sub, & head, close),
-       #'states: pc.beside(~vert: #'bottom, code("("), v, i_sub, code(", "), omega,
-                           code_sub(to_string(i)), code(")"), & head, & state_in, close),
-       #'omega: omega}
+      def v_sub = code_sub(to_string(i))
+      def omega_out = greek("ω")
+      def omega_out_sub = code_sub(to_string(i))
+      def op = code(" = update(")
+      def arg1 = code(["a", "a", "b"][i - 1])
+      def arg2 = code(["x", "x", "y"][i - 1])
+      def arg_comma = code(", ")
+      def omega_in = greek("ω")
+      def omega_in_sub = if i == 1 | [] | [code_sub(to_string(i - 1))]
+      def close = code(")")
+      // the line as it is written, with the pieces that mean something named
+      def segs:
+        [[#false, [code("(")]],
+         [#'value, [v, v_sub]],
+         [#false, [code(", ")]],
+         [#'state, [omega_out, omega_out_sub]],
+         [#false, [code(")")]],
+         [#'op, [op]],
+         [#'arg1, [arg1]],
+         [#false, [arg_comma]],
+         [#'arg2, [arg2]],
+         [#false, [code(", ")]],
+         [#'state_in, [omega_in] ++ omega_in_sub],
+         [#false, [close]]]
+      {#'plain: pc.beside(~vert: #'bottom, v, v_sub, op, arg1, arg_comma, arg2, close),
+       #'states: segs_pict(segs),
+       #'omega: omega_out,
+       #'segs: segs}
   // What the program hands back, which is what extraction is asked for: the value
   // the second `update` returned, and -- in the state form -- the state the third
   // one left. `return ` and `v2` are the same picts in both, so the move slides
@@ -1109,9 +1145,16 @@ fun code_parts() :: Map:
   def ret_v = code("v")
   def ret_sub = code_sub("2")
   def ret:
+    def segs:
+      [[#'op, [ret_head]],
+       [#false, [code("(")]],
+       [#'value, [ret_v, ret_sub]],
+       [#false, [code(", ")]],
+       [#'state, [greek("ω"), code_sub("3")]],
+       [#false, [code(")")]]]
     {#'plain: pc.beside(~vert: #'bottom, ret_head, ret_v, ret_sub),
-     #'states: pc.beside(~vert: #'bottom, ret_head, code("("), ret_v, ret_sub,
-                         code(", "), greek("ω"), code_sub("3"), code(")"))}
+     #'states: segs_pict(segs),
+     #'segs: segs}
   def lines = updates ++ [ret]
   // The frame is measured, and measured against the *state* form: a box sized to
   // the plain form would have to grow as the code moves into the state form, and
@@ -1513,47 +1556,56 @@ fun slide_egraph():
   def parts = code_parts()
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
 
-  // Each line of the program goes into the graph in three presses: the line is
-  // marked, a copy of it lifts out into the open below the box, and then that copy
-  // becomes the `update` box in the graph while the value and the state it returns
-  // arrive around it.
+  // Each line of the program goes into the graph in two presses: the line is
+  // marked, with a copy of every piece of it that means something sitting exactly
+  // on top of that piece; then those copies fly right into the graph, each one
+  // turning into the node it stands for as it lands.
   //
-  // The copy is the very pict the code box draws that line with, keyed by the node
-  // it is about to become. So the first press puts it exactly over the line it is a
-  // copy of, where it cannot be told from the original, and the two presses after
-  // that carry it out and turn it into a node -- which is the story this slide has
-  // to tell, that a line of the program *is* a piece of the graph.
+  // The copies are keyed by the nodes they become, so a piece of text and the box
+  // it becomes are one thing travelling, which is the whole point: `a` in the
+  // program *is* the `a` in the graph. Nothing waits in the middle, and no piece is
+  // ever wider than the words it copies, so nothing crosses the edge of the slide.
   //
   // One band per line, built once, so the press that marks the next line has only
   // the band to move.
   def bands: for List (k in 0..4): band_of(parts, k) ++ [band_above]
-  fun line_pict(i :: Int) :~ pc.Pict:
-    ((parts[#'lines] :~ List)[i] :~ Map)[#'states]
-  // where the box draws that line, from the same measurements `code_pict` uses
-  fun line_home(i :: Int) :: List:
-    [code_x + code_inset + code_indent,
-     code_y + code_inset + code_row * (i + 1)
-       + (code_row - (line_pict(i)).height) / 2]
-  // and where the copy goes to be looked at: the open space under the box
-  def copy_home = [200.0, 810.0]
 
-  // Which `update` each line becomes, in the order the graph is built.
-  def line_keys = [#'u1, #'u2, #'u3, #'ret]
+  // Which node each piece of line `k` becomes. Only the pieces that bring a *new*
+  // node are listed: by the second line its operands and its incoming state are in
+  // the graph already, and the copy of a piece with nowhere to go would be motion
+  // that means nothing.
+  def line_targets:
+    [{ #'value: #'v1, #'state: #'s1, #'op: #'u1,
+       #'arg1: #'a, #'arg2: #'x, #'state_in: #'s0 },
+     { #'value: #'v2, #'state: #'s2, #'op: #'u2 },
+     { #'value: #'v3, #'state: #'s3, #'op: #'u3, #'arg1: #'b, #'arg2: #'y },
+     { #'op: #'ret }]
+
+  // where the box draws line `k`, from the same measurements `code_pict` uses
+  fun line_pict(k :: Int) :~ pc.Pict:
+    ((parts[#'lines] :~ List)[k] :~ Map)[#'states]
+  fun line_x() :: Real: code_x + code_inset + code_indent
+  fun line_y(k :: Int) :: Real:
+    code_y + code_inset + code_row * (k + 1) + (code_row - (line_pict(k)).height) / 2
+  // the copies of line `k`'s pieces, each over the piece it copies
+  fun line_copies(k :: Int) :: Map:
+    def targets :~ Map = line_targets[k]
+    def segs :~ List = ((parts[#'lines] :~ List)[k] :~ Map)[#'segs]
+    for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(segs)):
+      skip_when !targets.has_key(role)
+      m ++ { targets[role]: [piece, line_x() + dx, line_y(k)] }
 
   chain_slide(
     page,
     [Frame(),
      & List.append(
-         & for List (key in line_keys, i in 0..):
-             def mark = { #'mark: bands[i] }
-             // what the graph has before this line goes in, and after
-             def before = chain_node_picts(chain_spots_upto(i), [])
-             def after = chain_node_picts(chain_spots_upto(i + 1), [])
-             [Frame(~picts: before ++ mark ++ { key: [line_pict(i), & line_home(i)] },
-                    ~edges: chain_edges(i)),
-              Frame(~picts: before ++ mark ++ { key: [line_pict(i), & copy_home] },
-                    ~edges: chain_edges(i)),
-              Frame(~picts: after ++ mark, ~edges: chain_edges(i + 1))])])
+         & for List (k in 0..4):
+             def mark = { #'mark: bands[k] }
+             [Frame(~picts: chain_node_picts(chain_spots_upto(k), []) ++ mark
+                              ++ line_copies(k),
+                    ~edges: chain_edges(k)),
+              Frame(~picts: chain_node_picts(chain_spots_upto(k + 1), []) ++ mark,
+                    ~edges: chain_edges(k + 1))])])
 
 // -------------------------------------------------------------------------------------
 // slide_rue: a rule over `update`, and the rule applied.
@@ -1929,9 +1981,46 @@ fun slide_fork():
        skip_when e[0] == #'s && readers.contains(e[1])
        e)
       ++ (for List (r in readers): [#'f, r, fork_key])
+  // The state and the two `update`s that read it are all drawn in the fork's red:
+  // one of them is the thing that cannot be shared, and the other two are the pair
+  // sharing it, and the three of them together are the problem.
+  def fork_red = [fork_key] ++ readers
   def term:
-    Frame(~picts: chain_node_picts(term_spots, kept, ~red: [fork_key])
+    Frame(~picts: chain_node_picts(term_spots, kept, ~red: fork_red)
                     ++ rule_over ++ fork_over,
+          ~edges: term_edges)
+
+  // Then the same term again, laid out to show what shape it is: two paths out of
+  // one state that come back together, which is a diamond, and a diamond is exactly
+  // what a program cannot be here. `ω1` is the apex, the two `update`s that read it
+  // hang off it left and right, what each returns sits under it, and the two meet
+  // again at the `return`.
+  //
+  // Every node is in both frames, so the press is the term rearranging itself:
+  // nothing fades, nothing arrives, the picture just falls into the shape it always
+  // had. The edges follow their ends, so the two red ones become the top two sides
+  // of the diamond as it opens.
+  def diamond_spots:
+    { #'a: [leaf_x(0), chain_y(0)], #'x: [leaf_x(1), chain_y(0)],
+      #'b: [leaf_x(2), chain_y(0)], #'y: [leaf_x(3), chain_y(0)],
+      #'s0: [chain_s, chain_y(0)],
+      #'u1: [1510.0, chain_y(1)],
+      #'s1: [1568.0, chain_y(2)],                              // the apex
+      #'u2: [1350.0, chain_y(3)], #'u3: [1670.0, chain_y(3)],  // the two branches
+      #'v2: [1408.0, chain_y(4)], #'s3: [1728.0, chain_y(4)],
+      #'ret: [1510.0, chain_y(5)] }                            // where they meet
+  // The bubble comes down beside the apex, and on two lines: from above it would
+  // have to cross the `update` the state comes out of, which is always directly
+  // over it, and on one line it is wide enough to sit on the apex itself.
+  def diamond_fork_over:
+    { #'fork: [bubble_at(chain_plain[fork_key], ~spot: diamond_spots[fork_key],
+                         ~body: [1053.0, 360.0], ~color: talk_red,
+                         ~content: prose_stack([[["two copies", #'bold]],
+                                                [["of memory!", #'bold]]])),
+               0.0, 0.0, band_above] }
+  def diamond:
+    Frame(~picts: chain_node_picts(diamond_spots, kept, ~red: fork_red)
+                    ++ rule_over ++ diamond_fork_over,
           ~edges: term_edges)
 
   chain_slide(
@@ -1941,7 +2030,7 @@ fun slide_fork():
                       // only the states are unioned, so only their class is drawn
                       ~classes: state_class_under,
                       ~kept: kept)
-      ++ [term])
+      ++ [term, diamond])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
