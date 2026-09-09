@@ -1207,6 +1207,10 @@ fun bubble_at(node, ~spot: spot :~ List, ~body: body :~ List,
   multi_callout(~on: probe, ~place: marker, ~at: [target],
                 ~color: color, ~padding: 18.0, content)
 
+// A word for a bubble that has to fit somewhere narrow.
+def small_face = draw.Font(~name: prose_font, ~size: 32.0, ~weight: #'bold)
+fun small_prose(s :: String) :: pc.Pict: pc.text(s, ~font: small_face)
+
 // A sentence for a bubble, in the deck's Helvetica Neue: each item is a string
 // and how it is set, `#'plain`, `#'bold` or `#'sub`.
 def prose_face = draw.Font(~name: prose_font, ~size: 40.0)
@@ -1331,19 +1335,21 @@ fun chain_nodes(~picked: picked :: List = [],
 def chain_graph:
   [[#'a, #'k_a, [], 0], [#'x, #'k_x, [], 0], [#'one, #'k_one, [], 0],
    [#'s0, #'k_s0, [], 0],
-   [#'xp, #'k_xp, [#'k_x, #'k_one], 1],                       // x + 1
-   [#'u1, #'k_u1, [#'k_a, #'k_x, #'k_s0], 2],                 // the write the program has
-   [#'us, #'k_us, [#'k_a, #'k_xp, #'k_s0], 2],                // the write the rule adds
-   [#'v1, #'k_old, [#'k_u1], 3], [#'s1, #'k_s1, [#'k_u1], 3],
-   [#'v3, #'k_old, [#'k_us], 3], [#'s3, #'k_fin, [#'k_us], 3],
-   [#'u2, #'k_u2, [#'k_a, #'k_xp, #'k_s1], 4],                // the overwrite
-   [#'v2, #'k_v2, [#'k_u2], 5], [#'s2, #'k_fin, [#'k_u2], 5],
-   [#'ret, #'k_ret, [#'k_old, #'k_fin], 6]]
+   // `x + 1` is drawn in the row of inputs, so it shares their layer: its own
+   // operands are listed before it, which is all the cost pass needs
+   [#'xp, #'k_xp, [#'k_x, #'k_one], 0],
+   [#'u1, #'k_u1, [#'k_a, #'k_x, #'k_s0], 1],                 // the write the program has
+   [#'us, #'k_us, [#'k_a, #'k_xp, #'k_s0], 1],                // the write the rule adds
+   [#'v1, #'k_old, [#'k_u1], 2], [#'s1, #'k_s1, [#'k_u1], 2],
+   [#'v3, #'k_old, [#'k_us], 2], [#'s3, #'k_fin, [#'k_us], 2],
+   [#'u2, #'k_u2, [#'k_a, #'k_xp, #'k_s1], 3],                // the overwrite
+   [#'v2, #'k_v2, [#'k_u2], 4], [#'s2, #'k_fin, [#'k_u2], 4],
+   [#'ret, #'k_ret, [#'k_old, #'k_fin], 5]]
 
 // The nodes that carry memory, which are the ones that must not be shared: a value
 // can be read twice, a state cannot.
 def chain_states = [#'s0, #'s1, #'s2, #'s3]
-def chain_layers = 7
+def chain_layers = 6
 
 // The cheapest node in each class. A node costs one plus the cost of the classes
 // it takes, and a class costs what its cheapest node does; the nodes are listed in
@@ -1416,18 +1422,31 @@ fun chain_forks(g :~ List, ~root: root) :: List:
 // The two writes that read the memory the program starts with are drawn side by
 // side under it, which is what makes the fork legible when extraction takes both:
 // two boxes reaching up to one `ω`.
+// What each press of `slide_egraph` brings, in the order the program is read, and
+// then what the rule adds. Each entry is [key, x, y, tag].
+//
+// The memory is the last of an `update`'s arguments, as it is in the paper, so it
+// is the last thing in the row of inputs -- rightmost, with the two writes that read
+// it below and the state chain running down that side. The address sits next to it,
+// above the corridor between the two writes, because all three writes reach it and
+// from there none of those edges has a box to cross. `x + 1` goes up in the row of inputs rather than under
+// it: every operand edge climbs through the rows above, and a box sitting in that
+// band is a box those edges have to cross. The corridor between the two writes is
+// left clear for the same reason -- the overwrite reaches its operands up through
+// it -- and each write's own results sit under it, value inwards, so that the two
+// values the rule equates face each other across the corridor.
 def chain_steps:
-  [[[#'a, 1113.0, chain_y(0), "a"], [#'x, 1201.0, chain_y(0), "x"],
-    [#'s0, 1750.0, chain_y(0), "ω"],
-    [#'u1, 1113.0, chain_y(2), "update"],
-    [#'s1, 1300.0, chain_y(3), "ω1"], [#'v1, 1390.0, chain_y(3), "v1"]],
-   [[#'one, 1289.0, chain_y(0), "1"], [#'xp, 1300.0, chain_y(1), "x+1"],
-    [#'u2, 1360.0, chain_y(4), "update (2)"],
-    [#'v2, 1550.0, chain_y(5), "v2"], [#'s2, 1683.0, chain_y(5), "ω2"]],
-   [[#'ret, 1440.0, chain_y(6), "return"]],
+  [[[#'x, 1120.0, chain_y(0), "x"], [#'a, 1450.0, chain_y(0), "a"],
+    [#'s0, 1620.0, chain_y(0), "ω"],
+    [#'u1, 1120.0, chain_y(1), "update"],
+    [#'s1, 1120.0, chain_y(2), "ω1"], [#'v1, 1210.0, chain_y(2), "v1"]],
+   [[#'one, 1210.0, chain_y(0), "1"], [#'xp, 1300.0, chain_y(0), "x+1"],
+    [#'u2, 1300.0, chain_y(3), "update (2)"],
+    [#'v2, 1300.0, chain_y(4), "v2"], [#'s2, 1690.0, chain_y(4), "ω2"]],
+   [[#'ret, 1210.0, chain_y(5), "return"]],
    // what the rule adds
-   [[#'us, 1580.0, chain_y(2), "update (3)"],
-    [#'v3, 1593.0, chain_y(3), "v3"], [#'s3, 1683.0, chain_y(3), "ω3"]]]
+   [[#'us, 1600.0, chain_y(1), "update (3)"],
+    [#'v3, 1600.0, chain_y(2), "v3"], [#'s3, 1690.0, chain_y(2), "ω3"]]]
 
 // An edge runs from a node to the ones it is built from: an `update` points at its
 // arguments, and the value and state it returns point back at it. Data still flows
@@ -1435,18 +1454,17 @@ def chain_steps:
 //
 // `#'up` aims the arrowhead at a node's bottom edge rather than at the point on its
 // border facing the source, so the edge stays under the row it passes beneath. A
-// number bows the edge instead, out into whatever band is empty -- see `chain_wire`.
-// The fourth element pulls an end away from its neighbour, so that two edges into
-// one box do not arrive on top of each other.
+// number bows the edge instead -- see `chain_wire`. The overwrite reaches the state
+// it reads with a bow, since that state's own sibling value sits between them.
 def chain_value_edges:
-  [[[#'u1, #'a], [#'u1, #'x], [#'v1, #'u1]],
-   [[#'xp, #'x], [#'xp, #'one],
-    [#'u2, #'a, 0.3, -13.0], [#'u2, #'xp], [#'v2, #'u2]],
-   [[#'ret, #'v1, 0.55, 0.0]],
-   [[#'us, #'a, 0.35, 13.0], [#'us, #'xp], [#'v3, #'us]]]
+  [[[#'u1, #'x], [#'u1, #'a], [#'v1, #'u1]],
+   [[#'xp, #'x, #'up, -14.0], [#'xp, #'one, #'up, 14.0],
+    [#'u2, #'a], [#'u2, #'xp], [#'v2, #'u2]],
+   [[#'ret, #'v1]],
+   [[#'us, #'a], [#'us, #'xp], [#'v3, #'us]]]
 def chain_state_edges:
   [[[#'u1, #'s0], [#'s1, #'u1]],
-   [[#'u2, #'s1], [#'s2, #'u2]],
+   [[#'u2, #'s1, 0.28, 0.0], [#'s2, #'u2]],
    [[#'ret, #'s2]],
    [[#'us, #'s0], [#'s3, #'us]]]
 
@@ -1641,7 +1659,7 @@ fun rule_greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face with (size =
 fun rule_sub(s :: String) :: pc.Pict: rule_code(s).scale(0.6)
 fun rule_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
-fun update_rule(~value: value :: Boolean = #true) :: pc.Pict:
+fun update_rule(~value: value :: Boolean = #true) :: Map:
   // Dead store elimination, over the two lines of the program: the first write is
   // overwritten, so the memory after both is the memory after the second alone, and
   // what the first write returned is what that single write returns.
@@ -1654,10 +1672,16 @@ fun update_rule(~value: value :: Boolean = #true) :: pc.Pict:
   def premise2 = rule_line(rule_code("(v"), rule_sub("2"), rule_code(", "), rule_greek("ω"),
                            rule_sub("2"), rule_code(") = update(a, x+1, "),
                            rule_greek("ω"), rule_sub("1"), rule_code(")"))
-  def introduced:
-    rule_line(rule_code("(v"), rule_sub("3"), rule_code(", "), rule_greek("ω"),
-              rule_sub("3"), rule_code(") = update(a, x+1, "), rule_greek("ω"),
-              rule_code(")"))
+  // The line the rule adds, in pieces, named by the node each becomes: the value it
+  // returns, the memory it leaves, and the write itself.
+  def introduced_segs:
+    [[#false, [rule_code("(")]],
+     [#'value, [rule_code("v"), rule_sub("3")]],
+     [#false, [rule_code(", ")]],
+     [#'state, [rule_greek("ω"), rule_sub("3")]],
+     [#false, [rule_code(")")]],
+     [#'op, [rule_code(" = update(a, x+1, "), rule_greek("ω"), rule_code(")")]]]
+  def introduced = segs_pict(introduced_segs)
   fun same(): pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
   // Each equality in the colour of the class it makes, which is what ties the two
   // statements to the two regions in the graph.
@@ -1680,7 +1704,13 @@ fun update_rule(~value: value :: Boolean = #true) :: pc.Pict:
     as_pict(shape_pict(~width: body.width + 40.0, ~height: body.height + 40.0,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 6000")]),
                        ~fill: hex("E2E2E2"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
-  pc.overlay(box, body)
+  // The pict, and where inside it the line it introduces is drawn, so that a copy
+  // of that line's pieces can be lifted off the rule and flown into the graph. The
+  // body is centred in the box, and each row is centred in the body.
+  { #'pict: pc.overlay(box, body),
+    #'segs: introduced_segs,
+    #'at: [20.0 + (body.width - introduced.width) / 2,
+           20.0 + premise1.height + 14.0 + premise2.height + 14.0 + bar.height + 14.0] }
 
 // Nodes marked as sharing an e-class: a ring around each, in the class's own
 // colour, drawn over the picture.
@@ -1815,7 +1845,7 @@ def rule_classes_under = old_class_under ++ memory_class_under
 // `return`, which is the class the walk starts from.
 def chain_ask_over:
   { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
-                      ~body: [1100.0, 930.0], ~color: talk_blue,
+                      ~body: [1150.0, 850.0], ~color: talk_blue,
                       ~content: prose([["extract", #'bold]])),
             0.0, 0.0, band_above] }
 
@@ -1827,11 +1857,26 @@ def chain_ask_over:
 // naming a rebuilt one is naming a different thing, which fades out and in over
 // itself instead of staying where it is.
 fun chain_rule_over(parts :~ Map, ~value: value :: Boolean) :: Map:
-  { #'rule: [fill_width(update_rule(~value: value),
+  { #'rule: [fill_width((update_rule(~value: value) :~ Map)[#'pict],
                         (parts[#'frame] :~ pc.Pict).width),
              rule_x, rule_y, band_above],
     #'band0: band_of(parts, 0) ++ [band_above],
     #'band1: band_of(parts, 1) ++ [band_above] }
+
+// A copy of every piece of the line the rule adds, sitting exactly where the rule
+// box draws it, keyed by the node it becomes. The rule box is scaled to the width of
+// the code box, so the pieces are scaled and placed by the same factor.
+fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
+  def rule :~ Map = update_rule(~value: value)
+  def natural :~ pc.Pict = rule[#'pict]
+  def factor = (parts[#'frame] :~ pc.Pict).width / natural.width
+  def [line_dx, line_dy] :~ List = rule[#'at]
+  def becomes = { #'value: #'v3, #'state: #'s3, #'op: #'us }
+  for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(rule[#'segs])):
+    skip_when !becomes.has_key(role)
+    m ++ { becomes[role]: [(piece :~ pc.Pict).scale(factor),
+                           rule_x + factor * (line_dx + dx),
+                           rule_y + factor * line_dy] }
 
 // The presses both extraction slides share, in order: the graph, the rule, the
 // classes the rule makes, the asking, then the walk -- two presses a layer, the
@@ -1885,20 +1930,31 @@ fun slide_rue():
   // that write are its own results.
   def redundant_over:
     { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
-                              ~body: [1113.0, 700.0], ~color: talk_red,
-                              ~content: prose_stack([[["Redundant", #'bold]],
-                                                     [["update", #'bold]]])),
+                              // in the corridor between the two writes, where it
+                              // can point straight at the one it is about. Smaller
+                              // than the deck's other bubbles, because that
+                              // corridor is only as wide as the gap between them.
+                              ~body: [1330.0, 350.0], ~color: talk_red,
+                              ~content: pc.stack(~sep: 2.0, ~horiz: #'center,
+                                                 small_prose("Redundant"),
+                                                 small_prose("update"))),
                     0.0, 0.0, band_above] }
 
-  // The graph the program builds, then the rule, then what the rule adds: one more
-  // write, straight off the memory the program started with, and the two classes
-  // that say it computes the same things.
+  // The write the rule adds arrives the way the program's own terms did: a copy of
+  // the line that states it lifts off the rule box and flies into the graph, each
+  // piece turning into the node it names. The copies are keyed by those nodes, so
+  // the press that puts the write in the graph is one move.
+  def flying = chain_rule_pieces(parts, ~value: #true)
+
+  // The graph the program builds, then the rule with the copy sitting on the line
+  // it states, then that copy in the graph as a write of its own with the two
+  // classes it makes, and last a word about the write it makes redundant.
   def program = chain_node_picts(chain_spots_upto(3), [])
   def with_rule = chain_node_picts(chain_spots, [])
   chain_slide(
     page,
     [Frame(~picts: program, ~edges: chain_edges(3)),
-     Frame(~picts: program ++ rule_over, ~edges: chain_edges(3)),
+     Frame(~picts: program ++ rule_over ++ flying, ~edges: chain_edges(3)),
      Frame(~picts: with_rule ++ rule_over ++ rule_classes_under,
            ~edges: chain_edges(4)),
      Frame(~picts: with_rule ++ rule_over ++ rule_classes_under ++ redundant_over,
@@ -1938,22 +1994,28 @@ fun slide_fork():
   // only if the node it leaves is in the term, and it is redrawn to the node its
   // class settled on -- which is how the `return` ends up pointing at the memory
   // the rule's write left, rather than at the one the program's second write left.
-  def best = chain_best(graph)
   def class_of:
     for values(m :~ Map = {}) ([key, cls, _, _] in graph): m ++ { key: cls }
-  fun settled(key): ((best[class_of[key]] :~ List)[0])
-  def term_spots:
-    for values(m :~ Map = {}) (key in kept): m ++ { key: chain_spots[key] }
-  def term_edges:
+  fun spots_of(keep :~ List) :: Map:
+    for values(m :~ Map = {}) (key in keep): m ++ { key: chain_spots[key] }
+  // The edges of one answer: an edge stays if the node it leaves is in the answer,
+  // and it is aimed at whichever member of its class the answer took -- which is how
+  // the `return` comes to point at the memory the rule's write left rather than the
+  // one the program's second write left. `~red` names the nodes whose state edges
+  // are the ones reading the same memory twice.
+  fun edges_among(keep :~ List, ~red: red :~ List = []) :: List:
+    def taken:
+      for values(m :~ Map = {}) ([key, cls, _, _] in graph):
+        if keep.contains(key) | m ++ { cls: key } | m
     for List (e :~ List in chain_edges(4)):
-      keep_when kept.contains(e[1])
-      def target = settled(e[2])
-      keep_when kept.contains(target)
-      // the two writes that read the same memory are joined to it in red
-      def kind = if e[0] == #'s && readers.contains(e[1]) | #'f | e[0]
-      [kind, e[1], target] ++ (for List (i in 3..e.length()): e[i])
+      keep_when keep.contains(e[1])
+      def cls = class_of[e[2]]
+      keep_when taken.has_key(cls)
+      def kind = if e[0] == #'s && red.contains(e[1]) | #'f | e[0]
+      [kind, e[1], taken[cls]] ++ (for List (i in 3..e.length()): e[i])
+  def term_edges = edges_among(kept, ~red: readers)
   def term:
-    Frame(~picts: chain_node_picts(term_spots, kept, ~red: fork_red) ++ rule_over,
+    Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red) ++ rule_over,
           ~edges: term_edges)
 
   // And the same term laid out as the shape it is: the memory the program started
@@ -1981,10 +2043,37 @@ fun slide_fork():
                     ++ rule_over ++ diamond_fork_over,
           ~edges: term_edges)
 
+  // What we would take if we knew: the write the rule added, and both the value and
+  // the memory read off that one write. One write where the program had two, and no
+  // memory read twice -- an effect-safe program, and a better one than we started
+  // with.
+  def safe = [#'ret, #'us, #'v3, #'s3, #'a, #'x, #'one, #'xp, #'s0]
+  def safe_edges = edges_among(safe)
+  def safe_term:
+    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over,
+          ~edges: safe_edges)
+  // and what the rest of the talk is for
+  def idea_over:
+    def body:
+      make_bubble(~color: talk_green,
+                  as_pict(linebox(~width: 620.0, ~height: 150.0,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("we want to extract an", ~font: prose_font,
+                                           ~size: 52.0, ~bold: #true)),
+                                  para(~align: #'center,
+                                       run("effect-safe program!", ~font: prose_font,
+                                           ~size: 52.0, ~bold: #true)))))
+    // along the bottom, under everything the answer left standing
+    { #'idea: [body, 1150.0, 820.0, band_above] }
+  def wanted:
+    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ idea_over,
+          ~edges: safe_edges)
+
   chain_slide(
     page,
     chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
-      ++ [term, diamond])
+      ++ [term, diamond, safe_term, wanted])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
