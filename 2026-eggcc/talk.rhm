@@ -216,39 +216,10 @@ def code_y = 240.0
 def code_row = 69.0          // a line of the box: 60pt of ink at 40pt, plus leading
 def code_inset = 20.0
 
-def chain_row = 92.0
-fun chain_y(layer :: Int) :: Real: 250.0 + layer * chain_row
-// The column block, whose three spacings are all load-bearing: the ω-to-`update`
-// edge threads the gap between the value column and the state column, a few points
-// above the value node in that row, so closing that gap up puts the edge through
-// the box.
-def chain_op = 1398.0        // the update boxes, which are 180.242 wide
-def chain_v = 1598.0         // v1 … v3
-def chain_s = 1758.0         // ω, ω1 … ω3
-// The variables in a row along the top, in the order the signature names them,
-// with the incoming state at the end of the row above its own column. They are
-// the inputs, so they belong together and above everything that reads them.
-//
-// The row sits entirely *left* of the `update` column, which is what makes the
-// long edges drawable. An `update` far down the chain has to reach a variable
-// past every `update` above it, and those are all in one column: from the left
-// the edge has clear air, and from directly above it does not. Two of them still
-// have to bow out into the empty band below the row -- see `chain_wire`.
-//
-// The row starts 20 past the code box, which ends at 1033, and is spread to the
-// `update` column at 1398 with everything in between: four boxes fed by three
-// `update`s from below make a fan, and the wider the row the less of a thicket the
-// fan is.
-//
-// The extraction pointer walks down the far side, right of the state column, not
-// between the code and the graph. It is 80 wide, and standing it in there cost the
-// slide a lane of white the width of two nodes for the sake of one arrow.
-def chain_point_x = 1846.0
-fun leaf_x(i :: Int) :: Real: 1053.0 + i * 88.0
-// The node the program's two results meet in, one layer below them: `return` is
-// what groups the value and the state into the tuple the function hands back, and
-// so it is the root the extraction starts from.
-def chain_ret = 1620.0
+// The extraction pointer walks down the right margin, clear of the graph, rather
+// than between the code and the graph: standing it in there cost the slide a lane
+// of white the width of two nodes for the sake of one arrow.
+def chain_point_x = 1760.0
 
 // The rule box on `slide_rue`, under the code it is about. It is scaled to the
 // width of the code box, whatever that measures, so the two of them share a right
@@ -650,6 +621,12 @@ fun slide_12():
       match e[0]
       | #'op: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4)
       | #'op_blue: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue)
+      // The long climb to `1` arrives at its side rather than under it: the
+      // rewritten `−` sits directly below `1` with two arrowheads of its own
+      // pinned there, and a third between them would read as one of the pair.
+      | #'op_left:
+          arrow(~on: q, from, to, ~line_width: 4, ~gap: 4,
+                ~to_at: pc.Find.left(as_pict(to), ~dx: -1))
       // `1 - 1` takes the same node for both of its operands, so it needs two
       // arrows: one arrow would say the operator takes one thing. The two run side
       // by side, pinned 18 either side of the border's middle -- the two boxes are
@@ -681,7 +658,7 @@ fun slide_12():
                 ~to_at: pc.Find.bottom(as_pict(to), ~dx: -19, ~dy: 4))
 
   def es_plus: [[#'op, #'plus, #'a], [#'op, #'plus, #'one]]
-  def es_minus: [[#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
+  def es_minus: [[#'op, #'minus, #'plus], [#'op_left, #'minus, #'one]]
   def es_term = es_plus ++ es_minus
   def es_rewrite:
     [[#'op_blue, #'plus_r, #'minus_r], [#'op_pair, #'minus_r, #'one],
@@ -1290,15 +1267,25 @@ fun with_icon(canvas :: pc.Pict) :: pc.Pict:
          [[b2, b1], [b2, b3], [b5, b3], [b5, b6], [b7, b4], [b4, b1], [b4, b2], [b4, b5]],
          ~line_width: 2)
 
-// The nodes of the `update` chain. Values black, states blue, as Keynote had them.
-// The nodes of the `update` chain, values black and states blue. `picked` names
-// the ones extraction has chosen, which are built with a green background instead
-// of a white one -- the same node, drawn as picked, rather than a mark over it.
+// How wide each node's box is. The layout depends on it, so it is data rather
+// than a number inside the drawing code: the boxes below are built from it, and
+// `graph_layout.py` reads it to pack the rows.
+def chain_box:
+  { #'a: 64.0, #'x: 64.0, #'one: 64.0, #'xp: 116.0,
+    #'s0: 64.0, #'s1: 64.0, #'s2: 64.0, #'s3: 64.0,
+    #'v1: 64.0, #'v2: 64.0, #'v3: 64.0,
+    #'u1: 180.242, #'u2: 180.242, #'us: 180.242, #'ret: 180.242 }
+
+// The nodes of the `update` chain, values black and states blue, as Keynote had
+// them. `picked` names the ones extraction has chosen, which are built with a
+// green background instead of a white one -- the same node, drawn as picked,
+// rather than a mark laid over it.
 fun chain_nodes(~picked: picked :: List = [],
                 ~forked: forked :: List = []) :: Map:
   fun label(s): run(s, ~font: node_font, ~size: 40.0)
   fun sub(i): run(to_string(i), ~font: node_font, ~size: 40.0, ~baseline: -0.06)
-  fun node(key, w, color, lw, runs):
+  fun node(key, color, lw, runs):
+    def w = (chain_box :~ Map)[key] :~ Real
     graph_node(~width: w, ~height: if w > 100 | 64.0 | 63.486,
                ~adj: if w > 100 | "33349" | "33878",
                ~line: color, ~line_width: lw,
@@ -1307,34 +1294,28 @@ fun chain_nodes(~picked: picked :: List = [],
                        | picked.contains(key): node_green
                        | ~else: node_white),
                & runs)
-  fun leaf(key, s): node(key, 64.0, "000000", 3.0, [label(s)])
-  fun value(key, i): node(key, 64.0, "000000", 3.0, [label("v"), sub(i)])
+  fun leaf(key, s): node(key, "000000", 3.0, [label(s)])
+  fun value(key, i): node(key, "000000", 3.0, [label("v"), sub(i)])
   fun state(key, i):
-    node(key, 64.0, stateful_hex, 4.0,
+    node(key, stateful_hex, 4.0,
          if i == 0 | [label("ω")] | [label("ω"), sub(i)])
-  fun op(key): node(key, 180.242, stateful_hex, 4.0, [label("update")])
+  fun op(key): node(key, stateful_hex, 4.0, [label("update")])
   // `return` takes a state as well as a value, so it is one of the stateful ones
-  {#'ret: node(#'ret, 180.242, stateful_hex, 4.0, [label("return")]),
+  {#'ret: node(#'ret, stateful_hex, 4.0, [label("return")]),
    #'a: leaf(#'a, "a"), #'x: leaf(#'x, "x"), #'one: leaf(#'one, "1"),
    // the value the second write stores, and the reason the two writes cost
    // different amounts to perform
-   #'xp: node(#'xp, 116.0, "000000", 3.0, [label("x+1")]),
+   #'xp: node(#'xp, "000000", 3.0, [label("x+1")]),
    #'s0: state(#'s0, 0), #'s1: state(#'s1, 1),
    #'s2: state(#'s2, 2), #'s3: state(#'s3, 3),
    #'v1: value(#'v1, 1), #'v2: value(#'v2, 2), #'v3: value(#'v3, 3),
    #'u1: op(#'u1), #'u2: op(#'u2), #'us: op(#'us)}
 
-// What each `update` brings with it: its own box, the inputs it is the first to
-// use, and the value and state it returns, each at [key, x, y, tag].
-// `chain_spots_upto` reads the first `upto` of these groups, so the picture grows
-// one `update` per press, downwards, and nothing already on screen moves.
-//
-// The inputs all arrive with the first `update` that uses them, since they go in
-// the row along the top rather than beside the `update` that reads them.
 // The graph as data, so that an extraction over it can be worked out rather than
-// written down: each node's class, the classes its arguments come from, and which
-// layer it sits on. The rule's unions are here and nowhere else, so what follows
-// from them follows automatically.
+// written down: each node's class and the classes its arguments come from. The
+// rule's unions are here and nowhere else, so what follows from them -- what
+// extraction picks, what it costs, which memory it reads twice, and where every
+// node goes -- follows automatically.
 //
 // One rule, stated once: the first write is overwritten, so the memory after both
 // writes is the memory after the second alone, and what the first write returned is
@@ -1342,44 +1323,42 @@ fun chain_nodes(~picked: picked :: List = [],
 // makes extraction have a choice it can get wrong: `us` and `u1` both read the
 // memory the program started with.
 //
-//   [key, class, argument classes, layer]
+//   [key, class, the classes its arguments come from]
 def chain_graph:
-  [[#'a, #'k_a, [], 0], [#'x, #'k_x, [], 0], [#'one, #'k_one, [], 0],
-   [#'s0, #'k_s0, [], 0],
-   // `x + 1` is drawn in the row of inputs, so it shares their layer: its own
-   // operands are listed before it, which is all the cost pass needs
-   [#'xp, #'k_xp, [#'k_x, #'k_one], 0],
-   [#'u1, #'k_u1, [#'k_a, #'k_x, #'k_s0], 1],                 // the write the program has
-   [#'us, #'k_us, [#'k_a, #'k_xp, #'k_s0], 1],                // the write the rule adds
-   [#'v1, #'k_old, [#'k_u1], 2], [#'s1, #'k_s1, [#'k_u1], 2],
-   [#'v3, #'k_old, [#'k_us], 2], [#'s3, #'k_fin, [#'k_us], 2],
-   [#'u2, #'k_u2, [#'k_a, #'k_xp, #'k_s1], 3],                // the overwrite
-   [#'v2, #'k_v2, [#'k_u2], 4], [#'s2, #'k_fin, [#'k_u2], 4],
-   [#'ret, #'k_ret, [#'k_old, #'k_fin], 5]]
+  [[#'a, #'k_a, []], [#'x, #'k_x, []], [#'one, #'k_one, []], [#'s0, #'k_s0, []],
+   [#'xp, #'k_xp, [#'k_x, #'k_one]],                    // x + 1
+   [#'u1, #'k_u1, [#'k_a, #'k_x, #'k_s0]],              // the write the program has
+   [#'us, #'k_us, [#'k_a, #'k_xp, #'k_s0]],             // the write the rule adds
+   [#'v1, #'k_old, [#'k_u1]], [#'s1, #'k_s1, [#'k_u1]],
+   [#'v3, #'k_old, [#'k_us]], [#'s3, #'k_fin, [#'k_us]],
+   [#'u2, #'k_u2, [#'k_a, #'k_xp, #'k_s1]],             // the overwrite
+   [#'v2, #'k_v2, [#'k_u2]], [#'s2, #'k_fin, [#'k_u2]],
+   [#'ret, #'k_ret, [#'k_old, #'k_fin]]]
 
 // The nodes that carry memory, which are the ones that must not be shared: a value
 // can be read twice, a state cannot.
 def chain_states = [#'s0, #'s1, #'s2, #'s3]
-def chain_layers = 6
+
+// what each node is, by key: its class, and the classes it takes
+def chain_class_of:
+  for values(m :~ Map = {}) ([key, cls, _] in chain_graph): m ++ { key: cls }
+fun chain_args_of(g :~ List) :: Map:
+  for values(m :~ Map = {}) ([key, _, args] in g): m ++ { key: args }
+def chain_members_of:
+  for values(m :~ Map = {}) ([key, cls, _] in chain_graph):
+    m ++ { cls: (if m.has_key(cls) | (m[cls] :~ List) ++ [key] | [key]) }
 
 // The cheapest node in each class. A node costs one plus the cost of the classes
 // it takes, and a class costs what its cheapest node does; the nodes are listed in
 // the order the data flows, so one pass down the list settles all of them.
 fun chain_best(g :~ List) :: Map:
-  for values(best :~ Map = {}) ([key, cls, args, _] in g):
+  for values(best :~ Map = {}) ([key, cls, args] in g):
     def cost:
       for values(c = 1) (a in args):
         c + ((best[a] :~ List)[1] :~ Int)
     if !best.has_key(cls) || cost < ((best[cls] :~ List)[1] :~ Int)
     | best ++ { cls: [key, cost] }
     | best
-
-// What each node takes, by key, and -- the same under either rule, since a node's
-// row does not move -- which layer each one sits on.
-fun chain_args_of(g :~ List) :: Map:
-  for values(m :~ Map = {}) ([key, _, args, _] in g): m ++ { key: args }
-def chain_layer_of:
-  for values(m :~ Map = {}) ([key, _, _, layer] in chain_graph): m ++ { key: layer }
 
 // The classes the root reaches, following the cheapest node out of each.
 fun chain_reached(g :~ List, ~root: root) :: List:
@@ -1427,90 +1406,141 @@ fun chain_forks(g :~ List, ~root: root) :: List:
         keep_when rs.length() > 1 && chain_states.contains(key)
         for List (r in rs): [r, key])
 
-// What each press of `slide_egraph` brings, in the order the program is read, and
-// then what the rule adds. Each entry is [key, x, y, tag].
-//
-// The two writes that read the memory the program starts with are drawn side by
-// side under it, which is what makes the fork legible when extraction takes both:
-// two boxes reaching up to one `ω`.
-// What each press of `slide_egraph` brings, in the order the program is read, and
-// then what the rule adds. Each entry is [key, x, y, tag].
-//
-// The memory is the last of an `update`'s arguments, as it is in the paper, so it
-// is the last thing in the row of inputs -- rightmost, with the two writes that read
-// it below and the state chain running down that side. The address sits next to it,
-// above the corridor between the two writes, because all three writes reach it and
-// from there none of those edges has a box to cross. `x + 1` goes up in the row of inputs rather than under
-// it: every operand edge climbs through the rows above, and a box sitting in that
-// band is a box those edges have to cross. The corridor between the two writes is
-// left clear for the same reason -- the overwrite reaches its operands up through
-// it -- and each write's own results sit under it, value inwards, so that the two
-// values the rule equates face each other across the corridor.
-def chain_steps:
-  [[[#'x, 1120.0, chain_y(0), "x"], [#'a, 1450.0, chain_y(0), "a"],
-    [#'s0, 1620.0, chain_y(0), "ω"],
-    [#'u1, 1120.0, chain_y(1), "update"],
-    [#'s1, 1120.0, chain_y(2), "ω1"], [#'v1, 1210.0, chain_y(2), "v1"]],
-   [[#'one, 1210.0, chain_y(0), "1"], [#'xp, 1300.0, chain_y(0), "x+1"],
-    [#'u2, 1300.0, chain_y(3), "update (2)"],
-    [#'v2, 1300.0, chain_y(4), "v2"], [#'s2, 1690.0, chain_y(4), "ω2"]],
-   [[#'ret, 1210.0, chain_y(5), "return"]],
-   // what the rule adds
-   [[#'us, 1600.0, chain_y(1), "update (3)"],
-    [#'v3, 1600.0, chain_y(2), "v3"], [#'s3, 1690.0, chain_y(2), "ω3"]]]
+// -------------------------------------------------------------------------------------
+// The same question asked of a term rather than of a class: what does this choice
+// of one node per class come to, and does it read a memory twice?
 
-// An edge runs from a node to the ones it is built from: an `update` points at its
-// arguments, and the value and state it returns point back at it. Data still flows
+// Every way of choosing one node from each class. Two classes have anything to
+// decide and two members each, so there are four; trying them all is quicker than
+// being clever, which is the whole difficulty the rest of the talk is about.
+fun chain_choices() :: List:
+  for values(all :~ List = [{}]) (cls in chain_members_of.keys()):
+    List.append(
+      & for List (choice :~ Map in all):
+          for List (key in chain_members_of[cls] :~ List):
+            choice ++ { cls: key })
+
+// What the root reaches under a choice, and what that costs -- a node costs one
+// plus what its arguments cost, which is what `chain_best` minimises class by class.
+fun chain_reached_by(choice :~ Map, ~root: root) :: List:
+  def args = chain_args_of(chain_graph)
+  recur walk(cls = root, seen :~ List = []):
+    if seen.contains(cls)
+    | seen
+    | for values(acc :~ List = seen ++ [cls]) (a in args[choice[cls]] :~ List):
+        walk(a, acc)
+fun chain_term_of(choice :~ Map, ~root: root) :: List:
+  for List (cls in chain_reached_by(choice, ~root: root)): choice[cls]
+fun chain_cost_of(choice :~ Map, ~root: root) :: Int:
+  def args = chain_args_of(chain_graph)
+  recur cost(cls = root):
+    for values(c = 1) (a in args[choice[cls]] :~ List): c + cost(a)
+
+// A memory read by two of the nodes of a term. Sharing a value is what an e-graph
+// is for; sharing a state means two copies of memory, so a term with one of these
+// in it is not a program. Comes back as [reader, the state it reads].
+fun chain_forks_in(term :~ List) :: List:
+  def args = chain_args_of(chain_graph)
+  def taken:
+    for values(m :~ Map = {}) (key in term): m ++ { chain_class_of[key]: key }
+  def readers:
+    for values(m :~ Map = {}) (key in term):
+      for values(m :~ Map = m) (a in args[key] :~ List):
+        m ++ { a: (if m.has_key(a) | (m[a] :~ List) ++ [key] | [key]) }
+  List.append(
+    & for List (cls in readers.keys()):
+        def rs :~ List = readers[cls]
+        keep_when rs.length() > 1 && chain_states.contains(taken[cls])
+        for List (r in rs): [r, taken[cls]])
+
+// The cheapest term that reads no memory twice: what we would extract if we knew
+// to. It is not the program we started with -- that one is effect-safe too, and
+// costs more -- and it is not what the greedy walk comes back with, which is
+// cheaper than either and not a program at all.
+fun chain_safe(~root: root) :: List:
+  def answers:
+    for List (choice :~ Map in chain_choices()):
+      def term = chain_term_of(choice, ~root: root)
+      keep_when chain_forks_in(term) == []
+      [chain_cost_of(choice, ~root: root), term]
+  def best:
+    for values(best :~ List = answers[0]) (answer :~ List in answers):
+      if (answer[0] :~ Int) < (best[0] :~ Int) | answer | best
+  best[1] :~ List
+
+// Where the nodes go: the y of each row, and each node's left edge and row.
+//
+// Solved by `graph_layout.py` in this directory, which is told the graph above and
+// nothing else, and enforces, in this order: data flows down -- a node sits below
+// everything it is built from, and the members of an e-class share a row, since a
+// class is one thing; as few crossings as it can find; no edge behind a box it does
+// not end at; and no long shallow run, which reads as a horizontal line rather than
+// as data flowing down. The numbers below are its answer with a few nudged by eye.
+// `python3 graph_layout.py` checks the table as it stands and names anything it
+// breaks, which is what makes nudging safe; `--solve` searches again from scratch.
+def chain_rows: [210.0, 296.0, 436.0, 524.0, 612.0, 700.0, 788.0]
+def chain_pos:
+  { #'x: [1432.8, 0], #'one: [1518.8, 0],
+    #'a: [1257.3, 1], #'xp: [1373.3, 1], #'s0: [1547.3, 1],
+    #'u1: [1504.8, 2],
+    #'us: [1114.5, 3], #'s1: [1607.8, 3],
+    #'v3: [1133.4, 4], #'v1: [1320.0, 4], #'u2: [1445.0, 4],
+    #'s3: [1329.4, 5], #'s2: [1517.9, 5], #'v2: [1604.5, 5],
+    #'ret: [1418.8, 6] }
+fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
+def chain_layers = (chain_rows :~ List).length()
+// which row each node is on, which is also the order the extraction walk visits
+// them in: the walk goes down the picture because the data does
+def chain_layer_of:
+  for values(m :~ Map = {}) (key in (chain_pos :~ Map).keys()):
+    m ++ { key: ((chain_pos :~ Map)[key] :~ List)[1] }
+
+// What each press of `slide_egraph` brings, in the order the program is read, and
+// then what the rule adds. Only the *order* of arrival is written down here; where
+// each node lands is the table above, so a node cannot arrive in one place and be
+// drawn in another.
+def chain_reveals:
+  [[#'x, #'a, #'s0, #'u1, #'s1, #'v1],          // (v1, ω1) = update(a, x, ω)
+   [#'one, #'xp, #'u2, #'v2, #'s2],             // (v2, ω2) = update(a, x+1, ω1)
+   [#'ret],                                     // return (v1, ω2)
+   [#'us, #'v3, #'s3]]                          // and what the rule adds
+
+// An edge runs from a node to each class it is built from: an `update` points at
+// its arguments, and the value and state it returns point back at it. Data flows
 // down the picture; the arrowheads say what contains what.
 //
-// `#'up` aims the arrowhead at a node's bottom edge rather than at the point on its
-// border facing the source, so the edge stays under the row it passes beneath. A
-// number bows the edge instead -- see `chain_wire`. The overwrite reaches the state
-// it reads with a bow, since that state's own sibling value sits between them.
-def chain_value_edges:
-  [[[#'u1, #'x], [#'u1, #'a], [#'v1, #'u1]],
-   [[#'xp, #'x, #'up, -14.0], [#'xp, #'one, #'up, 14.0],
-    [#'u2, #'a], [#'u2, #'xp], [#'v2, #'u2]],
-   [[#'ret, #'v1]],
-   [[#'us, #'a], [#'us, #'xp], [#'v3, #'us]]]
-def chain_state_edges:
-  [[[#'u1, #'s0], [#'s1, #'u1]],
-   [[#'u2, #'s1, 0.28, 0.0], [#'s2, #'u2]],
-   [[#'ret, #'s2]],
-   [[#'us, #'s0], [#'s3, #'us]]]
+// The edges are the argument lists of the graph, so there is no second table to
+// keep in step with the first. A class with more than one member is drawn pointing
+// at the member the program itself built -- the one that arrives first -- and an
+// edge is blue, meaning a memory passes along it, when either of its ends is one of
+// the nodes that carry memory.
+def chain_edge_list:
+  def first_of:
+    for values(m :~ Map = {}) (group in (chain_reveals :~ List).reverse()):
+      for values(m :~ Map = m) (key in group :~ List):
+        m ++ { chain_class_of[key]: key }
+  List.append(
+    & for List ([key, _, args] in chain_graph):
+        for List (cls in args :~ List):
+          def to = first_of[cls]
+          def kind:
+            if chain_states.contains(key) || chain_states.contains(to)
+            | #'s
+            | #'v
+          [kind, key, to])
 
 // A transparent slide, for a layer that goes over the page.
 def blank_slide = pc.blank(~width: slide_width, ~height: slide_height)
 
-// Three kinds of edge. A plain one runs border to border. `#'up` comes up under
-// the variable it points at, so it passes below the row rather than clipping the
-// boxes along it. A number bows the edge out into the empty band below the row and
-// left of the column, for the runs a straight line cannot make without crossing an
-// `update` on the way -- the number is how far it bows. The fourth element pulls an
-// end apart from its neighbour: two `update`s reaching the same variable arrive at
-// the same point from almost the same angle, and two bows leaving the same border
-// at the same place run down each other for most of their length.
+// One edge, border to border, with an arrowhead at the end that says what the
+// node contains. There used to be two other kinds -- one that came up under the
+// row it pointed into, one that bowed around a box in the way -- and the layout
+// solver made both unnecessary: an edge that has to dodge something is a layout
+// that has not been solved.
 fun chain_wire(q :: pc.Pict, n :~ Map, es :~ List,
                ~color: color = "black", ~line_width: lw :: Real = 4) :~ pc.Pict:
   for values(acc :~ pc.Pict = q) (e :~ List in es):
-    def mode = if e.length() > 2 | e[2] | #false
-    def off = if e.length() > 3 | e[3] | 0.0
-    cond
-    | mode == #'up:
-        arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4,
-              // `~dy: 1`, not 5: these edges arrive at a shallow angle, and a tip
-              // stopped short of a rounded corner reads as an arrow that missed
-              ~to_at: pc.Find.bottom(as_pict(n[e[1]]), ~dx: off, ~dy: 1))
-    | mode is_a Real:
-        pc.connect(~on: acc,
-                   pc.Find.left(as_pict(n[e[0]]), ~dy: off),
-                   pc.Find.bottom(as_pict(n[e[1]]), ~dy: 1),
-                   ~style: #'arrow, ~line: color, ~line_width: lw,
-                   ~arrow_size: 4 * lw,
-                   ~start_angle: math.pi, ~end_angle: math.pi / 2,
-                   ~start_pull: mode, ~end_pull: mode)
-    | ~else:
-        arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4)
+    arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4)
 
 // -------------------------------------------------------------------------------------
 // slide_update: the three `update`s, what one does, and where the states come in.
@@ -1677,31 +1707,63 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
   //
   // Premises above the line, and what the rule concludes below it -- including the
   // write it adds, which is the whole reason extraction has a choice to get wrong.
-  def premise1 = rule_line(rule_code("(v"), rule_sub("1"), rule_code(", "), rule_greek("ω"),
-                           rule_sub("1"), rule_code(") = update(a, x, "), rule_greek("ω"),
-                           rule_code(")"))
-  def premise2 = rule_line(rule_code("(v"), rule_sub("2"), rule_code(", "), rule_greek("ω"),
-                           rule_sub("2"), rule_code(") = update(a, x+1, "),
-                           rule_greek("ω"), rule_sub("1"), rule_code(")"))
-  // The line the rule adds, in pieces, named by the node each becomes: the value it
-  // returns, the memory it leaves, and the write itself.
+  //
+  // Every piece of the rule that stands for a node in the graph is tagged with that
+  // node, so a copy of the rule can be taken apart and flown into the picture: the
+  // premises onto the nodes they matched, the new line onto where its nodes go, and
+  // each equality onto the class it makes. The tags are node keys, and the text of a
+  // tagged piece is the label of the node it names, so a piece that has flown to its
+  // node lands on that node's own label.
+  def premise1_segs:
+    [[#false, [rule_code("(")]],
+     [#'v1, [rule_code("v"), rule_sub("1")]],
+     [#false, [rule_code(", ")]],
+     [#'s1, [rule_greek("ω"), rule_sub("1")]],
+     [#false, [rule_code(") = ")]],
+     [#'u1, [rule_code("update")]],
+     [#false, [rule_code("(")]],
+     [#'a, [rule_code("a")]],
+     [#false, [rule_code(", ")]],
+     [#'x, [rule_code("x")]],
+     [#false, [rule_code(", ")]],
+     [#'s0, [rule_greek("ω")]],
+     [#false, [rule_code(")")]]]
+  def premise2_segs:
+    [[#false, [rule_code("(")]],
+     [#'v2, [rule_code("v"), rule_sub("2")]],
+     [#false, [rule_code(", ")]],
+     [#'s2, [rule_greek("ω"), rule_sub("2")]],
+     [#false, [rule_code(") = ")]],
+     [#'u2, [rule_code("update")]],
+     [#false, [rule_code("(")]],
+     [#'a, [rule_code("a")]],
+     [#false, [rule_code(", ")]],
+     [#'xp, [rule_code("x+1")]],
+     [#false, [rule_code(", ")]],
+     [#'s1, [rule_greek("ω"), rule_sub("1")]],
+     [#false, [rule_code(")")]]]
   def introduced_segs:
     [[#false, [rule_code("(")]],
-     [#'value, [rule_code("v"), rule_sub("3")]],
+     [#'v3, [rule_code("v"), rule_sub("3")]],
      [#false, [rule_code(", ")]],
-     [#'state, [rule_greek("ω"), rule_sub("3")]],
-     [#false, [rule_code(")")]],
-     [#'op, [rule_code(" = update(a, x+1, "), rule_greek("ω"), rule_code(")")]]]
+     [#'s3, [rule_greek("ω"), rule_sub("3")]],
+     [#false, [rule_code(") = ")]],
+     [#'us, [rule_code("update")]],
+     [#false, [rule_code("(a, x+1, "), rule_greek("ω"), rule_code(")")]]]
+  def premise1 = segs_pict(premise1_segs)
+  def premise2 = segs_pict(premise2_segs)
   def introduced = segs_pict(introduced_segs)
   fun same(): pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
   // Each equality in the colour of the class it makes, which is what ties the two
   // statements to the two regions in the graph.
-  def equalities:
-    pc.beside(~sep: 72.0, ~vert: #'bottom,
-              rule_line(rule_code("v"), rule_sub("1"), same(), rule_code("v"),
-                        rule_sub("3")).colorize(value_class),
-              rule_line(rule_greek("ω"), rule_sub("2"), same(), rule_greek("ω"),
-                        rule_sub("3")).colorize(state_class))
+  def value_eq:
+    rule_line(rule_code("v"), rule_sub("1"), same(), rule_code("v"),
+              rule_sub("3")).colorize(value_class)
+  def state_eq:
+    rule_line(rule_greek("ω"), rule_sub("2"), same(), rule_greek("ω"),
+              rule_sub("3")).colorize(state_class)
+  def eq_sep = 72.0
+  def equalities = pc.beside(~sep: eq_sep, ~vert: #'bottom, value_eq, state_eq)
   def below:
     if value
     | pc.stack(~sep: 10.0, ~horiz: #'center, introduced, equalities)
@@ -1709,19 +1771,38 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
   def w:
     math.max(premise1.width, math.max(premise2.width, below.width))
   def bar = pc.rectangle(~width: w, ~height: 3.0, ~fill: "black", ~line: #false)
+  def row_sep = 14.0
   def body:
-    pc.stack(~sep: 14.0, ~horiz: #'center, premise1, premise2, bar, below)
+    pc.stack(~sep: row_sep, ~horiz: #'center, premise1, premise2, bar, below)
   def box:
     as_pict(shape_pict(~width: body.width + 40.0, ~height: body.height + 40.0,
                        ~geom: preset_geom("roundRect", [pair("adj", "val 6000")]),
                        ~fill: hex("E2E2E2"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
-  // The pict, and where inside it the line it introduces is drawn, so that a copy
-  // of that line's pieces can be lifted off the rule and flown into the graph. The
-  // body is centred in the box, and each row is centred in the body.
+  // Where each row is drawn inside the box: the body is centred in the box, which
+  // is 20 bigger on every side, and each row is centred in the body. A copy flown
+  // out of the rule starts at these coordinates, so it starts exactly where the
+  // audience last saw it.
+  fun row_at(row :: pc.Pict, y :: Real) :: List:
+    [20.0 + (body.width - row.width) / 2, y]
+  def y1 = 20.0
+  def y2 = y1 + premise1.height + row_sep
+  def y_bar = y2 + premise2.height + row_sep
+  def y_below = y_bar + bar.height + row_sep
+  def y_eq = y_below + introduced.height + 10.0
+  def eq_x = 20.0 + (body.width - equalities.width) / 2
   { #'pict: pc.overlay(box, body),
+    // the line the rule adds, and where it is drawn
     #'segs: introduced_segs,
-    #'at: [20.0 + (body.width - introduced.width) / 2,
-           20.0 + premise1.height + 14.0 + premise2.height + 14.0 + bar.height + 14.0] }
+    #'at: row_at(introduced, y_below),
+    // the two premises: what the rule matches, and where each is drawn
+    #'premises: [[premise1_segs, row_at(premise1, y1)],
+                 [premise2_segs, row_at(premise2, y2)]],
+    // and the equalities, by the class each one makes
+    #'equalities: [[#'old_class, value_eq,
+                    [eq_x, y_eq + equalities.height - value_eq.height]],
+                   [#'memory_class, state_eq,
+                    [eq_x + value_eq.width + eq_sep,
+                     y_eq + equalities.height - state_eq.height]]] }
 
 // Nodes marked as sharing an e-class: a ring around each, in the class's own
 // colour, drawn over the picture.
@@ -1772,7 +1853,7 @@ fun node_middle(node, x :: Real, y :: Real) :: List:
 // The chain as a frame's worth of data. Every node in two drawings, plain and
 // picked, each built once: a pick is the same box with a green fill, so a frame
 // that picks a node names its green twin and the box turns green in place.
-def chain_keys: for List ([key, _, _, _] in chain_graph): key
+def chain_keys: for List ([key, _, _] in chain_graph): key
 def chain_plain = chain_nodes()
 def chain_green = chain_nodes(~picked: chain_keys)
 def chain_red = chain_nodes(~forked: chain_keys)
@@ -1797,22 +1878,25 @@ fun chain_node_picts(spots :~ Map, picks :~ List, ~red: red :~ List = []) :: Map
       | ~else: chain_plain[key]
     m ++ { key: [pict, x, y] }
 
-// Where the nodes of the first `upto` steps sit, from the tables the presses are
-// built from.
+// Which nodes are on the slide after the first `upto` presses, and where they sit.
+fun chain_shown(upto :: Int) :: List:
+  List.append(& for List (k in 0..upto): (chain_reveals :~ List)[k])
 fun chain_spots_upto(upto :: Int) :: Map:
-  for values(m :~ Map = {}) (k in 0..upto):
-    for values(m :~ Map = m) ([key, x, y, _] in chain_steps[k]): m ++ { key: [x, y] }
-def chain_spots :~ Map = chain_spots_upto(chain_steps.length())
+  for values(m :~ Map = {}) (key in chain_shown(upto)):
+    def [x, row] = (chain_pos :~ Map)[key]
+    m ++ { key: [x, chain_y(row)] }
+def chain_spots :~ Map = chain_spots_upto((chain_reveals :~ List).length())
 
-// The edges of the first `upto` steps, each tagged with what kind it is: `#'v` for
-// a value edge, thin and black, `#'s` for a state edge, thick and in Keynote's
-// blue. One list, because a scene's edges are compared with the next scene's, and
-// an edge either is or is not still there.
+// The edges of those nodes: an edge is drawn once both of its ends have arrived,
+// so a node's arrival is written down in one place and the edges follow. Each is
+// tagged with what kind it is -- `#'v` for a value edge, thin and black, `#'s` for
+// a state edge, thick and in Keynote's blue. One flat list, because a scene's edges
+// are compared with the next scene's, and an edge either is or is not still there.
 fun chain_edges(upto :: Int) :: List:
-  List.append(
-    & for List (k in 0..upto):
-        (for List (e :~ List in chain_value_edges[k]): [#'v] ++ e)
-          ++ (for List (e :~ List in chain_state_edges[k]): [#'s] ++ e))
+  def shown = chain_shown(upto)
+  for List (e :~ List in chain_edge_list):
+    keep_when shown.contains(e[1]) && shown.contains(e[2])
+    e
 
 // `at` is the frame's own nodes, which is what the ghosts on the layer are and so
 // what an edge can be found and aimed at.
@@ -1882,16 +1966,17 @@ fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
   def natural :~ pc.Pict = rule[#'pict]
   def factor = (parts[#'frame] :~ pc.Pict).width / natural.width
   def [line_dx, line_dy] :~ List = rule[#'at]
-  def becomes = { #'value: #'v3, #'state: #'s3, #'op: #'us }
+  // the pieces are tagged with the nodes they name, and a piece of the line the
+  // rule introduces is keyed by the node it becomes, so the press that puts that
+  // write in the graph is one move rather than a fade
   for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(rule[#'segs])):
-    skip_when !becomes.has_key(role)
-    m ++ { becomes[role]: [(piece :~ pc.Pict).scale(factor),
-                           rule_x + factor * (line_dx + dx),
-                           rule_y + factor * line_dy] }
+    m ++ { role: [(piece :~ pc.Pict).scale(factor),
+                  rule_x + factor * (line_dx + dx),
+                  rule_y + factor * line_dy] }
 
 // The presses both extraction slides share, in order: the graph, the rule, the
-// classes the rule makes, the asking, then the walk -- two presses a layer, the
-// pointer arriving and then the picks landing -- and last the choices nothing
+// classes the rule makes, the asking, then the walk -- a press a row, the pointer
+// arriving and that row's picks landing with it -- and last the choices nothing
 // reaches fading, which leaves what the root asked for.
 //
 // The two slides differ in the rule they state, and so in the graph the walk runs
@@ -1919,12 +2004,9 @@ fun chain_walk_frames(~graph: graph :~ List,
    scene(~rule: #true),
    scene(~rule: #true, ~union: #true),
    scene(~rule: #true, ~union: #true, ~ask: #true),
-   & List.append(
-       & for List (layer in 0..chain_layers):
-           [scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
-                  ~picks: chain_picks(graph, ~upto: layer - 1)),
-            scene(~rule: #true, ~union: #true, ~ask: #true, ~point: layer,
-                  ~picks: chain_picks(graph, ~upto: layer))]),
+   & for List (row in 0..chain_layers):
+       scene(~rule: #true, ~union: #true, ~ask: #true, ~point: row,
+             ~picks: chain_picks(graph, ~upto: row)),
    scene(~rule: #true, ~union: #true, ~ask: #true, ~picks: kept)]
 
 fun slide_rue():
@@ -2006,7 +2088,7 @@ fun slide_fork():
   // class settled on -- which is how the `return` ends up pointing at the memory
   // the rule's write left, rather than at the one the program's second write left.
   def class_of:
-    for values(m :~ Map = {}) ([key, cls, _, _] in graph): m ++ { key: cls }
+    for values(m :~ Map = {}) ([key, cls, _] in graph): m ++ { key: cls }
   fun spots_of(keep :~ List) :: Map:
     for values(m :~ Map = {}) (key in keep): m ++ { key: chain_spots[key] }
   // The edges of one answer: an edge stays if the node it leaves is in the answer,
@@ -2016,7 +2098,7 @@ fun slide_fork():
   // are the ones reading the same memory twice.
   fun edges_among(keep :~ List, ~red: red :~ List = []) :: List:
     def taken:
-      for values(m :~ Map = {}) ([key, cls, _, _] in graph):
+      for values(m :~ Map = {}) ([key, cls, _] in graph):
         if keep.contains(key) | m ++ { cls: key } | m
     for List (e :~ List in chain_edges(4)):
       keep_when keep.contains(e[1])
@@ -2029,54 +2111,82 @@ fun slide_fork():
     Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red) ++ rule_over,
           ~edges: term_edges)
 
-  // And the same term laid out as the shape it is: the memory the program started
-  // with at the apex, the two writes that both read it hanging off it, what each
-  // returns below them, and the `return` where the two paths meet. Every node is in
-  // both frames, so the press is the term falling into the shape it always had.
+  // And the same term laid out as the shape it is. Only the memory is kept: what
+  // the writes compute is what they are for, but the diamond is about which memory
+  // each of them reads, so the operands fade and what is left is the shape -- the
+  // memory the program started with at the apex, the two writes that both read it
+  // hanging off it, and the two paths meeting again at the `return`. Every node in
+  // it is in the frame before, so the press is the term falling into the shape it
+  // always had.
+  def skeleton = [#'s0, #'u1, #'us, #'v1, #'s3, #'ret]
+  // Its own coordinates rather than the graph's rows: the shape is the point here,
+  // and it is drawn wide enough to leave the top left clear for a callout that can
+  // reach the memory at the apex without crossing one of the two writes under it.
   def diamond_spots:
-    { #'a: [1113.0, chain_y(0)], #'x: [1189.0, chain_y(0)],
-      #'one: [1265.0, chain_y(0)], #'xp: [1180.0, chain_y(1)],
-      #'s0: [1670.0, chain_y(0)],                               // the apex
-      #'u1: [1450.0, chain_y(2)], #'us: [1740.0, chain_y(2)],   // the two writes
-      #'v1: [1516.0, chain_y(3)], #'s3: [1806.0, chain_y(3)],
-      #'ret: [1570.0, chain_y(4)] }                             // where they meet
+    { #'s0: [1500.0, 250.0],                              // the apex
+      #'u1: [1330.0, 400.0], #'us: [1620.0, 400.0],       // the two writes
+      #'v1: [1388.0, 540.0], #'s3: [1678.0, 540.0],       // what each returns
+      #'ret: [1442.0, 680.0] }                            // where they meet
   def diamond_fork_over:
-    // pointing at the left-hand write rather than at the memory itself: the apex
-    // has the two writes right under it, so a spike from anywhere below crosses one
-    // of them, and from the side there is no room beside the row of inputs
-    { #'fork: [bubble_at(chain_plain[#'u1], ~spot: diamond_spots[#'u1],
-                         ~body: [1113.0, 700.0], ~color: talk_red,
+    // beside the apex, pointing at it: from below, a spike crosses one of the two
+    // writes, and the memory read twice is what the bubble is about
+    { #'fork: [bubble_at(chain_plain[#'s0], ~spot: diamond_spots[#'s0],
+                         ~body: [1100.0, 232.0], ~color: talk_red,
                          ~content: prose_stack([[["two copies", #'bold]],
                                                 [["of memory!", #'bold]]])),
                0.0, 0.0, band_above] }
   def diamond:
     Frame(~picts: chain_node_picts(diamond_spots, kept, ~red: fork_red)
                     ++ rule_over ++ diamond_fork_over,
-          ~edges: term_edges)
+          ~edges: edges_among(skeleton, ~red: readers))
 
-  // What we would take if we knew: the write the rule added, and both the value and
-  // the memory read off that one write. One write where the program had two, and no
-  // memory read twice -- an effect-safe program, and a better one than we started
-  // with.
-  def safe = [#'ret, #'us, #'v3, #'s3, #'a, #'x, #'one, #'xp, #'s0]
+  // Then the walk again, this time not allowed to read a memory twice. Which node
+  // it takes out of each class is worked out rather than written down -- see
+  // `chain_safe` -- and it comes back with one write where the program had two.
+  //
+  // The same pointer down the same rows, but a press a row rather than two: the
+  // audience has seen the walk, and what is new is where it goes instead.
+  def safe = chain_safe(~root: chain_root)
   def safe_edges = edges_among(safe)
+  def safe_ask_over:
+    { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
+                        ~body: [1150.0, 850.0], ~color: talk_green,
+                        ~content: prose_stack([[["extract", #'bold]],
+                                               [["effect-safely", #'bold]]])),
+              0.0, 0.0, band_above] }
+  fun again(~picks: picks :: List = [], ~point: point = #false) :: Frame:
+    Frame(~picts: chain_node_picts(chain_spots, picks) ++ rule_over
+                    ++ rule_classes_under ++ safe_ask_over
+                    ++ (if point == #false
+                        | {}
+                        | { #'point: [chain_pointer, & chain_point_at(point)] }),
+          ~edges: chain_edges(4))
+  def rewalk:
+    for List (row in 0..chain_layers):
+      again(~point: row,
+            ~picks: for List (key in safe): keep_when chain_layer_of[key] <= row; key)
+
+  // and what it comes back with, which is the program we wanted: one write, no
+  // memory read twice, and cheaper than the program we started from
   def safe_term:
-    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over,
+    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ safe_ask_over,
           ~edges: safe_edges)
+
   // and what the rest of the talk is for
   def idea_over:
     def body:
       make_bubble(~color: talk_green,
-                  as_pict(linebox(~width: 620.0, ~height: 150.0,
+                  as_pict(linebox(~width: 470.0, ~height: 128.0,
                                   ~insets: insets(0.0, 0.0, 0.0, 0.0),
                                   para(~align: #'center,
                                        run("we want to extract an", ~font: prose_font,
-                                           ~size: 52.0, ~bold: #true)),
+                                           ~size: 46.0, ~bold: #true)),
                                   para(~align: #'center,
                                        run("effect-safe program!", ~font: prose_font,
-                                           ~size: 52.0, ~bold: #true)))))
-    // along the bottom, under everything the answer left standing
-    { #'idea: [body, 1150.0, 820.0, band_above] }
+                                           ~size: 46.0, ~bold: #true)))))
+    // in the room the answer leaves: the two writes it did not take were on this
+    // side of the picture, and dropping them empties it
+    { #'idea: [body, 1380.0, 520.0, band_above] }
   def wanted:
     Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ idea_over,
           ~edges: safe_edges)
@@ -2084,7 +2194,7 @@ fun slide_fork():
   chain_slide(
     page,
     chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
-      ++ [term, diamond, safe_term, wanted])
+      ++ [term, diamond] ++ rewalk ++ [safe_term, wanted])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
