@@ -42,7 +42,9 @@ from itertools import combinations, permutations, product
 
 TALK = "talk.rhm"
 LEFT, RIGHT = 1090.0, 1812.0      # the graph's own column, right of the code
-GAP = 22.0                        # least space between two boxes in a row
+GAP = 44.0                        # least space between two boxes in a row: two
+                                  # boxes closer than this leave their arrowheads
+                                  # crowding each other
 
 
 # ---------------------------------------------------------------------------

@@ -1329,7 +1329,8 @@ def chain_box:
 // green background instead of a white one -- the same node, drawn as picked,
 // rather than a mark laid over it.
 fun chain_nodes(~picked: picked :: List = [],
-                ~forked: forked :: List = []) :: Map:
+                ~forked: forked :: List = [],
+                ~matched: matched :: List = []) :: Map:
   fun label(s): run(s, ~font: node_font, ~size: 40.0)
   fun sub(i): run(to_string(i), ~font: node_font, ~size: 40.0, ~baseline: -0.06)
   fun node(key, color, lw, runs):
@@ -1339,6 +1340,7 @@ fun chain_nodes(~picked: picked :: List = [],
                ~line: color, ~line_width: lw,
                ~fill: (cond
                        | forked.contains(key): node_fork
+                       | matched.contains(key): node_match
                        | picked.contains(key): node_green
                        | ~else: node_white),
                & runs)
@@ -1528,13 +1530,24 @@ fun chain_safe(~root: root) :: List:
 // breaks, which is what makes nudging safe; `--solve` searches again from scratch.
 def chain_rows: [210.0, 296.0, 436.0, 524.0, 612.0, 700.0, 788.0]
 def chain_pos:
-  { #'x: [1432.8, 0], #'one: [1518.8, 0],
-    #'a: [1257.3, 1], #'xp: [1373.3, 1], #'s0: [1547.3, 1],
-    #'u1: [1504.8, 2],
-    #'us: [1114.5, 3], #'s1: [1607.8, 3],
-    #'v3: [1133.4, 4], #'v1: [1320.0, 4], #'u2: [1445.0, 4],
-    #'s3: [1329.4, 5], #'s2: [1517.9, 5], #'v2: [1604.5, 5],
-    #'ret: [1418.8, 6] }
+  { #'x: [1475.0, 0], #'one: [1583.0, 0],
+    #'a: [1302.0, 1], #'xp: [1411.0, 1], #'s0: [1607.0, 1],
+    #'u1: [1525.0, 2],
+    #'us: [1112.0, 3], #'s1: [1542.0, 3],
+    #'v3: [1117.0, 4], #'v1: [1318.0, 4], #'u2: [1444.0, 4],
+    #'s3: [1329.0, 5], #'s2: [1483.0, 5], #'v2: [1592.0, 5],
+    #'ret: [1439.0, 6] }
+
+// Where each callout's body sits. Placed by eye, not solved -- but kept here
+// beside the layout it has to live in, because a bubble is a box like any other
+// and moving a node can leave one lying across an edge. `graph_layout.py` does not
+// know about these, so they are the one thing to re-check by looking.
+def chain_bubbles:
+  { #'ask: [1150.0, 850.0],           // "extract", below the return
+    #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
+    #'redundant: [1645.0, 550.0],     // "Redundant update", below the write it kills
+    #'idea: [1380.0, 520.0] }         // "an effect-safe program", where the answer left room
+
 fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
 def chain_layers = (chain_rows :~ List).length()
 // which row each node is on, which is also the order the extraction walk visits
@@ -1717,6 +1730,7 @@ fun slide_egraph():
 def node_white = "FFFFFF"
 def node_green = "B7E3A6"                     // what extraction picked
 def node_fork = "F9C4C4"                      // and what it picked twice
+def node_match = "FFE9A3"                     // and what a rule has just matched
 def stateful_hex = "0433FF"
 fun graph_node(~width: w :: Real, ~height: h :: Real, ~adj: adj :: String,
                ~line: line :: String, ~line_width: lw :: Real,
@@ -1876,7 +1890,9 @@ def eclass_pad = 12.0
 def eclass_grey = draw.Color(146, 146, 146, 0.3)
 def eclass_width = 64.0 + 2 * eclass_pad     // a node, plus its padding
 fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
-                ~dash: dash_color) :: pc.Pict:
+                ~dash: dash_color,
+                ~width: w :: Real = slide_width,
+                ~height: h :: Real = slide_height) :: pc.Pict:
   def path = draw.Path()
   path.move_to(from)
   path.curve_to(c1, c2, to)
@@ -1887,7 +1903,7 @@ fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
             target.brush := draw.Brush.none
             target.path(path, ~dx: dx, ~dy: dy)
             target.restore(),
-          ~width: slide_width, ~height: slide_height)
+          ~width: w, ~height: h)
   let p = put(p, stroked(draw.Pen(~color: eclass_grey, ~width: eclass_width)), 0.0, 0.0)
   // `#'show_dash` is this enum's spelling of the short dash the other equivalence
   // lines are drawn with; there is no `#'short_dash` in it.
@@ -1905,6 +1921,7 @@ def chain_keys: for List ([key, _, _] in chain_graph): key
 def chain_plain = chain_nodes()
 def chain_green = chain_nodes(~picked: chain_keys)
 def chain_red = chain_nodes(~forked: chain_keys)
+def chain_gold = chain_nodes(~matched: chain_keys)
 // Smaller than the one on the background slide: it stands in the margin right of
 // the state column, so it has to be narrow enough to sit clear of both the class
 // region beside it and the edge of the slide.
@@ -1965,30 +1982,38 @@ fun chain_slide(page :: pc.Pict, frames :~ List) :: pc.Pict:
 // state the program hands back.
 def chain_root = #'k_ret
 
-// The two classes the rule makes, each on a layer of its own under the nodes it
-// holds. Both are straight tubes, because the layout puts the members of each
-// class in a line: the two values that are what `a` held before sit side by side in
-// one row, and the two memories that are the memory the program ends with sit one
-// above the other in one column.
-def old_class_under:
-  def v1_mid = node_middle(chain_plain[#'v1], & chain_spots[#'v1])
-  def v3_mid = node_middle(chain_plain[#'v3], & chain_spots[#'v3])
-  { #'old_class: [eclass_tube(blank_slide, v1_mid, v1_mid, v3_mid, v3_mid,
-                              ~dash: value_class),
-                  0.0, 0.0, band_below] }
-def memory_class_under:
-  def s2_mid = node_middle(chain_plain[#'s2], & chain_spots[#'s2])
-  def s3_mid = node_middle(chain_plain[#'s3], & chain_spots[#'s3])
-  { #'memory_class: [eclass_tube(blank_slide, s3_mid, s3_mid, s2_mid, s2_mid,
-                                 ~dash: state_class),
-                     0.0, 0.0, band_below] }
-def rule_classes_under = old_class_under ++ memory_class_under
+// The region for a class whose members are apart, as a pict with a place of its
+// own rather than as a drawing on a slide-sized layer. That is what lets the
+// equality in the rule box fly out and *become* the region: a press interpolates
+// one position per key, so the thing arriving has to have a position to arrive at.
+fun eclass_region(from :~ List, to :~ List, ~dash: dash) :: List:
+  def pad = eclass_width / 2 + 6.0
+  def left = math.min(from[0], to[0]) - pad
+  def top = math.min(from[1], to[1]) - pad
+  def here = [from[0] - left, from[1] - top]
+  def there = [to[0] - left, to[1] - top]
+  [eclass_tube(pc.blank(~width: math.abs(from[0] - to[0]) + 2 * pad,
+                        ~height: math.abs(from[1] - to[1]) + 2 * pad),
+               here, here, there, there, ~dash: dash,
+               ~width: math.abs(from[0] - to[0]) + 2 * pad,
+               ~height: math.abs(from[1] - to[1]) + 2 * pad),
+   left, top]
+
+// The two classes the rule makes, by the key each is drawn under. Both are
+// straight tubes, because the layout puts the members of a class side by side.
+def chain_regions:
+  fun mid(key): node_middle(chain_plain[key], & chain_spots[key])
+  { #'old_class: eclass_region(mid(#'v1), mid(#'v3), ~dash: value_class),
+    #'memory_class: eclass_region(mid(#'s3), mid(#'s2), ~dash: state_class) }
+def rule_classes_under:
+  for values(m :~ Map = {}) (key in (chain_regions :~ Map).keys()):
+    m ++ { key: ((chain_regions :~ Map)[key] :~ List) ++ [band_below] }
 
 // What the extraction is asked for, said where it is asked: a bubble on the
 // `return`, which is the class the walk starts from.
 def chain_ask_over:
   { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
-                      ~body: [1150.0, 850.0], ~color: talk_blue,
+                      ~body: (chain_bubbles :~ Map)[#'ask], ~color: talk_blue,
                       ~content: prose([["extract", #'bold]])),
             0.0, 0.0, band_above] }
 
@@ -2006,21 +2031,77 @@ fun chain_rule_over(parts :~ Map, ~value: value :: Boolean) :: Map:
     #'band0: band_of(parts, 0) ++ [band_above],
     #'band1: band_of(parts, 1) ++ [band_above] }
 
-// A copy of every piece of the line the rule adds, sitting exactly where the rule
-// box draws it, keyed by the node it becomes. The rule box is scaled to the width of
-// the code box, so the pieces are scaled and placed by the same factor.
+// -------------------------------------------------------------------------------------
+// Applying the rule, as four movements: the rule's premises fly out and land on the
+// nodes they matched, those nodes flash, the line the rule concludes flies out and
+// becomes new nodes, and the equalities fly out and become the regions round the
+// classes they make.
+//
+// All four are the same trick. A copy of a piece of the rule is made where the rule
+// box draws it -- so it starts exactly where the audience last saw it, invisible
+// against the rule's own text -- and keyed by the thing in the graph it is about.
+// The next frame puts that key somewhere else, and the press is a move rather than
+// a fade. What a piece is keyed by is the whole difference between the movements:
+//
+//   the conclusion   by the node it *becomes*, so text turns into a box
+//   a premise        by [#'match, node], since that node is already on the slide
+//                    and a frame holds one pict per key
+//   an equality      by the class region it becomes, so text turns into a region
+
+// How the rule box is drawn: scaled to the code box's width, at rule_x/rule_y. A
+// copy lifted off it has to be scaled and placed the same way.
+fun rule_scale(parts :~ Map, rule :~ Map) :: Real:
+  (parts[#'frame] :~ pc.Pict).width / (rule[#'pict] :~ pc.Pict).width
+fun rule_place(factor :: Real, at :~ List, dx :: Real = 0.0) :: List:
+  [rule_x + factor * (at[0] + dx), rule_y + factor * at[1]]
+
+// The line the rule concludes, in pieces, each keyed by the node it becomes.
 fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
   def rule :~ Map = update_rule(~value: value)
-  def natural :~ pc.Pict = rule[#'pict]
-  def factor = (parts[#'frame] :~ pc.Pict).width / natural.width
-  def [line_dx, line_dy] :~ List = rule[#'at]
-  // the pieces are tagged with the nodes they name, and a piece of the line the
-  // rule introduces is keyed by the node it becomes, so the press that puts that
-  // write in the graph is one move rather than a fade
+  def factor = rule_scale(parts, rule)
   for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(rule[#'segs])):
     m ++ { role: [(piece :~ pc.Pict).scale(factor),
-                  rule_x + factor * (line_dx + dx),
-                  rule_y + factor * line_dy] }
+                  & rule_place(factor, rule[#'at], dx)] }
+
+// The premises, in pieces, each keyed by the node it matched. `~landed` turns each
+// piece into the node it names, drawn as matched and standing exactly on that node:
+// so the words of the rule become boxes as they fly, and where they come to rest
+// the graph lights up. Drawing the arriving box over the node rather than tinting
+// the node keeps one label on screen instead of two nearly-aligned ones.
+//
+// A node the rule names twice -- the address, and the memory the second write reads
+// -- keeps the first piece and drops the second, since two copies of one key is one
+// drawing.
+fun chain_match_pieces(parts :~ Map, ~value: value :: Boolean,
+                       ~landed: landed :: Boolean = #false) :: Map:
+  def rule :~ Map = update_rule(~value: value)
+  def factor = rule_scale(parts, rule)
+  for values(m :~ Map = {}) ([segs, at] in rule[#'premises] :~ List):
+    for values(m :~ Map = m) ([role, piece, dx] in segs_pieces(segs)):
+      def key = [#'match, role]
+      skip_when m.has_key(key)
+      m ++ { key: (if landed
+                   | [chain_gold[role], & (chain_spots :~ Map)[role], band_above]
+                   | [(piece :~ pc.Pict).scale(factor),
+                      & rule_place(factor, at, dx), band_above]) }
+
+// The equalities, each keyed by the region it becomes. A copy is padded out to the
+// region's own size so that the two share a top left corner: a press interpolates
+// one position for the key, and padding is what puts the words in the middle of the
+// region they turn into rather than at its corner.
+fun chain_eq_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
+  def rule :~ Map = update_rule(~value: value)
+  def factor = rule_scale(parts, rule)
+  for values(m :~ Map = {}) ([class_key, eq, at] in rule[#'equalities] :~ List):
+    def region :~ pc.Pict = ((chain_regions :~ Map)[class_key] :~ List)[0]
+    def small = (eq :~ pc.Pict).scale(factor)
+    def padded:
+      pc.overlay(pc.blank(~width: region.width, ~height: region.height), small)
+    def [x, y] = rule_place(factor, at)
+    m ++ { class_key: [padded,
+                       x - (padded.width - small.width) / 2,
+                       y - (padded.height - small.height) / 2,
+                       band_above] }
 
 // The presses both extraction slides share, in order: the graph, the rule, the
 // classes the rule makes, the asking, then the walk -- a press a row, the pointer
@@ -2075,29 +2156,42 @@ fun slide_rue():
                               // can point straight at the one it is about. Smaller
                               // than the deck's other bubbles, because that
                               // corridor is only as wide as the gap between them.
-                              ~body: [1330.0, 350.0], ~color: talk_red,
+                              ~body: (chain_bubbles :~ Map)[#'redundant],
+                              ~color: talk_red,
                               ~content: pc.stack(~sep: 2.0, ~horiz: #'center,
                                                  small_prose("Redundant"),
                                                  small_prose("update"))),
                     0.0, 0.0, band_above] }
 
-  // The write the rule adds arrives the way the program's own terms did: a copy of
-  // the line that states it lifts off the rule box and flies into the graph, each
-  // piece turning into the node it names. The copies are keyed by those nodes, so
-  // the press that puts the write in the graph is one move.
-  def flying = chain_rule_pieces(parts, ~value: #true)
+  // The four movements of applying the rule -- see `chain_match_pieces` and the
+  // block above it for what each copy is keyed by, which is what makes each press
+  // a move rather than a fade.
+  def match_on_rule = chain_match_pieces(parts, ~value: #true)
+  def match_on_graph = chain_match_pieces(parts, ~value: #true, ~landed: #true)
+  def conclusion = chain_rule_pieces(parts, ~value: #true)
+  def equalities = chain_eq_pieces(parts, ~value: #true)
 
-  // The graph the program builds, then the rule with the copy sitting on the line
-  // it states, then that copy in the graph as a write of its own with the two
-  // classes it makes, and last a word about the write it makes redundant.
   def program = chain_node_picts(chain_spots_upto(3), [])
   def with_rule = chain_node_picts(chain_spots, [])
+  // The rule is stated with a copy of every piece of it sitting on top of the piece
+  // it copies, so the copies cost nothing to look at and have somewhere to leave
+  // from. They ride along until the movement that is theirs.
+  def stated = rule_over ++ match_on_rule ++ conclusion ++ equalities
   chain_slide(
     page,
-    [Frame(~picts: program, ~edges: chain_edges(3)),
-     Frame(~picts: program ++ rule_over ++ flying, ~edges: chain_edges(3)),
+    [// the graph the program builds
+     Frame(~picts: program, ~edges: chain_edges(3)),
+     // the rule, said beside the two lines it is about
+     Frame(~picts: program ++ stated, ~edges: chain_edges(3)),
+     // its premises fly out, turning into the nodes they matched as they go
+     Frame(~picts: program ++ rule_over ++ match_on_graph ++ conclusion ++ equalities,
+           ~edges: chain_edges(3)),
+     // the match read, the line it concludes flies out and becomes a write
+     Frame(~picts: with_rule ++ rule_over ++ equalities, ~edges: chain_edges(4)),
+     // and its equalities fly out and become the regions round the classes they make
      Frame(~picts: with_rule ++ rule_over ++ rule_classes_under,
            ~edges: chain_edges(4)),
+     // last, a word about the write the rule has just made redundant
      Frame(~picts: with_rule ++ rule_over ++ rule_classes_under ++ redundant_over,
            ~edges: chain_edges(4))])
 
@@ -2153,7 +2247,7 @@ fun slide_fork():
       def cls = class_of[e[2]]
       keep_when taken.has_key(cls)
       def kind = if e[0] == #'s && red.contains(e[1]) | #'f | e[0]
-      [kind, e[1], taken[cls]] ++ (for List (i in 3..e.length()): e[i])
+      [kind, e[1], taken[cls]]
   def term_edges = edges_among(kept, ~red: readers)
   def term:
     Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red) ++ rule_over,
@@ -2166,27 +2260,28 @@ fun slide_fork():
   // hanging off it, and the two paths meeting again at the `return`. Every node in
   // it is in the frame before, so the press is the term falling into the shape it
   // always had.
-  def skeleton = [#'s0, #'u1, #'us, #'v1, #'s3, #'ret]
-  // Its own coordinates rather than the graph's rows: the shape is the point here,
-  // and it is drawn wide enough to leave the top left clear for a callout that can
-  // reach the memory at the apex without crossing one of the two writes under it.
-  def diamond_spots:
-    { #'s0: [1500.0, 250.0],                              // the apex
-      #'u1: [1330.0, 400.0], #'us: [1620.0, 400.0],       // the two writes
-      #'v1: [1388.0, 540.0], #'s3: [1678.0, 540.0],       // what each returns
-      #'ret: [1442.0, 680.0] }                            // where they meet
-  def diamond_fork_over:
-    // beside the apex, pointing at it: from below, a spike crosses one of the two
-    // writes, and the memory read twice is what the bubble is about
-    { #'fork: [bubble_at(chain_plain[#'s0], ~spot: diamond_spots[#'s0],
-                         ~body: [1100.0, 232.0], ~color: talk_red,
+  // What is wrong with it, said where it is wrong. The two writes that read the
+  // same memory and the memory itself are already red, and that *is* the diamond --
+  // one memory with two writes hanging off it -- so there is nothing to relayout;
+  // the callout only has to name what the red is saying.
+  //
+  // It points at a write rather than at the memory: the memory sits directly above
+  // the two of them, so a spike from anywhere with room for the words would have a
+  // write in the way. Of the two, the one nearer the words.
+  def blamed_write:
+    def [bx, _] = (chain_bubbles :~ Map)[#'fork]
+    fun far(key): math.abs((chain_spots[key] :~ List)[0] - bx)
+    for values(best = readers[0]) (r in readers): if far(r) < far(best) | r | best
+  def fork_over:
+    { #'fork: [bubble_at(chain_plain[blamed_write], ~spot: chain_spots[blamed_write],
+                         ~body: (chain_bubbles :~ Map)[#'fork], ~color: talk_red,
                          ~content: prose_stack([[["two copies", #'bold]],
                                                 [["of memory!", #'bold]]])),
                0.0, 0.0, band_above] }
-  def diamond:
-    Frame(~picts: chain_node_picts(diamond_spots, kept, ~red: fork_red)
-                    ++ rule_over ++ diamond_fork_over,
-          ~edges: edges_among(skeleton, ~red: readers))
+  def blamed:
+    Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red)
+                    ++ rule_over ++ fork_over,
+          ~edges: term_edges)
 
   // Then the walk again, this time not allowed to read a memory twice. Which node
   // it takes out of each class is worked out rather than written down -- see
@@ -2198,7 +2293,7 @@ fun slide_fork():
   def safe_edges = edges_among(safe)
   def safe_ask_over:
     { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
-                        ~body: [1150.0, 850.0], ~color: talk_green,
+                        ~body: (chain_bubbles :~ Map)[#'ask], ~color: talk_green,
                         ~content: prose_stack([[["extract", #'bold]],
                                                [["effect-safely", #'bold]]])),
               0.0, 0.0, band_above] }
@@ -2234,7 +2329,7 @@ fun slide_fork():
                                            ~size: 46.0, ~bold: #true)))))
     // in the room the answer leaves: the two writes it did not take were on this
     // side of the picture, and dropping them empties it
-    { #'idea: [body, 1380.0, 520.0, band_above] }
+    { #'idea: [body, & (chain_bubbles :~ Map)[#'idea], band_above] }
   def wanted:
     Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ idea_over,
           ~edges: safe_edges)
@@ -2242,7 +2337,7 @@ fun slide_fork():
   chain_slide(
     page,
     chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
-      ++ [term, diamond] ++ rewalk ++ [safe_term, wanted])
+      ++ [term, blamed] ++ rewalk ++ [safe_term, wanted])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
