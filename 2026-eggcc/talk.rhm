@@ -566,17 +566,6 @@ fun slide_12():
       ~width: slide_width, ~height: slide_height,
       ~background: hex("FFFFFF"),
       at(1890.004, 1045.0, ~tag: "Slide Number", shape_pict(~width: 19.008, ~height: 29.496)),
-      at(95.0, 249.26, ~tag: "Input term: (a + 1) - 1",
-         textbox(~width: 371.37, ~height: 228.28, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("Input term:", ~font: prose_font, ~size: 60.0,
-                          ~spacing: -2.01)),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("", ~size: 60.0, ~spacing: -2.0, ~font: "Arial")),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("  (a + 1) - 1", ~font: prose_font, ~size: 60.0,
-                          ~spacing: -2.01)))),
       at(95.0, 85.0, ~tag: "Equivalence Graph (E-Graph)",
          textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -694,9 +683,9 @@ fun slide_12():
                 ~from_at: pc.Find.top(as_pict(from), ~dx: 0),
                 ~to_at: pc.Find.bottom(as_pict(to), ~dx: 19))
 
-  def es_term:
-    [[#'op, #'plus, #'a], [#'op, #'plus, #'one],
-     [#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
+  def es_plus: [[#'op, #'plus, #'a], [#'op, #'plus, #'one]]
+  def es_minus: [[#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
+  def es_term = es_plus ++ es_minus
   def es_rewrite:
     [[#'op_blue, #'plus_r, #'minus_r], [#'op_blue, #'minus_r, #'one],
      [#'op_aside, #'plus_r, #'a], [#'eq_blue, #'minus, #'plus_r]]
@@ -799,11 +788,84 @@ fun slide_12():
   // The graph being built: the rules, the term, the rewrite of it, and the 0 the
   // second rule makes. Each press brings its nodes and their edges and leaves
   // everything already on the slide exactly as it was.
+  // ---------------------------------------------------------------- the input term
+  //
+  // Drawn as one pict per glyph, laid out here rather than by a text box, so that a
+  // subterm can be marked, copied, and walked out into the graph. Keynote's box
+  // shrank 60pt text to fit itself; 45pt with a point and a half taken out between
+  // the glyphs is what that came to, measured off the old rendering.
+  //
+  // The pieces that become nodes are keyed by the *node* they become. Turning text
+  // into graph is then one press: the glyph travels to where its node goes and turns
+  // into it on the way, which is what says that this box in the picture is that
+  // piece of the term.
+  def term_font = draw.Font(~name: prose_font, ~size: 45.0)
+  def term_strs = ["(", "a", " ", "+", " ", "1", ")", " ", "-", " ", "1"]
+  def term_glyphs = for List (s in term_strs): pc.text(s, ~font: term_font)
+  def values(term_offs, term_w):
+    for values(acc :~ List = [], dx :~ Real = 0.0) (g :~ pc.Pict in term_glyphs, i in 0..):
+      values(acc ++ [dx - 1.5 * i], dx + g.width)
+  fun term_run(i :: Int, j :: Int) :: pc.Pict:
+    for values(q :~ pc.Pict = pc.blank(~width: 0.0, ~height: 0.0)) (k in i..j):
+      pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: term_offs[k] - term_offs[i], ~dy: 0.0,
+                 q, term_glyphs[k])
+  // where the label and the line go, so that their ink lands where the box put it
+  def label_x = 99.0
+  def label_y = 255.0
+  def term_x = 129.0
+  def term_y = 370.0
+  // and where a copy of a subterm goes to be looked at: the empty band over the
+  // graph, between the term it came from and the rules
+  def copy_x = 760.0
+  def copy_y = 320.0
+  def input_label = pc.text("Input term:", ~font: term_font)
+  def input_line = term_run(0, term_strs.length())
+
+  // a band behind the glyphs `i` up to `j`, as the code slides mark a line
+  fun term_mark(i :: Int, j :: Int) :: List:
+    def w = term_offs[j - 1] - term_offs[i] + (term_glyphs[j - 1] :~ pc.Pict).width
+    [pc.rectangle(~width: w + 16.0, ~height: (term_glyphs[i] :~ pc.Pict).height,
+                  ~fill: highlight, ~line: #false, ~rounded: -0.3),
+     term_x + term_offs[i] - 8.0, term_y]
+  // the copy of `(a + 1)`, glyph by glyph, at `x`: the three that become nodes are
+  // keyed by their nodes, and the brackets are keyed to themselves so they can fade
+  fun sub_picts(x :: Real, y :: Real) :: Map:
+    for values(m :~ Map = {}) ([key, i] in [[#'open, 0], [#'a, 1], [#'plus, 3],
+                                            [#'one, 5], [#'close, 6]]):
+      m ++ { key: [term_glyphs[i], x + term_offs[i], y] }
+  // and the copy of the whole term: the subterm that is a node already, the operator
+  // that is about to become one, and the `1` that is a node already
+  def whole_left = term_run(0, 7)
+  fun whole_picts(x :: Real, y :: Real) :: Map:
+    { #'whole_left: [whole_left, x + term_offs[0], y],
+      #'minus: [term_glyphs[8], x + term_offs[8], y],
+      #'whole_right: [term_glyphs[10], x + term_offs[10], y] }
+
+  def sub_mark = { #'mark: term_mark(0, 7) }
+  def whole_mark = { #'mark: term_mark(0, term_strs.length()) }
+  def term_nodes = spots_of([#'a, #'one, #'plus], [])
+
   def build:
     [Frame(),
      Frame(~picts: rules_over),
-     Frame(~picts: spots_of(keys_term, []) ++ rules_over ++ flow_over,
+     // `(a + 1)`: marked in the term, then a copy of it out into the open, then the
+     // glyphs turning into the nodes they name, with the arrows arriving
+     Frame(~picts: rules_over ++ sub_mark ++ sub_picts(term_x, term_y)),
+     Frame(~picts: rules_over ++ sub_mark ++ sub_picts(copy_x, copy_y)),
+     Frame(~picts: rules_over ++ sub_mark ++ flow_over ++ term_nodes,
+           ~edges: es_plus),
+     // then the whole term, the same way, which adds the `−` and its two arrows.
+     // Its other two pieces are already in the graph, so they have nowhere to go and
+     // fade where they stand.
+     Frame(~picts: rules_over ++ whole_mark ++ flow_over ++ term_nodes
+                     ++ whole_picts(term_x, term_y),
+           ~edges: es_plus),
+     Frame(~picts: rules_over ++ whole_mark ++ flow_over ++ term_nodes
+                     ++ whole_picts(copy_x, copy_y),
+           ~edges: es_plus),
+     Frame(~picts: rules_over ++ flow_over ++ spots_of(keys_term, []),
            ~edges: es_term),
+     // and then the rewrites, as before
      Frame(~picts: spots_of(keys_rewrite, []) ++ rules_over ++ flow_over,
            ~edges: es_term ++ es_rewrite),
      Frame(~picts: spots_of(keys_all, []) ++ rules_over ++ flow_over,
@@ -853,8 +915,13 @@ fun slide_12():
   def term_2:
     Frame(~picts: { #'a: [green[#'a], 1000.0, 620.0] } ++ rules_over ++ third_over)
 
+  // the page every press draws over: the canvas, the label, and the term itself
+  def page:
+    put(put(as_pict(base_canvas), input_label, label_x, label_y),
+        input_line, term_x, term_y)
+
   magic_slide(
-    as_pict(base_canvas),
+    page,
     build
       ++ [// the classes, and then the job, each on its own press
           frame(),
@@ -1445,15 +1512,48 @@ fun slide_egraph():
   def canvas = with_icon(titled("The Effectful E-Graph"))
   def parts = code_parts()
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
-  // one band per `update` line, each built once so the press that brings the next
-  // one only has that band to fade
+
+  // Each line of the program goes into the graph in three presses: the line is
+  // marked, a copy of it lifts out into the open below the box, and then that copy
+  // becomes the `update` box in the graph while the value and the state it returns
+  // arrive around it.
+  //
+  // The copy is the very pict the code box draws that line with, keyed by the node
+  // it is about to become. So the first press puts it exactly over the line it is a
+  // copy of, where it cannot be told from the original, and the two presses after
+  // that carry it out and turn it into a node -- which is the story this slide has
+  // to tell, that a line of the program *is* a piece of the graph.
+  //
+  // One band per line, built once, so the press that marks the next line has only
+  // the band to move.
   def bands: for List (k in 0..4): band_of(parts, k) ++ [band_above]
+  fun line_pict(i :: Int) :~ pc.Pict:
+    ((parts[#'lines] :~ List)[i] :~ Map)[#'states]
+  // where the box draws that line, from the same measurements `code_pict` uses
+  fun line_home(i :: Int) :: List:
+    [code_x + code_inset + code_indent,
+     code_y + code_inset + code_row * (i + 1)
+       + (code_row - (line_pict(i)).height) / 2]
+  // and where the copy goes to be looked at: the open space under the box
+  def copy_home = [200.0, 810.0]
+
+  // Which `update` each line becomes, in the order the graph is built.
+  def line_keys = [#'u1, #'u2, #'u3, #'ret]
+
   chain_slide(
     page,
-    for List (k in 0..5):
-      Frame(~picts: chain_node_picts(chain_spots_upto(k), [])
-                      ++ (if k == 0 | {} | { #'mark: bands[k - 1] }),
-            ~edges: chain_edges(k)))
+    [Frame(),
+     & List.append(
+         & for List (key in line_keys, i in 0..):
+             def mark = { #'mark: bands[i] }
+             // what the graph has before this line goes in, and after
+             def before = chain_node_picts(chain_spots_upto(i), [])
+             def after = chain_node_picts(chain_spots_upto(i + 1), [])
+             [Frame(~picts: before ++ mark ++ { key: [line_pict(i), & line_home(i)] },
+                    ~edges: chain_edges(i)),
+              Frame(~picts: before ++ mark ++ { key: [line_pict(i), & copy_home] },
+                    ~edges: chain_edges(i)),
+              Frame(~picts: after ++ mark, ~edges: chain_edges(i + 1))])])
 
 // -------------------------------------------------------------------------------------
 // slide_rue: a rule over `update`, and the rule applied.

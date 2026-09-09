@@ -94,9 +94,16 @@ fun spots_between(a :: Frame, b :: Frame, t :: Real) :: Map:
                  | eb == []: [ea[1], ea[2]]
                  | ~else: [lerp(ea[1], eb[1], t), lerp(ea[2], eb[2], t)]) }
 
-fun picts_between(a :: Frame, b :: Frame) :: Map:
+// Which drawing of each key the edges are aimed at. The near side of the press: a
+// key drawn one way and then another is a different size in the two frames, and
+// aiming at the one that has gone leaves the edges attached to a pict that is no
+// longer there -- at the end of the press, wrongly, and for good until the next one
+// redraws them.
+fun picts_between(a :: Frame, b :: Frame, t :: Real) :: Map:
   for values(m :~ Map = {}) (key in keys_of(a, b)):
-    def ea :~ List = grab(a.picts, key) || grab(b.picts, key)
+    def near = if t < 0.5 | a | b
+    def far = if t < 0.5 | b | a
+    def ea :~ List = grab(near.picts, key) || grab(far.picts, key)
     m ++ { key: ea[0] }
 
 // Everything to draw, as [band, pict, x, y, alpha]. A key drawn differently by the
@@ -122,7 +129,7 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                   ~edge_band: edge_band :: Int = band_edges) :: pc.Pict:
   def blank = pc.blank(~width: base.width, ~height: base.height)
   def draws :~ List = draws_between(a, b, t)
-  def at :~ Map = picts_between(a, b)
+  def at :~ Map = picts_between(a, b, t)
   def spots :~ Map = spots_between(a, b, t)
   // a ghost of every pict where it is now: a ghost draws nothing and is still
   // findable, so the edges are drawn on a layer of their own, from the current
