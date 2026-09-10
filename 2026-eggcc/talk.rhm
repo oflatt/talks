@@ -2226,6 +2226,7 @@ def stateful_hex = "0433FF"
 // one is the paler one and `v2` besides -- so deeper reading as *more* is what they
 // mean, and a pair that differs in lightness stays two things under any colour
 // vision. Both are pale enough to read black text.
+def node_blob = "EFE6FA"                      // the mass an extractable set covers
 def node_es_0 = "E9DDF8"                      // what the bare argument state reaches
 def node_es_1 = "C3A9E8"                      // what every walk through one write reaches
 def node_es_2 = "8E6BC4"                      // and that, plus the redundant write's value
@@ -2697,6 +2698,9 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     // `#'f` is a state edge that should not be there: two of them arriving at one
     // node is memory read twice
     | e[0] == #'f: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: talk_red)
+    // not an edge at all: which nodes the extractable set covers, which the slide
+    // draws for itself, since it has to change shape as the press runs
+    | e[0] == #'blob: q
     | e[0] == #'m: q
     // a statewalk being laid down, in the colour of the extractable set it reaches
     | e[0] == #'w0: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_0))
@@ -2737,9 +2741,9 @@ def band_chip = band_nodes + 3
 def band_callout = band_nodes + 4
 def band_flight = band_nodes + 5
 
-fun chain_slide(page :: pc.Pict, frames :~ List) :: pc.Pict:
+fun chain_slide(page :: pc.Pict, frames :~ List, ~& kws) :: pc.Pict:
   magic_slide(page, frames, ~wire: chain_wire_specs, ~edge_band: band_wires,
-              ~under_wire: chain_point_specs, ~under_band: band_point)
+              ~under_wire: chain_point_specs, ~under_band: band_point, ~& kws)
 
 // The class the extraction starts from: `return` is what groups the value and the
 // state the program hands back.
@@ -4138,41 +4142,82 @@ fun slide_dp():
   // mark on each node: a class is in reach or it is not, and a shape that covers the
   // ones that are says so in one look.
   //
-  // It is built out of a blob per node, all in one flat opaque colour, so that two
-  // that touch read as one mass rather than as a darker patch where they overlap.
-  // Every node keeps its blob in every press, which is what animates the set growing:
-  // a node not yet in reach parks a *blank* blob at the head of the walk, so the
-  // press that brings it into reach interpolates that blank travelling out to the
-  // node and swelling into a blob on the way. The set grows out of the walk, which
-  // is where it comes from.
+  // It is built out of a blob per node, all painted into one layer in one flat
+  // opaque colour, so that two that touch read as one mass rather than as a darker
+  // patch where they overlap. The layer is drawn by the press rather than by either
+  // frame, because what has to happen between two presses is that the mass *grows*:
+  // a blob that arrives as a second pict can only dissolve into place, and a set
+  // spreading over what it has reached does not dissolve, it spreads.
+  //
+  // Each blob that is new to this press swells from nothing to full size, and the
+  // ones further from the mass that is already there start later, so the whole thing
+  // runs outwards from the walk instead of blinking on all at once.
   def blob_pad = 26.0
-  fun blob_of(key, fill :: String) :: pc.Pict:
+  fun blob_centre(key) :: List:
+    def [x, y] = (away :~ Map)[key] :~ List
     def [w, h] = node_size(key)
-    pc.rectangle(~width: (w + 2 * blob_pad) * dp_scale,
-                 ~height: (h + 2 * blob_pad) * dp_scale,
-                 ~fill: hex_color(fill), ~line: #false, ~rounded: -0.75)
-  fun blobs(row :~ List) :: Map:
-    def fill = chain_es_fill(chain_es_index(row[1] :~ List))
+    [x + w * dp_scale / 2, y + h * dp_scale / 2]
+  // which nodes a frame says the mass covers
+  fun covered_of(f :: Frame) :: List:
+    for List (e :~ List in f.edges): keep_when e[0] == #'blob; e[1]
+  fun smooth(u :: Real) :: Real:
+    def v = math.max(0.0, math.min(1.0, u))
+    v * v * (3.0 - 2.0 * v)
+  fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
+    def was :~ List = covered_of(a)
+    def now :~ List = covered_of(b)
+    // how far each newcomer is from the mass that is already there, as a fraction of
+    // the furthest one: that is when it starts to swell
+    def coming :~ List: for List (k in now): keep_when !was.contains(k); k
+    fun reach_dist(key) :: Real:
+      def [cx, cy] = blob_centre(key)
+      for values(d :~ Real = 1.0e9) (o in was):
+        def [ox, oy] = blob_centre(o)
+        math.min(d, math.sqrt((cx - ox) * (cx - ox) + (cy - oy) * (cy - oy)))
+    def far:
+      for values(m :~ Real = 1.0) (k in coming): math.max(m, reach_dist(k))
+    def size :~ Map:
+      for values(m :~ Map = {}) (key in now ++ was):
+        def f:
+          cond
+          | was.contains(key) && now.contains(key): 1.0
+          | now.contains(key):
+              def start = 0.5 * (if far > 0.0 | reach_dist(key) / far | 0.0)
+              smooth((t - start) / math.max(0.05, 1.0 - start))
+          | ~else: smooth(1.0 - t)
+        m ++ { key: f }
+    pc.dc(fun (target :: draw.DC, dx, dy):
+            target.save()
+            target.pen := draw.Pen(~color: draw.Color(0, 0, 0, 0.0), ~width: 0)
+            target.brush := draw.Brush(~color: hex_color(node_blob))
+            for (key in size.keys()):
+              def f = (size[key] :~ Real)
+              skip_when f <= 0.01
+              def [cx, cy] = blob_centre(key)
+              def [w, h] = node_size(key)
+              def bw = (w + 2 * blob_pad) * dp_scale * f
+              def bh = (h + 2 * blob_pad) * dp_scale * f
+              def path = draw.Path()
+              path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
+                                     math.min(bw, bh) * 0.45)
+              target.path(path)
+            target.restore(),
+          ~width: slide_width, ~height: slide_height)
+
+  // and what each press says the mass covers: the walk, and every node of a class
+  // the walk puts within reach
+  fun blob_marks(row :~ List) :: List:
     def walk :~ List = row[2]
-    def head = walk[walk.length() - 1]
-    def [hx, hy] = (away :~ Map)[head] :~ List
-    for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
-      def covered = walk.contains(key) || (row[1] :~ List).contains(c)
-      def [x, y] = (away :~ Map)[key] :~ List
-      def [w, h] = node_size(key)
-      m ++ { [#'blob, key]:
-               (if covered
-                | [blob_of(key, fill),
-                   x - blob_pad * dp_scale, y - blob_pad * dp_scale, band_below]
-                // parked at the head of the walk, with nothing drawn of it yet
-                | [pc.blank(~width: 1.0, ~height: 1.0), hx, hy, band_below]) }
+    for List ([key, c, _] in chain_graph :~ List):
+      keep_when walk.contains(key) || (row[1] :~ List).contains(c)
+      [#'blob, key]
 
   fun step(n :: Int, ~reach: reach :: Boolean) :: Frame:
     def row :~ List = rows[n]
     Frame(~picts: picts_at(away, chain_dp_fills(rows.sublist(0, n + 1)),
-                           ~scale: dp_scale)
-                    ++ (if reach | blobs(row) | {}),
-          ~edges: chain_edges(4) ++ walk_edges(row))
+                           ~scale: dp_scale),
+          ~edges: chain_edges(4) ++ walk_edges(row)
+                    ++ (if reach | blob_marks(row) | []))
 
   chain_slide(
     as_pict(canvas),
@@ -4189,7 +4234,8 @@ fun slide_dp():
      // walk puts within reach
      step(0, ~reach: #false),
      step(0, ~reach: #true),
-     & for List (n in 1..rows.length()): step(n, ~reach: #true)])
+     & for List (n in 1..rows.length()): step(n, ~reach: #true)],
+    ~stage: blob_stage, ~stage_band: band_below)
 
 def all_slides:
   [slide_1,

@@ -134,7 +134,15 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                   // crossing what is written in it. Both layers are handed every
                   // spec; each draws the ones it is for.
                   ~under_wire: under_wire :: maybe(Function.of_arity(3)) = #false,
-                  ~under_band: under_band :: Int = band_below) :: pc.Pict:
+                  ~under_band: under_band :: Int = band_below,
+                  // A layer that is a function of how far through the press we are,
+                  // rather than of what the two frames hold. Everything else here
+                  // moves a pict or fades one into another; this is for the things
+                  // that have to *change shape* on the way -- a region that grows out
+                  // to cover what it has reached, say, which as two picts would be
+                  // one dissolving into the other. Called with both frames and `t`.
+                  ~stage: stage :: maybe(Function.of_arity(4)) = #false,
+                  ~stage_band: stage_band :: Int = band_below) :: pc.Pict:
   def blank = pc.blank(~width: base.width, ~height: base.height)
   def draws :~ List = draws_between(a, b, t)
   def at :~ Map = picts_between(a, b, t)
@@ -155,18 +163,24 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
       draw_them(ghosts, specs, at).alpha(al)
   def edge_layers = layers_of(wire)
   def under_layers = if under_wire | layers_of(under_wire) | []
+  def stage_layer = if stage | stage(blank, a, b, t) | #false
   def bands :~ List:
     (for List (d :~ List in draws): d[0]) ++ [edge_band]
       ++ (if under_wire | [under_band] | [])
+      ++ (if stage | [stage_band] | [])
   def lo = for values(m :~ Int = bands[0]) (v in bands): math.min(m, v)
   def hi = for values(m :~ Int = bands[0]) (v in bands): math.max(m, v)
   for values(q :~ pc.Pict = base) (band in lo..hi + 1):
     // the edges of the band, and then everything placed in it
     def wired:
+      def with_stage:
+        if band != stage_band || !stage_layer
+        | q
+        | put(q, stage_layer, 0.0, 0.0)
       def with_under:
         if band != under_band
-        | q
-        | for values(q :~ pc.Pict = q) (l in under_layers): put(q, l, 0.0, 0.0)
+        | with_stage
+        | for values(q :~ pc.Pict = with_stage) (l in under_layers): put(q, l, 0.0, 0.0)
       if band != edge_band
       | with_under
       | for values(q :~ pc.Pict = with_under) (l in edge_layers): put(q, l, 0.0, 0.0)
