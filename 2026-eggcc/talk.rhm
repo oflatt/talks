@@ -1953,6 +1953,33 @@ fun chain_statewalks() :: List:
             if seen | rows | rows ++ [[kc, es2, walk2]]
         loop(more, i + 1)
 
+// The term one row of the table stands for: the last term of its walk, with every
+// operand resolved -- a pure one to the representative ExtractMap found for its
+// class under this walk, an effectful one to the walk's own member of that class.
+// This is the whole of why what comes back is effect-safe: an operand is only ever
+// something the walk itself passed through.
+fun chain_dp_term(row :~ List) :: List:
+  def walk :~ List = row[2]
+  def rep :~ Map = chain_extract_map(walk)
+  def args :~ Map = chain_args_of(chain_graph)
+  fun on_walk(c):
+    for values(found = #false) (k in walk):
+      if chain_class_of[k] == c | k | found
+  recur build(key = walk[walk.length() - 1], acc :~ List = []):
+    if acc.contains(key)
+    | acc
+    | for values(acc :~ List = acc ++ [key]) (a in args[key] :~ List):
+        build(if chain_eff_class(a) | on_walk(a) | rep[a], acc)
+
+// The row the algorithm ends on: of the entries at the root class, the one whose
+// term is cheapest. A node of the term apiece, which is the cost this graph's other
+// arithmetic uses.
+fun chain_dp_best() :: List:
+  def at_root:
+    for List (row :~ List in chain_statewalks()): keep_when row[0] == chain_root; row
+  for values(best :~ List = at_root[0]) (row :~ List in at_root):
+    if chain_dp_term(row).length() < chain_dp_term(best).length() | row | best
+
 // The distinct extractable sets, in the order the table first writes one. A set is
 // then a number, and a number is a colour: white for the one the bare argument state
 // reaches, and the two fills for the two the writes open up.
@@ -4212,6 +4239,27 @@ fun slide_dp():
       keep_when walk.contains(key) || (row[1] :~ List).contains(c)
       [#'blob, key]
 
+  // ----------------------------------------------------------------- and the answer
+  // The term the algorithm settles on, as the graph's own nodes turned green.
+  fun green_over(term :~ List) :: Map:
+    def nodes :~ Map = chain_nodes(~picked: term)
+    for values(m :~ Map = {}) (key in term):
+      def [x, y] = (away :~ Map)[key] :~ List
+      def n = nodes[key]
+      def q :~ pc.Pict = if n is_a pc.Pict | n | as_pict(n)
+      m ++ { key: [q.scale(dp_scale), x, y] }
+  // an edge stays if the node it leaves is in the term, aimed at whichever member of
+  // its class the term took
+  fun term_edges(term :~ List) :: List:
+    def taken:
+      for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
+        if term.contains(key) | m ++ { c: key } | m
+    for List (e :~ List in chain_edges(4)):
+      keep_when term.contains(e[1])
+      def c = chain_class_of[e[2]]
+      keep_when taken.has_key(c)
+      [e[0], e[1], taken[c]]
+
   fun step(n :: Int, ~reach: reach :: Boolean) :: Frame:
     def row :~ List = rows[n]
     Frame(~picts: picts_at(away, chain_dp_fills(rows.sublist(0, n + 1)),
@@ -4234,7 +4282,22 @@ fun slide_dp():
      // walk puts within reach
      step(0, ~reach: #false),
      step(0, ~reach: #true),
-     & for List (n in 1..rows.length()): step(n, ~reach: #true)],
+     & for List (n in 1..rows.length()): step(n, ~reach: #true),
+     // ------------------------------------------------------------------ the answer
+     // The table is full. Nothing is in reach of anything in particular any more:
+     // what is left is what it stored, and the root is a class with two of them.
+     Frame(~picts: picts_at(away, chain_dp_fills(rows), ~scale: dp_scale),
+           ~edges: chain_edges(4)),
+     // Of those two, the cheaper. Its walk is drawn again and the term it stands for
+     // turns green: the walk's own terms, and for every pure operand whatever
+     // ExtractMap found for that class under *this* walk -- which is why the value
+     // the `return` takes is the one this walk's write returned and never the other.
+     Frame(~picts: picts_at(away, chain_dp_fills(rows), ~scale: dp_scale)
+                     ++ green_over(chain_dp_term(chain_dp_best())),
+           ~edges: chain_edges(4) ++ walk_edges(chain_dp_best())),
+     // and then just that term, where the graph had it
+     Frame(~picts: green_over(chain_dp_term(chain_dp_best())),
+           ~edges: term_edges(chain_dp_term(chain_dp_best())))],
     ~stage: blob_stage, ~stage_band: band_below)
 
 def all_slides:
