@@ -498,6 +498,11 @@ fun slide_2():
 // picture before it holds the same term, and the press that leaves that picture
 // puts this very pict where this slide draws it -- so the click between the two
 // slides is a match cut rather than a cut.
+// The workflow picture and the example it hands over to are one thought, and the
+// press between them moves the term and the rules without moving anything else --
+// so they carry one title, and the click changes only what it has to.
+def flow_title = "E-Graphs Explore a Big Space"
+
 def term_font = draw.Font(~name: prose_font, ~size: 45.0)
 def term_strs = ["(", "a", " ", "+", " ", "1", ")", " ", "-", " ", "1"]
 def term_glyphs = for List (s in term_strs): pc.text(s, ~font: term_font)
@@ -569,17 +574,11 @@ fun slide_12():
   // -- extraction reads the classes the way the data flows.
   def flow_x = 620.0
 
-  def base_canvas:
-    slide_canvas(
-      ~width: slide_width, ~height: slide_height,
-      ~background: hex("FFFFFF"),
-      at(1890.004, 1045.0, ~tag: "Slide Number", shape_pict(~width: 19.008, ~height: 29.496)),
-      at(95.0, 85.0, ~tag: "Equivalence Graph (E-Graph)",
-         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                 para(~line_spacing: pair(#'percent, 0.8),
-                      run("E-Graph Example", ~font: prose_font,
-                          ~size: 85.0, ~bold: #true, ~spacing: -2.01)))))
+  // The same title the picture before this one carries, written by the same helper:
+  // the press that leaves that picture puts the term and the rules where this slide
+  // draws them, and a title set even slightly differently is the one thing on the
+  // slide that would move.
+  def base_canvas = titled(flow_title)
 
   // The rules, each under a key of its own rather than all three in one picture:
   // a rule that comes over to what it matched is that key drawn somewhere else, and
@@ -2986,13 +2985,13 @@ def flow_gear = make_gear(~size: 190.0, ~teeth: 11)
 // it the same size, so renaming it is a change of words in one place rather than a
 // shape that grows.
 fun extract_arrow(~safe: safe :: Boolean) :: pc.Pict:
-  def face = draw.Font(~name: prose_font, ~size: 34.0, ~weight: #'bold)
+  def face = draw.Font(~name: prose_font, ~size: 30.0, ~weight: #'bold)
   def label:
     if safe
     | pc.stack(~sep: 2.0, ~horiz: #'center,
-               pc.text("effect-safe", ~font: face), pc.text("extraction", ~font: face))
-    | pc.text("extract", ~font: face)
-  as_pict(make_arrow(~width: 300.0, ~height: 200.0, ~color: talk_blue, label))
+               pc.text("Effect-safe", ~font: face), pc.text("extraction!", ~font: face))
+    | pc.text("Extract!", ~font: face)
+  as_pict(make_arrow(~width: 330.0, ~height: 164.0, ~color: talk_blue, label))
 
 // Where each stage sits. Both pictures share these, so the second is the first with
 // the IR stage put in the gap the first one leaves between the program and the
@@ -3000,8 +2999,8 @@ fun extract_arrow(~safe: safe :: Boolean) :: pc.Pict:
 def flow_program_at = [95.0, 244.0]
 def flow_ir_at = [95.0, 496.0]
 def flow_rules_at = [95.0, 748.0]
-def flow_egraph_at = [730.0, 380.0]
-def flow_arrow_at = [1050.0, 466.0]
+def flow_egraph_at = [700.0, 380.0]
+def flow_arrow_at = [1020.0, 466.0]
 def flow_optimized_at = [1390.0, 466.0]
 def flow_egraph_size = [280.0, 300.0]
 
@@ -3113,8 +3112,6 @@ fun flow_callout(page :: pc.Pict, target :~ List,
                  ~color: color, ~padding: 20.0, content),
    0.0, 0.0, band_above]
 
-def flow_title = "E-Graphs Explore a Big Space"
-
 // -------------------------------------------------------------------------------------
 // slide_40: the workflow, a stage per press, and then the handoff -- the term and
 // the rules fly out of their boxes to the places the next slide draws them.
@@ -3153,20 +3150,20 @@ fun slide_41():
     { #'threading: flow_callout(page, with_ir[#'ir_box], ~body: [746.0, 202.0],
                                 ~color: talk_green,
                                 ~content: prose_stack(
-                                            [[["effects modeled by", #'plain]],
+                                            [[["Effects modeled by", #'plain]],
                                              [["threading", #'bold],
                                               [" functional objects!", #'plain]]])) }
   def refine:
     { #'refine: flow_callout(page, safe[#'extract], ~body: [1130.0, 740.0],
                              ~color: talk_green,
                              ~content: prose_stack(
-                                         [[["refine the semantics to", #'plain]],
+                                         [[["Refine the semantics to", #'plain]],
                                           [["only ", #'plain], ["effect-safe", #'bold],
                                            [" programs", #'plain]]])) }
   def worry:
     { #'worry: flow_callout(page, safe[#'rules_box], ~body: [706.0, 840.0],
                             ~color: talk_blue,
-                            ~content: prose_stack([[["write rules", #'bold]],
+                            ~content: prose_stack([[["Write rules", #'bold]],
                                                    [["without worry", #'bold]]])) }
   magic_slide(page,
               [workflow_frame(pure, flow_all),

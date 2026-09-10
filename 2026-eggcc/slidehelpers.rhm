@@ -100,10 +100,10 @@ fun make_bubble(~width: width :: maybe(Real) = #false,
 // stubby arrow or a long one depending only on what is written in it.
 fun make_arrow(~width: width :: maybe(Real) = #false,
                ~height: height :: maybe(Real) = #false,
-               ~padding: padding :: Real = 24,
+               ~padding: padding :: Real = 20,
                ~color: color :: draw.Color || String = talk_blue,
-               ~head: head :: Real = 0.36,
-               ~shaft: shaft :: Real = 0.58,
+               ~head: head :: Real = 0.34,
+               ~shaft: shaft :: Real = 0.62,
                child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
   def content = gap_stack(child, ...)
@@ -131,10 +131,12 @@ fun make_arrow(~width: width :: maybe(Real) = #false,
          target.path(path, ~dx: dx, ~dy: dy)
          target.restore(),
        ~width: w, ~height: h)
-  // the content sits in the middle of the bar, which is left of the middle of the
-  // arrow by half the point
+  // Centred in the arrow, not in the bar: the bar is only the part left of the
+  // point, and something centred in it reads as pushed to the left of the shape it
+  // is written in. The point is wide at its base, so a label centred on the whole
+  // still has the shape behind it.
   overlay(~horiz: #'left, ~vert: #'top,
-          ~dx: (w - hw - content.width) / 2, ~dy: (h - content.height) / 2,
+          ~dx: (w - content.width) / 2, ~dy: (h - content.height) / 2,
           shape, content)
 
 // A cog, for the step of a picture that is a machine rather than a thing: teeth
