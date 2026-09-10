@@ -39,6 +39,7 @@ export:
   slide_egraph
   slide_rue
   slide_fork
+  slide_nphard
   slide_34
   slide_36
   slide_37
@@ -135,8 +136,8 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // The header's discs sit around y 18..50 and the deck's slide titles start at
 // y 64, which is what the disc and text scales in `header_layout` are chosen
 // against. Retitle a slide higher than that and the two will meet.
-def sections = ["Motivate Effectful E-Graphs", "Effectful E-Graphs",
-                "A DP Solution", "It Works!"]
+def sections = ["Motivate Effectful E-Graphs", "Example Effectful E-Graph",
+                "Effect-Safe Extraction", "It Works!"]
 
 fun section_canvas():
   as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
@@ -3191,6 +3192,360 @@ fun slide_fork():
       ++ [term, reddened, blamed] ++ rewalk ++ [safe_term, answer])
 
 // -------------------------------------------------------------------------------------
+// slide_nphard: effect-safe extraction is NP-hard, by a reduction from CNF-SAT.
+//
+// This is Figure 5 of the paper, drawn in the deck's own hand. It came over from
+// `np-hard.key` as three dozen empty rounded rectangles with the arrowheads landing
+// in the middle of them -- every label in that deck is a Keynote *equation*, and
+// equations do not port -- so rather than repair the dump, the picture is rebuilt
+// here from the formula it encodes, in the vocabulary the rest of the talk uses:
+// `ω` for a state, blue for everything that carries one, a grey tube round an
+// e-class, and arrows that stop at a border and point at what a node is built from.
+//
+// The encoding, from Section 5 of the paper:
+//
+//   ω        the incoming state.
+//   xᵢ, ¬xᵢ  effectful operators: they take a state and return a value and a state.
+//            The two of them are the two ways to assign xᵢ.
+//   ωᵢ       the state each of those leaves behind. The two of them are *equal*, so
+//            a walk down the chain takes one assignment per variable and the state
+//            it ends at cannot tell which -- but it cannot mix them either.
+//   gᵢ       one pure term per literal of clause i, reading the operator that makes
+//            that literal true. All the literals of a clause are one e-class, so an
+//            extraction takes exactly one of them.
+//   R        the root: one term out of every clause class, and the final state.
+//
+// So a term out of R is effect-safe exactly when the literals it picks read one
+// consistent chain of assignments -- which is exactly when the formula is satisfiable.
+//
+// It is built from the formula rather than drawn, so the picture cannot disagree
+// with the words: change `np_clauses` and the chain, the clause classes, their
+// edges, the rows they sit on and the extraction at the end all follow.
+//
+//   ϕ = ¬x₀ ∧ (¬x₁ ∨ x₀) ∧ (x₂ ∨ x₁ ∨ ¬x₂)
+//
+// A literal is [variable, is it negated]; a clause is a list of them.
+def np_vars = 3
+def np_clauses:
+  [[[0, #true]],
+   [[1, #true], [0, #false]],
+   [[2, #false], [1, #false], [2, #true]]]
+
+// The assignment the last press extracts: one truth value per variable.
+def np_witness = [#false, #false, #true]
+
+def np_sub = ["₀", "₁", "₂", "₃", "₄"]
+fun np_lit_name(lit :~ List) :: String:
+  (if lit[1] | "¬x" | "x") +& np_sub[lit[0] :~ Int]
+
+// Which of a variable's two operators a literal reads: the left one asserts it,
+// the right one denies it.
+fun np_lit_side(lit :~ List) :: Int: if lit[1] | 1 | 0
+
+// A clause's literals, left to right, highest target first: an edge that leaves a
+// node sideways has to clear its own neighbours, and ordering them this way is what
+// lets every one of them leave over the top of the ones beside it.
+fun np_lit_rank(lit :~ List) :: Int: (lit[0] :~ Int) * 2 + np_lit_side(lit)
+def np_members:
+  for List (clause :~ List in np_clauses):
+    clause.sort(fun (a :~ List, b :~ List): np_lit_rank(a) < np_lit_rank(b))
+
+// ------------------------------------------------------------------ the picture
+// The chain of assignments runs down the right, a variable to a rung: the two
+// operators that assign it, and the class of the state either one leaves. The
+// clause classes stand to the left, each on the first row below every operator it
+// reads, and the root is below all of them.
+def np_h = 64.0                  // every node, as tall as the deck's
+def np_pitch = 92.0
+def np_top = 235.0
+fun np_y(row :: Int) :: Real: np_top + row * np_pitch
+def np_mid = 1520.0
+def np_op_w = 128.0              // an operator, which has a literal written in it
+def np_op_dx = 160.0
+def np_st_w = 64.0               // a state
+def np_st_dx = 48.0
+def np_arg_w = 96.0
+def np_root_w = 76.0
+def np_g_w = 64.0
+def np_g_pitch = 150.0           // wide enough that a member's edge clears the next
+def np_g_right = 1040.0           // where the first clause's last member sits
+def np_g_step = 60.0             // and how much further right each longer one reaches
+// The root hangs below the last row rather than on it, so that its arrows up to the
+// clause classes are not flat and its arrow up to the last state is not a stub.
+def np_root_x = np_mid - 60.0   // clear of the state column, so its arrows up to
+                                // the clause classes leave from beside it, not behind it
+def np_root_y = np_y(2 * np_vars) + 200.0
+
+// A clause sits on row 2c+2 at the earliest -- below every operator it reads, and
+// below the clause before it, so the root can see all three of them at once.
+def np_clause_row:
+  for List (clause :~ List in np_members, c in 0..):
+    for values(m = 2 * c + 2) (lit :~ List in clause):
+      math.max(m, 2 * (lit[0] :~ Int) + 2)
+
+// Where each thing in the picture sits, before any of it is drawn: the edges have
+// to be worked out from these, and one of them decides where a whole row goes.
+fun np_op_middle(lit :~ List) :: List:
+  def v = lit[0] :~ Int
+  [np_mid + (if np_lit_side(lit) == 0 | 0.0 - np_op_dx | np_op_dx), np_y(2 * v + 1) + np_h / 2]
+fun np_g_x(c :: Int, k :: Int) :: Real:
+  def last = ((np_members :~ List)[c] :~ List).length() - 1
+  np_g_right + c * np_g_step - (last - k) * np_g_pitch
+
+// A clause hangs a little *below* the row it is allowed on. Its members sit side by
+// side and every one of them but the last has to send an edge out over the ones to
+// its right; the further the row is below what it reads, the steeper that edge
+// leaves, and this is the smallest drop that gets all of them over the top of their
+// neighbours. Left to itself a clause takes no drop at all -- which is what keeps
+// the last member's edge from sinking into the row above on its way out.
+def np_clear = 8.0               // and how much daylight to leave over a neighbour
+def np_clause_drop:
+  for List (clause :~ List in np_members, c in 0..):
+    def base = np_y((np_clause_row :~ List)[c]) + np_h / 2
+    def want:
+      for values(m :~ Real = base) (lit :~ List in clause, k in 0..):
+        skip_when k == clause.length() - 1
+        def [tx, ty] = np_op_middle(lit)
+        math.max(m, ty + (np_h / 2 + np_clear) * (tx - np_g_x(c, k))
+                           / (np_g_pitch - np_g_w / 2))
+    want - base
+fun np_clause_y(c :: Int) :: Real:
+  np_y((np_clause_row :~ List)[c]) + (np_clause_drop :~ List)[c]
+
+// A clause colour is not one the deck already spends on something else: green is
+// what a state equivalence is drawn in, and blue is what carries a state.
+def np_colors = ["C7006A", "BF8200", "6A2FA0"]
+def np_dashes: [draw.Color(199, 0, 106), draw.Color(191, 130, 0), draw.Color(106, 47, 160)]
+
+//   [key, what is written in it, its colour, its width, x, y]
+def np_nodes:
+  [[[#'arg], "ω", stateful_hex, np_arg_w, np_mid - np_arg_w / 2, np_y(0)]]
+    ++ List.append(
+         & for List (v in 0..np_vars):
+             [[[#'op, v, 0], "x" +& np_sub[v], stateful_hex, np_op_w,
+               np_mid - np_op_dx - np_op_w / 2, np_y(2 * v + 1)],
+              [[#'op, v, 1], "¬x" +& np_sub[v], stateful_hex, np_op_w,
+               np_mid + np_op_dx - np_op_w / 2, np_y(2 * v + 1)],
+              [[#'st, v, 0], "ω" +& np_sub[v + 1], stateful_hex, np_st_w,
+               np_mid - np_st_dx - np_st_w / 2, np_y(2 * v + 2)],
+              [[#'st, v, 1], "ω" +& np_sub[v + 1], stateful_hex, np_st_w,
+               np_mid + np_st_dx - np_st_w / 2, np_y(2 * v + 2)]])
+    ++ List.append(
+         & for List (clause :~ List in np_members, c in 0..):
+             for List (k in 0..clause.length()):
+               [[#'g, c, k], "g" +& np_sub[c + 1], np_colors[c], np_g_w,
+                np_g_x(c, k) - np_g_w / 2, np_clause_y(c)])
+    ++ [[[#'root], "R", stateful_hex, np_root_w, np_root_x - np_root_w / 2, np_root_y]]
+
+def np_at:
+  for values(m :~ Map = {}) ([key, _, _, w, x, y] in np_nodes): m ++ { key: [x, y, w] }
+fun np_middle(key) :: List:
+  def [x, y, w] = np_at[key]
+  [x + (w :~ Real) / 2, y + np_h / 2]
+
+// The state the extraction settles on for each variable, and the member of each
+// clause class that assignment makes true.
+fun np_pick_side(v :: Int) :: Int: if (np_witness :~ List)[v] | 0 | 1
+fun np_pick_member(clause :~ List) :: Int:
+  for values(found = -1) (lit :~ List in clause, k in 0..):
+    cond
+    | found >= 0: found
+    | (np_witness :~ List)[lit[0] :~ Int] != lit[1]: k
+    | ~else: found
+
+//   [what kind of edge, from, to] -- `#'state` for the ones a memory passes along,
+// and otherwise the clause the edge belongs to, which is what colours it.
+// `~picked` re-aims the root at the members an extraction actually takes.
+fun np_edge_list(~picked: picked :: Boolean) :: List:
+  def last_state = [#'st, np_vars - 1, np_pick_side(np_vars - 1)]
+  List.append(
+    & for List (v in 0..np_vars):
+        List.append(
+          & for List (side in 0..2):
+              [[#'state, [#'op, v, side], (if v == 0 | [#'arg] | [#'st, v - 1, side])],
+               [#'state, [#'st, v, side], [#'op, v, side]]]))
+    ++ List.append(
+         & for List (clause :~ List in np_members, c in 0..):
+             for List (lit :~ List in clause, k in 0..):
+               [c, [#'g, c, k], [#'op, lit[0], np_lit_side(lit)]])
+    ++ [[#'state, [#'root], last_state]]
+    ++ (for List (clause :~ List in np_members, c in 0..):
+          def k:
+            if picked | np_pick_member(clause) | clause.length() - 1
+          [#'root, [#'root], [#'g, c, k]])
+
+// Everything the extraction takes: one operator and one state per variable, one
+// term out of each clause class, and the root.
+def np_picked_keys:
+  [[#'arg]]
+    ++ List.append(
+         & for List (v in 0..np_vars):
+             [[#'op, v, np_pick_side(v)], [#'st, v, np_pick_side(v)]])
+    ++ (for List (clause :~ List in np_members, c in 0..):
+          [#'g, c, np_pick_member(clause)])
+    ++ [[#'root]]
+
+// The slide. The formula, then what the proof is going to do with it, then the
+// chain of assignments, a clause class at a time, the root, and last the thing the
+// whole picture is for: an effect-safe extraction is a satisfying assignment.
+fun slide_nphard():
+  def page = with_icon(titled("Effect-Safe Extraction is NP-Hard"))
+  // every node in its two drawings, plain and picked, each built once
+  fun np_pict(color :: String, w :: Real, text :: String, ~fill: fill :: String):
+    graph_node(~width: w, ~height: np_h, ~adj: "33878",
+               ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
+               ~fill: fill,
+               run(text, ~font: node_font, ~size: 40.0))
+  fun np_drawings(~fill: fill :: String) :: Map:
+    for values(m :~ Map = {}) ([key, text, color, w, _, _] in np_nodes):
+      m ++ { key: np_pict(color, w, text, ~fill: fill) }
+  def np_plain = np_drawings(~fill: node_white)
+  def np_green = np_drawings(~fill: node_green)
+  fun np_spots(keys :~ List, ~picked: picked :~ List = []) :: Map:
+    for values(m :~ Map = {}) ([key, _, _, _, x, y] in np_nodes):
+      skip_when !keys.contains(key)
+      m ++ { key: [(if picked.contains(key) | np_green | np_plain)[key], x, y] }
+
+  // which keys are on the slide after each press
+  fun np_kind_keys(kinds :~ List) :: List:
+    for List ([key, _, _, _, _, _] in np_nodes):
+      keep_when kinds.contains((key :~ List)[0])
+      key
+  def np_chain_keys = np_kind_keys([#'arg, #'op, #'st])
+  fun np_clause_keys(upto :: Int) :: List:
+    for List ([key, _, _, _, _, _] in np_nodes):
+      keep_when (key :~ List)[0] == #'g && (key :~ List)[1] < upto
+      key
+  def np_all_keys = np_chain_keys ++ np_clause_keys(np_clauses.length()) ++ [[#'root]]
+  // an edge is drawn once both of its ends are up
+  fun np_wires(keys :~ List, ~picked: picked :: Boolean = #false) :: List:
+    for List (e :~ List in np_edge_list(~picked: picked)):
+      keep_when keys.contains(e[1]) && keys.contains(e[2])
+      e
+
+  // The classes: the two states a variable's two operators leave are one class, and
+  // a clause is a class of its literals. A one-literal clause is a class too, and
+  // comes out as a blob round the single node.
+  fun np_tube(a, b, ~dash: dash) :: List:
+    eclass_region(np_middle(a), np_middle(b), ~dash: dash) ++ [band_below]
+  def np_state_classes:
+    for values(m :~ Map = {}) (v in 0..np_vars):
+      m ++ { [#'cls, #'st, v]: np_tube([#'st, v, 0], [#'st, v, 1], ~dash: state_class) }
+  fun np_clause_classes(upto :: Int) :: Map:
+    for values(m :~ Map = {}) (clause :~ List in np_members, c in 0..):
+      skip_when c >= upto
+      m ++ { [#'cls, #'g, c]: np_tube([#'g, c, 0], [#'g, c, clause.length() - 1],
+                                      ~dash: np_dashes[c]) }
+
+  // The formula, with each clause in the colour of the class that encodes it.
+  def np_math = draw.Font(~name: math_font, ~size: 52.0)
+  fun np_math_text(s :: String) :: pc.Pict: pc.text(s, ~font: np_math)
+  def np_formula:
+    def parts:
+      for List (clause :~ List in np_clauses, c in 0..):
+        def inner:
+          for values(s = "") (lit :~ List in clause, k in 0..):
+            s +& (if k == 0 | "" | " ∨ ") +& np_lit_name(lit)
+        np_math_text(if clause.length() == 1 | inner | "(" +& inner +& ")")
+          .colorize(np_dashes[c])
+    def line:
+      pc.beside(~vert: #'bottom, np_math_text("ϕ = "),
+                & List.append(& for List (p in parts, c in 0..):
+                                  if c == 0 | [p] | [np_math_text(" ∧ "), p]))
+    { #'formula: [line, 95.0, 240.0, band_callout] }
+
+  // What the proof is about to do, in a box in the corner Keynote had it in.
+  def np_proof:
+    def head = pc.text("Proof Strategy",
+                       ~font: draw.Font(~name: prose_font, ~size: 34.0, ~weight: #'bold))
+    def line_font = draw.Font(~name: prose_font, ~size: 30.0)
+    def rows = ["1. Take a boolean formula ϕ.",
+                "2. Construct an e-graph G.",
+                "3. G has an effect-safe extraction",
+                "     if and only if ϕ is satisfiable."]
+    def body:
+      pc.stack(~sep: 8.0, ~horiz: #'left, head,
+               & for List (s in rows): pc.text(s, ~font: line_font))
+    def pad = 26.0
+    { #'proof: [put(frame_box(body.width + 2 * pad, body.height + 2 * pad), body, pad, pad),
+                95.0, 355.0, band_callout] }
+
+  // and, at the end, the assignment the extraction spells out, where the strategy was
+  def np_answer:
+    def head = pc.text("Satisfying assignment:",
+                       ~font: draw.Font(~name: prose_font, ~size: 38.0, ~weight: #'bold))
+    def body:
+      pc.stack(~sep: 10.0, ~horiz: #'left, head,
+               & for List (v in 0..np_vars):
+                   np_math_text("x" +& np_sub[v] +& " = "
+                                  +& (if (np_witness :~ List)[v] | "⊤" | "⊥")))
+    { #'answer: [body, 95.0, 700.0, band_callout] }
+
+  fun np_callout(key, target, ~body: body :~ List, ~color: color,
+                 ~content: content :: pc.Pict) :: Map:
+    def [x, y, _] = np_at[target]
+    { key: [bubble_at(np_plain[target], ~spot: [x, y], ~body: body,
+                      ~color: color, ~content: content),
+            0.0, 0.0, band_callout] }
+  def np_says_assign:
+    np_callout(#'says, [#'op, np_vars - 1, 0], ~body: [700.0, 700.0], ~color: talk_blue,
+               ~content: prose_stack([[["effectful operators", #'bold]],
+                                      [["encode variable", #'bold]],
+                                      [["assignments", #'bold]]]))
+  def np_says_clause:
+    np_callout(#'says, [#'g, np_clauses.length() - 1, 0], ~body: [170.0, 900.0],
+               ~color: talk_blue,
+               ~content: prose_stack([[["one term per literal,", #'bold]],
+                                      [["all in one class", #'bold]]]))
+
+  fun frame(~keys: keys :~ List,
+            ~clauses: clauses :: Int = 0,
+            ~chain: chain :: Boolean = #false,
+            ~picked: picked :: Boolean = #false,
+            ~over: over :~ Map = {}) :: Frame:
+    Frame(~picts: np_spots(keys, ~picked: if picked | np_picked_keys | [])
+                    ++ np_formula
+                    ++ (if chain | np_state_classes | {})
+                    ++ np_clause_classes(clauses)
+                    ++ over,
+          ~edges: np_wires(keys, ~picked: picked))
+  magic_slide(
+    page,
+    [// the formula, and what the proof is going to do with it
+     frame(~keys: [], ~over: np_proof),
+     // the chain of assignments: two operators per variable on one thread of state,
+     // and the state after either of them is the same state
+     frame(~keys: np_chain_keys, ~chain: #true, ~over: np_proof ++ np_says_assign),
+     // a class per clause, one term per literal, each reading the operator that
+     // makes its literal true
+     frame(~keys: np_chain_keys ++ np_clause_keys(1), ~chain: #true, ~clauses: 1,
+           ~over: np_proof),
+     frame(~keys: np_chain_keys ++ np_clause_keys(2), ~chain: #true, ~clauses: 2,
+           ~over: np_proof),
+     frame(~keys: np_chain_keys ++ np_clause_keys(3), ~chain: #true, ~clauses: 3,
+           ~over: np_proof ++ np_says_clause),
+     // and the root, which takes one term out of every clause class
+     frame(~keys: np_all_keys, ~chain: #true, ~clauses: 3, ~over: np_proof),
+     // what the picture is for: the extraction is the satisfying assignment
+     frame(~keys: np_all_keys, ~chain: #true, ~clauses: 3, ~picked: #true,
+           ~over: np_proof ++ np_answer)],
+    ~wire: np_wire_specs, ~edge_band: band_wires)
+
+// The reduction's own edges. A state edge is thick and blue, like every other edge
+// in this deck that a memory passes along; a clause's edges are thin and in the
+// clause's own colour, since what they say is which operator that literal needs.
+fun np_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) (e :~ List in es):
+    cond
+    | e[0] == #'state:
+        arrow(~on: q, at[e[1]], at[e[2]], ~color: keynote_blue, ~line_width: 6, ~gap: 4)
+    | e[0] == #'root:
+        arrow(~on: q, at[e[1]], at[e[2]], ~color: "black", ~line_width: 4, ~gap: 4)
+    | ~else:
+        arrow(~on: q, at[e[1]], at[e[2]], ~color: np_dashes[e[0] :~ Int],
+              ~line_width: 3, ~gap: 4)
+
+// -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
 //
 // The generator gives each build stage its own slide; every object was a
@@ -3730,8 +4085,9 @@ def all_slides:
    // 2 -- what makes extraction hard once there are effects
    divider(1), in_section(1, slide_update), in_section(1, slide_egraph),
    in_section(1, slide_rue), in_section(1, slide_fork), in_section(1, slide_41),
-   // 3 -- the algorithm
+   // 3 -- what makes it hard, and the algorithm
    divider(2),
+   in_section(2, slide_nphard),
    in_section(2, slide_34),
    // 4 -- the numbers
    divider(3),

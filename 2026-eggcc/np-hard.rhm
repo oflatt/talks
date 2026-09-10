@@ -41,10 +41,9 @@ current_default_font("Helvetica Neue")
 // asked for and not the one that was drawn.
 register_fonts("fonts")
 check_fonts(
-  ["Helvetica Neue"],
+  ["Helvetica Neue", "Nimbus Sans"],
   ["PT Mono"],
-  ["Apple Chancery"],
-  ["Times New Roman"]
+  ["Times New Roman", "Tinos"]
 )
 
 // Images sit next to this file, so the program travels as a folder.
@@ -4136,11 +4135,11 @@ def slide_5 = slide_canvas(
                                  run(". ", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("2. Construct an e-graph ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(".", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("3. Show that ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(" has an effect-safe extraction if and only if ",
                                      ~size: 40.0), run(" is satisfiable. ", ~size: 40.0))))),
   // Group (id 834)
@@ -4716,11 +4715,11 @@ def slide_6 = slide_canvas(
                                  run(". ", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("2. Construct an e-graph ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(".", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("3. Show that ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(" has an effect-safe extraction if and only if ",
                                      ~size: 40.0), run(" is satisfiable. ", ~size: 40.0))))),
   // Group (id 955)
@@ -5343,11 +5342,11 @@ def slide_7 = slide_canvas(
                                  run(". ", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("2. Construct an e-graph ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(".", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("3. Show that ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(" has an effect-safe extraction if and only if ",
                                      ~size: 40.0), run(" is satisfiable. ", ~size: 40.0))))),
   // Group (id 1086)
@@ -6000,11 +5999,11 @@ def slide_8 = slide_canvas(
                                  run(". ", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("2. Construct an e-graph ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(".", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("3. Show that ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(" has an effect-safe extraction if and only if ",
                                      ~size: 40.0), run(" is satisfiable. ", ~size: 40.0))))),
   // Group (id 1223)
@@ -6675,11 +6674,11 @@ def slide_9 = slide_canvas(
                                  run(". ", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("2. Construct an e-graph ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(".", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("3. Show that ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(" has an effect-safe extraction if and only if ",
                                      ~size: 40.0), run(" is satisfiable. ", ~size: 40.0))))),
   // Effectful operators encode variable assignments (id 1348)
@@ -7217,11 +7216,11 @@ def slide_10 = slide_canvas(
                                  run(". ", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("2. Construct an e-graph ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(".", ~size: 40.0)),
                             para(~line_spacing: pair(#'percent, 1.2),
                                  run("3. Show that ", ~size: 40.0),
-                                 run("G", ~font: "Apple Chancery", ~size: 40.0),
+                                 run("G", ~font: "Times New Roman", ~italic: #true, ~size: 40.0),
                                  run(" has an effect-safe extraction if and only if ",
                                      ~size: 40.0), run(" is satisfiable. ", ~size: 40.0))))),
   // Effectful operators encode variable assignments (id 1455)
@@ -7417,7 +7416,7 @@ def slide_11 = slide_canvas(
                                                          ~size: 48.0,
                                                          ~color: hex("0076BA")),
                                                        run(
-                                                         "G", ~font: "Apple Chancery",
+                                                         "G", ~font: "Times New Roman", ~italic: #true,
                                                          ~size: 48.0,
                                                          ~color: hex("0076BA")))))),
                               at(0.0, 0.0,
