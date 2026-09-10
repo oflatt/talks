@@ -135,8 +135,15 @@ fun make_arrow(~width: width :: maybe(Real) = #false,
   // point, and something centred in it reads as pushed to the left of the shape it
   // is written in. The point is wide at its base, so a label centred on the whole
   // still has the shape behind it.
+  //
+  // Down the descent, not down the whole box: a line of text is as tall as its font,
+  // and what is drawn of it stops at the baseline unless something in it has a tail.
+  // Centring the box therefore hangs the letters half a descent high -- which on a
+  // label of capitals and x-height, which is what these are, is the whole of what
+  // makes it look off centre.
   overlay(~horiz: #'left, ~vert: #'top,
-          ~dx: (w - content.width) / 2, ~dy: (h - content.height) / 2,
+          ~dx: (w - content.width) / 2,
+          ~dy: (h - (content.height - content.descent)) / 2,
           shape, content)
 
 // A cog, for the step of a picture that is a machine rather than a thing: teeth

@@ -737,8 +737,7 @@ fun slide_12():
 
   // the list, with one of its rules standing over by the graph instead of in it
   fun rules_with(staged) :: Map:
-    { #'rules_label: [rules_label, & rules_label_at, band_rule] }
-      ++ rule_over(#'rule1, ~staged: staged == #'rule1)
+    rule_over(#'rule1, ~staged: staged == #'rule1)
       ++ rule_over(#'rule2, ~staged: staged == #'rule2)
   def rules_over = rules_with(#false)
 
@@ -2045,8 +2044,6 @@ fun rule_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 // column rather than across the slide from it: two sizes in one column reads as one
 // of them mattering more, and neither does.
 def rule_size = 45.0
-def rules_label:
-  pc.text("Rules:", ~font: draw.Font(~name: prose_font, ~size: rule_size))
 
 // A rule is built out of pieces rather than set as one string, so that a copy of any
 // one piece can be lifted off it: what a rule matched is shown by lighting up its
@@ -2128,10 +2125,11 @@ def rule_ident:
 
 def rules_line_1 = rule_assoc[#'pict] :~ pc.Pict
 def rules_line_2 = rule_zero[#'pict] :~ pc.Pict
-// where the three of them sit, under the term, and where the label above them does
-def rules_label_at = [99.0, 340.0]
-def rules_line_1_at = [129.0, 416.0]
-def rules_line_2_at = [129.0, 496.0]
+// Where the three of them sit: under the term, left-aligned with it. They carry no
+// heading -- a list of rewrites under a program is a list of rewrites, and a word
+// saying so is a line of the slide spent on nothing.
+def rules_line_1_at = [129.0, 340.0]
+def rules_line_2_at = [129.0, 420.0]
 def rules_line_3_at:
   [(rules_line_2_at :~ List)[0],
    (rules_line_2_at :~ List)[1] + rules_line_2.height + 13.0]
@@ -3368,8 +3366,7 @@ fun slide_40():
   def handoff:
     { #'program: [input_line, term_x, term_y, band_nodes],
       #'rule_1: [rules_line_1, & rules_line_1_at, band_nodes],
-      #'rule_2: [rules_line_2, & rules_line_2_at, band_nodes],
-      #'rules_label: [rules_label, & rules_label_at, band_nodes] }
+      #'rule_2: [rules_line_2, & rules_line_2_at, band_nodes] }
   magic_slide(page,
               [& for List (k in 1..(flow_steps :~ List).length() + 1):
                    workflow_frame(scene, flow_keys(~upto: k)),
