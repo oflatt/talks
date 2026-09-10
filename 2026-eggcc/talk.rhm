@@ -22,7 +22,6 @@ import:
   draw
 
 export:
-  workflow_scene
   slide_width
   slide_height
   all_slides
@@ -600,8 +599,8 @@ fun slide_12():
   // crossing the shape of this graph cannot be drawn without.
   def spot:
     { #'one: [780.0, row_in], #'a: [1010.0, row_in],
-      #'plus: [860.0, row_mid], #'minus_r: [1140.0, row_mid],
-      #'zero: [1310.0, row_mid],
+      #'plus: [860.0, row_mid], #'minus_r: [1190.0, row_mid],
+      #'zero: [1360.0, row_mid],
       #'minus: [780.0, row_out], #'plus_r: [1010.0, row_out] }
   fun middle(key) :: List:
     [(spot[key] :~ List)[0] + nd / 2, (spot[key] :~ List)[1] + nd / 2]
@@ -2068,6 +2067,9 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
   def y_eq = y_below + introduced.height + 10.0
   def eq_x = 20.0 + (body.width - equalities.width) / 2
   { #'pict: pc.overlay(box, body),
+    // the rule without the box round it, for a picture that holds it inside a box
+    // of its own
+    #'body: body,
     // the line the rule adds, and where it is drawn
     #'segs: introduced_segs,
     #'at: row_at(introduced, y_below),
@@ -3023,6 +3025,7 @@ def flow_egraph_size = [280.0, 300.0]
 // their column at full size.
 def flow_rules_scale = 0.8
 def flow_code_scale = 0.54
+def flow_rule_scale = 0.55
 
 fun workflow_scene(~section: section :: Int,
                    ~ir: ir :: Boolean = #false,
@@ -3032,9 +3035,15 @@ fun workflow_scene(~section: section :: Int,
     if section == 0
     | input_line
     | code_updates(parts, ~states: #false).scale(flow_code_scale)
+  // each picture holds the rules its own section works with: the two the term is
+  // rewritten by, and then the one about writes that the last few slides were
+  // about -- which is written as if nothing had effects, and is the point
   def rule_1 = rules_line_1.scale(flow_rules_scale)
   def rule_2 = rules_line_2.scale(flow_rules_scale)
-  def rules_body = pc.stack(~sep: 10.0, ~horiz: #'left, rule_1, rule_2)
+  def rules_body:
+    if section == 0
+    | pc.stack(~sep: 10.0, ~horiz: #'left, rule_1, rule_2)
+    | ((update_rule(~value: #true) :~ Map)[#'body] :~ pc.Pict).scale(flow_rule_scale)
   def program = stage_pieces("Input Program", program_body, flow_program_at)
   def rules = stage_pieces("Optimization Rules", rules_body, flow_rules_at)
   def egraph:
@@ -3057,18 +3066,23 @@ fun workflow_scene(~section: section :: Int,
   def [_, rules_body_x, rules_body_y, _] = rules[#'body] :~ List
   { #'program_box: program[#'box], #'program: program[#'body],
     #'rules_box: rules[#'box],
-    #'rule_1: [rule_1, rules_body_x, rules_body_y, band_nodes],
-    #'rule_2: [rule_2, rules_body_x, rules_body_y + rule_1.height + 10.0, band_nodes],
     #'egraph_box: egraph[#'box], #'egraph: egraph[#'body],
     #'optimized_box: optimized[#'box], #'optimized: optimized[#'body],
     #'extract: [extract_arrow(~safe: safe), & flow_arrow_at, band_nodes] }
+    // the first picture's two rules are separate picts, since they fly to two
+    // separate places on the slide after it; the second's is one block
+    ++ (if section == 0
+        | { #'rule_1: [rule_1, rules_body_x, rules_body_y, band_nodes],
+            #'rule_2: [rule_2, rules_body_x, rules_body_y + rule_1.height + 10.0,
+                       band_nodes] }
+        | { #'rules_body: rules[#'body] })
     ++ (if ir | { #'ir_box: ir_stage[#'box], #'ir: ir_stage[#'body] } | {})
 
 // The first picture arrives a stage at a time: what you write, what else you write,
 // what they are put into, and what comes back out.
 def flow_steps:
   [[#'program_box, #'program],
-   [#'rules_box, #'rule_1, #'rule_2],
+   [#'rules_box, #'rule_1, #'rule_2, #'rules_body],
    [#'egraph_box, #'egraph],
    [#'extract, #'optimized_box, #'optimized]]
 fun flow_keys(~upto: upto :: Int, ~ir: ir :: Boolean = #false) :: List:
@@ -3135,12 +3149,13 @@ fun slide_40():
 // -------------------------------------------------------------------------------------
 // slide_41: the same workflow, once the program has effects.
 //
-// It opens on the picture the first one ended with, unchanged, and then says what is
-// different, one press at a time: the program is the one the last few slides have
-// been about, and so is the answer; it goes through a dataflow IR, which is what
-// makes an effect a value; extraction is the part that has to be taught about them;
-// and the rules, which have not moved or changed, are the point of the whole thing.
-// The last press hands the IR's program on to the slide that builds a graph from it.
+// It comes after the whole of the effectful example, and reads it back as a picture:
+// it opens on the workflow the first section ended with, unchanged, and then says
+// what is different, one press at a time. The program is the one the last four
+// slides were about, and so is the answer; it goes through a dataflow IR, which is
+// what makes an effect a value; the rule is the one those slides wrote, and it is
+// written as if nothing had effects; and extraction is the part that has to be
+// taught about them, which is the rest of the talk.
 fun slide_41():
   def page = titled(flow_title)
   def pure = workflow_scene(~section: 0)
@@ -3167,23 +3182,13 @@ fun slide_41():
                             ~color: talk_blue,
                             ~content: prose_stack([[["write rules", #'bold]],
                                                    [["without worry", #'bold]]])) }
-  // the program in its threaded form, on its way into the box the next slide builds
-  // its graph from
-  def parts = code_parts()
-  def handoff:
-    { #'ir: [code_updates(parts, ~states: #true), & code_updates_at, band_nodes],
-      // everything but those two lines, over the frame and under them
-      #'code_rest: [code_body(parts, ~states: #true, ~only: [0, 3]),
-                    code_x, code_y, band_edges],
-      #'code_frame: [parts[#'frame], code_x, code_y, band_below] }
   magic_slide(page,
               [workflow_frame(pure, flow_all),
                workflow_frame(effectful, flow_all),
                workflow_frame(with_ir, ir_keys, ~ir: #true, ~over: threading),
                workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading ++ refine),
                workflow_frame(safe, ir_keys, ~ir: #true,
-                              ~over: threading ++ refine ++ worry),
-               Frame(~picts: handoff)],
+                              ~over: threading ++ refine ++ worry)],
               ~wire: workflow_wire)
 
 def all_slides:
@@ -3193,9 +3198,8 @@ def all_slides:
    in_section(0, slide_2), in_section(0, slide_40), in_section(0, slide_12),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
-   divider(1), in_section(1, slide_update), in_section(1, slide_41),
-   in_section(1, slide_egraph),
-   in_section(1, slide_rue), in_section(1, slide_fork),
+   divider(1), in_section(1, slide_update), in_section(1, slide_egraph),
+   in_section(1, slide_rue), in_section(1, slide_fork), in_section(1, slide_41),
    // 3 -- the algorithm
    divider(2),
    in_section(2, slide_34),
