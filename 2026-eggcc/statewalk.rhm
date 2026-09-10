@@ -1,0 +1,147 @@
+#lang rhombus/and_meta
+// The statewalk DP algorithm -- the paper's Tiger -- over an e-graph given as data.
+//
+// Kept out of the deck because it is not about drawing: an e-graph here is a list of
+// [node, class, argument classes] and a list of which nodes carry state, and what
+// comes back is the table the algorithm fills in. The slide that shows it executing
+// renders exactly what these functions return, so the animation cannot drift from
+// the algorithm, and the algorithm can be read without reading a slide.
+//
+// A *statewalk* is a chain of effectful terms starting at the argument state, each
+// taking the last as its state operand. Its *extractable set* is the pure classes it
+// puts within reach: a pure term is usable only if every effectful subterm it needs
+// is on the walk, which is the whole of why what is built from one is effect-safe.
+// Two walks that end in the same class and reach the same pure classes can be
+// swapped for one another, so the table is indexed by (class, extractable set) and
+// keeps one walk per pair. How many a single class ends up with is its *statewalk
+// width*, and it is the parameter the algorithm's cost is measured in.
+
+export:
+  eff_node
+  eff_class
+  pure_classes
+  extract_map
+  es_of
+  statewalks
+  dp_term
+  dp_best
+
+// what each node takes, and what is in each class
+fun args_of(g :~ List) :: Map:
+  for values(m :~ Map = {}) ([key, _, args] in g): m ++ { key: args }
+fun class_of(g :~ List) :: Map:
+  for values(m :~ Map = {}) ([key, cls, _] in g): m ++ { key: cls }
+fun members_of(g :~ List) :: Map:
+  for values(m :~ Map = {}) ([key, cls, _] in g):
+    m ++ { cls: (if m.has_key(cls) | (m[cls] :~ List) ++ [key] | [key]) }
+// every class, in the order the graph lists them, which is what puts an extractable
+// set in a fixed order so that two of them can be compared as lists
+fun all_classes(g :~ List) :: List:
+  for values(acc :~ List = []) ([_, c, _] in g):
+    if acc.contains(c) | acc | acc ++ [c]
+
+// A node carries state if it *is* a state value or takes one; a class does if the
+// nodes in it do. Everything else is pure.
+fun eff_node(g :~ List, ~states: states :~ List, key) :: Boolean:
+  def state_classes: for List (k in states): class_of(g)[k]
+  states.contains(key)
+    || (for values(any = #false) (a in args_of(g)[key] :~ List):
+          any || state_classes.contains(a))
+fun eff_class(g :~ List, ~states: states :~ List, c) :: Boolean:
+  for values(any = #false) (k in members_of(g)[c] :~ List):
+    any || eff_node(g, ~states: states, k)
+fun pure_classes(g :~ List, ~states: states :~ List) :: List:
+  for List (c in all_classes(g)):
+    keep_when !eff_class(g, ~states: states, c)
+    c
+
+// ExtractMap: a representative pure term per class, built bottom-up as any extractor
+// would, with the one restriction that the only effectful terms available are the
+// ones the walk holds.
+fun extract_map(g :~ List, ~states: states :~ List, walk :~ List) :: Map:
+  def on_walk: for List (k in walk): class_of(g)[k]
+  recur loop(e :~ Map = {}):
+    def next:
+      for values(e :~ Map = e) ([key, c, ka] in g):
+        skip_when eff_node(g, ~states: states, key) || e.has_key(c)
+        def ok:
+          for values(all = #true) (a in ka :~ List):
+            all && (if eff_class(g, ~states: states, a)
+                    | on_walk.contains(a)
+                    | e.has_key(a))
+        if ok | e ++ { c: key } | e
+    if next.length() == e.length() | e | loop(next)
+
+// and the set of classes that reaches, in the graph's own order
+fun es_of(g :~ List, ~states: states :~ List, walk :~ List) :: List:
+  def reached = extract_map(g, ~states: states, walk).keys()
+  for List (c in all_classes(g)): keep_when reached.contains(c); c
+
+// The ways one walk can be extended: an effectful node that takes the class the walk
+// ends in, and whose pure operands the walk already reaches. Comes back as
+// [node, the class it is in].
+fun grow(g :~ List, ~states: states :~ List, c, es :~ List) :: List:
+  for values(acc :~ List = []) ([key, kc, ka] in g):
+    skip_when !eff_node(g, ~states: states, key)
+    skip_when !((ka :~ List).contains(c))
+    def ok:
+      for values(all = #true) (a in ka :~ List):
+        all && (eff_class(g, ~states: states, a) || es.contains(a))
+    if ok | acc ++ [[key, kc]] | acc
+
+// The table, as the rows the worklist writes, in order: [class, extractable set,
+// walk]. The rows *are* the worklist -- a new one is appended and `i` says how far
+// the queue has been read -- so what comes back is both the table and the order it
+// was filled in, which is what a slide showing it execute needs.
+fun statewalks(g :~ List, ~states: states :~ List, ~arg: arg) :: List:
+  def first = [class_of(g)[arg], es_of(g, ~states: states, [arg]), [arg]]
+  recur loop(rows :~ List = [first], i = 0):
+    cond
+    | i == rows.length(): rows
+    | ~else:
+        def [c, es, walk] = rows[i] :~ List
+        def more:
+          for values(rows :~ List = rows) ([key, kc] in grow(g, ~states: states, c, es)):
+            def walk2 = (walk :~ List) ++ [key]
+            def es2 = es_of(g, ~states: states, walk2)
+            def seen:
+              for values(any = #false) (row :~ List in rows):
+                any || (row[0] == kc && row[1] == es2)
+            if seen | rows | rows ++ [[kc, es2, walk2]]
+        loop(more, i + 1)
+
+// The term one row stands for: the last term of its walk with every operand
+// resolved -- a pure one to whatever ExtractMap found for its class under this walk,
+// an effectful one to the walk's own member of that class. An operand is therefore
+// only ever something the walk itself passed through, which is the whole of why the
+// term is effect-safe. Comes back as the nodes it is built from.
+fun dp_term(g :~ List, ~states: states :~ List, row :~ List) :: List:
+  def walk :~ List = row[2]
+  def rep :~ Map = extract_map(g, ~states: states, walk)
+  def args :~ Map = args_of(g)
+  def cls :~ Map = class_of(g)
+  fun on_walk(c):
+    for values(found = #false) (k in walk): if cls[k] == c | k | found
+  recur build(key = walk[walk.length() - 1], acc :~ List = []):
+    if acc.contains(key)
+    | acc
+    | for values(acc :~ List = acc ++ [key]) (a in args[key] :~ List):
+        build(if eff_class(g, ~states: states, a) | on_walk(a) | rep[a], acc)
+
+// The row the algorithm ends on: of the entries at the root class, the one whose
+// term is cheapest. A node of the term apiece, which is the cost model the rest of
+// this graph's arithmetic uses.
+fun dp_best(g :~ List, ~states: states :~ List, ~root: root) :: List:
+  def rows = statewalks(g, ~states: states, ~arg: root_arg(g, ~states: states))
+  def at_root: for List (row :~ List in rows): keep_when row[0] == root; row
+  for values(best :~ List = at_root[0]) (row :~ List in at_root):
+    if dp_term(g, ~states: states, row).length()
+         < dp_term(g, ~states: states, best).length()
+    | row
+    | best
+
+// The argument state: the one effectful node that takes nothing, which is where
+// every walk starts.
+fun root_arg(g :~ List, ~states: states :~ List):
+  for values(found = #false) ([key, _, ka] in g):
+    if eff_node(g, ~states: states, key) && (ka :~ List) == [] | key | found

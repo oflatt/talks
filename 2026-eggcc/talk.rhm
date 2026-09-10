@@ -14,6 +14,10 @@ import:
   // is on it rather than from two finished pictures. See magicmove.rhm for why the
   // pict library's own `magic_move` cannot do this job.
   "magicmove.rhm" open
+  // The statewalk DP algorithm, over an e-graph given as data. Prefixed rather than
+  // opened: what it exports are names about extraction in general, and this file has
+  // its own `extract_map`-shaped ideas about the word.
+  "statewalk.rhm" as sw
   // Prefixed, not `open`: rhombus/pict and the runtime above both export
   // `blank`, and opening both would make that name ambiguous.
   pict as pc
@@ -1883,75 +1887,21 @@ fun chain_safe(~root: root) :: List:
 // class and reach the same pure classes are interchangeable, so the table is
 // indexed by (class, extractable set) and keeps one walk per pair.
 
-// Which nodes carry state: the state values themselves, and whatever takes one.
-def chain_state_classes :~ List:
-  for List (k in chain_states :~ List): chain_class_of[k]
+// The statewalk DP, over this graph. The algorithm itself is in statewalk.rhm --
+// these are the deck's names for it, bound to the e-graph the slides draw.
 fun chain_eff_node(key) :: Boolean:
-  (chain_states :~ List).contains(key)
-    || (for values(any = #false) (a in chain_args_of(chain_graph)[key] :~ List):
-          any || chain_state_classes.contains(a))
-// and a class is effectful if the nodes in it are
+  sw.eff_node(chain_graph, ~states: chain_states, key)
 fun chain_eff_class(c) :: Boolean:
-  for values(any = #false) (k in chain_members_of[c] :~ List): any || chain_eff_node(k)
-
-// Every class, in the order the graph lists them, which is what puts an extractable
-// set in a fixed order so two of them can be compared as lists.
-def chain_all_classes :~ List:
-  for values(acc :~ List = []) ([_, c, _] in chain_graph :~ List):
-    if acc.contains(c) | acc | acc ++ [c]
+  sw.eff_class(chain_graph, ~states: chain_states, c)
 def chain_pure_classes :~ List:
-  for List (c in chain_all_classes): keep_when !chain_eff_class(c); c
-fun chain_as_set(l :~ List) :: List:
-  for List (c in chain_all_classes): keep_when l.contains(c); c
-
-// ExtractMap: a representative pure term per class, using only the effectful terms
-// the walk holds. Standard bottom-up extraction with that one restriction, which is
-// the whole of why what it returns is effect-safe with this walk.
+  sw.pure_classes(chain_graph, ~states: chain_states)
 fun chain_extract_map(walk :~ List) :: Map:
-  def on_walk: for List (k in walk): chain_class_of[k]
-  recur loop(e :~ Map = {}):
-    def next:
-      for values(e :~ Map = e) ([key, c, ka] in chain_graph :~ List):
-        skip_when chain_eff_node(key) || e.has_key(c)
-        def ok:
-          for values(all = #true) (a in ka :~ List):
-            all && (if chain_eff_class(a) | on_walk.contains(a) | e.has_key(a))
-        if ok | e ++ { c: key } | e
-    if next.length() == e.length() | e | loop(next)
+  sw.extract_map(chain_graph, ~states: chain_states, walk)
 fun chain_es_of(walk :~ List) :: List:
-  chain_as_set(chain_extract_map(walk).keys())
-
-// The ways one walk can be extended: an effectful node that takes the walk's class,
-// whose pure operands the walk already reaches. Comes back as [node, its class].
-fun chain_grow(c, es :~ List) :: List:
-  for values(acc :~ List = []) ([key, kc, ka] in chain_graph :~ List):
-    skip_when !chain_eff_node(key)
-    skip_when !((ka :~ List).contains(c))
-    def ok:
-      for values(all = #true) (a in ka :~ List):
-        all && (chain_eff_class(a) || es.contains(a))
-    if ok | acc ++ [[key, kc]] | acc
-
-// The table, as the rows the worklist writes, in order: [class, extractable set,
-// walk]. The rows *are* the worklist -- a new one is appended and `i` says how far
-// the queue has been read -- so the list that comes back is both the table and the
-// order the slide fills it in.
+  sw.es_of(chain_graph, ~states: chain_states, walk)
+// `s0` is the argument state, which is where every walk starts
 fun chain_statewalks() :: List:
-  def first = [chain_class_of[#'s0], chain_es_of([#'s0]), [#'s0]]
-  recur loop(rows :~ List = [first], i = 0):
-    cond
-    | i == rows.length(): rows
-    | ~else:
-        def [c, es, walk] = rows[i] :~ List
-        def more:
-          for values(rows :~ List = rows) ([key, kc] in chain_grow(c, es)):
-            def walk2 = (walk :~ List) ++ [key]
-            def es2 = chain_es_of(walk2)
-            def seen:
-              for values(any = #false) (row :~ List in rows):
-                any || (row[0] == kc && row[1] == es2)
-            if seen | rows | rows ++ [[kc, es2, walk2]]
-        loop(more, i + 1)
+  sw.statewalks(chain_graph, ~states: chain_states, ~arg: #'s0)
 
 // The term one row of the table stands for: the last term of its walk, with every
 // operand resolved -- a pure one to the representative ExtractMap found for its
@@ -1959,26 +1909,13 @@ fun chain_statewalks() :: List:
 // This is the whole of why what comes back is effect-safe: an operand is only ever
 // something the walk itself passed through.
 fun chain_dp_term(row :~ List) :: List:
-  def walk :~ List = row[2]
-  def rep :~ Map = chain_extract_map(walk)
-  def args :~ Map = chain_args_of(chain_graph)
-  fun on_walk(c):
-    for values(found = #false) (k in walk):
-      if chain_class_of[k] == c | k | found
-  recur build(key = walk[walk.length() - 1], acc :~ List = []):
-    if acc.contains(key)
-    | acc
-    | for values(acc :~ List = acc ++ [key]) (a in args[key] :~ List):
-        build(if chain_eff_class(a) | on_walk(a) | rep[a], acc)
+  sw.dp_term(chain_graph, ~states: chain_states, row)
 
 // The row the algorithm ends on: of the entries at the root class, the one whose
 // term is cheapest. A node of the term apiece, which is the cost this graph's other
 // arithmetic uses.
 fun chain_dp_best() :: List:
-  def at_root:
-    for List (row :~ List in chain_statewalks()): keep_when row[0] == chain_root; row
-  for values(best :~ List = at_root[0]) (row :~ List in at_root):
-    if chain_dp_term(row).length() < chain_dp_term(best).length() | row | best
+  sw.dp_best(chain_graph, ~states: chain_states, ~root: chain_root)
 
 // The distinct extractable sets, in the order the table first writes one. A set is
 // then a number, and a number is a colour: white for the one the bare argument state
@@ -4152,10 +4089,9 @@ fun slide_dp():
     def nodes :~ Map = chain_nodes(~fills: fills)
     for values(m :~ Map = {}) (key in spots.keys()):
       def [x, y] = spots[key] :~ List
-      // a node with one fill is the runtime's shape, a split one is already a pict
-      def n = nodes[key]
-      def q :~ pc.Pict = if n is_a pc.Pict | n | as_pict(n)
-      m ++ { key: [q.scale(k), x, y] }
+      // a node with one fill is the runtime's shape and a split one is already a
+      // pict; `as_pict` takes either
+      m ++ { key: [as_pict(nodes[key]).scale(k), x, y] }
 
   // --------------------------------------------------------------- what a row draws
   // The walk of one row, as edges between the terms it is made of, tagged with which
@@ -4267,9 +4203,7 @@ fun slide_dp():
     def nodes :~ Map = chain_nodes(~picked: term)
     for values(m :~ Map = {}) (key in term):
       def [x, y] = spots[key] :~ List
-      def n = nodes[key]
-      def q :~ pc.Pict = if n is_a pc.Pict | n | as_pict(n)
-      m ++ { key: [q.scale(dp_scale), x, y] }
+      m ++ { key: [as_pict(nodes[key]).scale(dp_scale), x, y] }
 
   // Where the answer goes once it is on its own. Placed by hand rather than left
   // where the graph had it: the graph puts the two members of the value class at
@@ -4348,6 +4282,9 @@ def all_slides:
    // 3 -- what makes it hard, and the algorithm
    divider(2),
    in_section(2, slide_nphard),
+   // and then what the algorithm does instead, on the example the section before
+   // this one was about
+   in_section(2, slide_dp),
    in_section(2, slide_34),
    // 4 -- the numbers
    divider(3),
