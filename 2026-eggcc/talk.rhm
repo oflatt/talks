@@ -4239,15 +4239,49 @@ fun slide_dp():
       keep_when walk.contains(key) || (row[1] :~ List).contains(c)
       [#'blob, key]
 
+  // ------------------------------------------------------------------- naming it
+  // A bubble on the mass, for the press that is about nothing else. It aims at a
+  // blank the size of what the mass covers rather than at any one node: the thing
+  // being named is the shape, not a box in it.
+  fun reach_bubble(row :~ List) :: Map:
+    def marks :~ List: for List (e :~ List in blob_marks(row)): e[1]
+    def box:
+      for values(b :~ List = [1.0e9, 1.0e9, -1.0e9, -1.0e9]) (key in marks):
+        def [x, y] = (away :~ Map)[key] :~ List
+        def [w, h] = node_size(key)
+        [math.min(b[0], x - blob_pad * dp_scale),
+         math.min(b[1], y - blob_pad * dp_scale),
+         math.max(b[2], x + (w + blob_pad) * dp_scale),
+         math.max(b[3], y + (h + blob_pad) * dp_scale)]
+    def ghost:
+      pc.blank(~width: (box[2] :~ Real) - (box[0] :~ Real),
+               ~height: (box[3] :~ Real) - (box[1] :~ Real))
+    { #'reach: [bubble_at(ghost, ~spot: [box[0], box[1]],
+                          ~body: [150.0, 300.0], ~color: talk_blue,
+                          ~content: prose([["extractable set", #'bold]])),
+                0.0, 0.0, band_callout] }
+
   // ----------------------------------------------------------------- and the answer
   // The term the algorithm settles on, as the graph's own nodes turned green.
-  fun green_over(term :~ List) :: Map:
+  fun green_over(term :~ List, spots :~ Map) :: Map:
     def nodes :~ Map = chain_nodes(~picked: term)
     for values(m :~ Map = {}) (key in term):
-      def [x, y] = (away :~ Map)[key] :~ List
+      def [x, y] = spots[key] :~ List
       def n = nodes[key]
       def q :~ pc.Pict = if n is_a pc.Pict | n | as_pict(n)
       m ++ { key: [q.scale(dp_scale), x, y] }
+
+  // Where the answer goes once it is on its own. Placed by hand rather than left
+  // where the graph had it: the graph puts the two members of the value class at
+  // opposite ends of a row, and an answer that takes the far one has its `return`
+  // reaching back across the state it also takes, straight through that node's
+  // label. On its own it is nine nodes and can be a tree.
+  def term_spots:
+    { #'x: [905.0, 250.0], #'one: [1065.0, 250.0],
+      #'a: [720.0, 400.0], #'xp: [930.0, 400.0], #'s0: [1170.0, 400.0],
+      #'us: [865.0, 560.0],
+      #'v3: [790.0, 720.0], #'s3: [1030.0, 720.0],
+      #'ret: [865.0, 880.0] }
   // an edge stays if the node it leaves is in the term, aimed at whichever member of
   // its class the term took
   fun term_edges(term :~ List) :: List:
@@ -4260,10 +4294,12 @@ fun slide_dp():
       keep_when taken.has_key(c)
       [e[0], e[1], taken[c]]
 
-  fun step(n :: Int, ~reach: reach :: Boolean) :: Frame:
+  fun step(n :: Int, ~reach: reach :: Boolean,
+           ~name: name :: Boolean = #false) :: Frame:
     def row :~ List = rows[n]
     Frame(~picts: picts_at(away, chain_dp_fills(rows.sublist(0, n + 1)),
-                           ~scale: dp_scale),
+                           ~scale: dp_scale)
+                    ++ (if name | reach_bubble(row) | {}),
           ~edges: chain_edges(4) ++ walk_edges(row)
                     ++ (if reach | blob_marks(row) | []))
 
@@ -4281,7 +4317,7 @@ fun slide_dp():
      // its own, because it is the idea the rest of the slide is made of -- what that
      // walk puts within reach
      step(0, ~reach: #false),
-     step(0, ~reach: #true),
+     step(0, ~reach: #true, ~name: #true),
      & for List (n in 1..rows.length()): step(n, ~reach: #true),
      // ------------------------------------------------------------------ the answer
      // The table is full. Nothing is in reach of anything in particular any more:
@@ -4293,10 +4329,10 @@ fun slide_dp():
      // ExtractMap found for that class under *this* walk -- which is why the value
      // the `return` takes is the one this walk's write returned and never the other.
      Frame(~picts: picts_at(away, chain_dp_fills(rows), ~scale: dp_scale)
-                     ++ green_over(chain_dp_term(chain_dp_best())),
+                     ++ green_over(chain_dp_term(chain_dp_best()), away),
            ~edges: chain_edges(4) ++ walk_edges(chain_dp_best())),
-     // and then just that term, where the graph had it
-     Frame(~picts: green_over(chain_dp_term(chain_dp_best())),
+     // and then just that term, laid out as the tree it is
+     Frame(~picts: green_over(chain_dp_term(chain_dp_best()), term_spots),
            ~edges: term_edges(chain_dp_term(chain_dp_best())))],
     ~stage: blob_stage, ~stage_band: band_below)
 
