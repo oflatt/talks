@@ -107,7 +107,9 @@ fun make_arrow(~width: width :: maybe(Real) = #false,
                child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
   def content = gap_stack(child, ...)
-  def w = width || ((content.width + 2 * padding) / (1 - head))
+  // wide enough that the label fits the part of the shape it is centred in, with
+  // `padding` either side of it -- see `text_w` below for which part that is
+  def w = width || ((content.width + 2 * padding) / (1 - head * shaft))
   def h = height || ((content.height + 2 * padding) / shaft)
   def hw = w * head                     // the point
   def sy0 = (h - h * shaft) / 2         // and the bar it grows out of
@@ -131,18 +133,23 @@ fun make_arrow(~width: width :: maybe(Real) = #false,
          target.path(path, ~dx: dx, ~dy: dy)
          target.restore(),
        ~width: w, ~height: h)
-  // Centred in the arrow, not in the bar: the bar is only the part left of the
-  // point, and something centred in it reads as pushed to the left of the shape it
-  // is written in. The point is wide at its base, so a label centred on the whole
-  // still has the shape behind it.
-  //
+  // Across: the bar, plus the wedge of the point that is still at least as tall as
+  // the bar. Not the whole shape -- the point tapers to nothing, so the room beside
+  // a label centred on the bounding box is flat and empty on its left and a closing
+  // taper on its right, and the label reads as shoved at the point. Not the bar
+  // alone either, which reads as shoved the other way. The wedge is where the
+  // point's edge, from (w - hw, 0) to (w, h/2), passes the top of the bar at `sy0`:
+  // that is `w - hw * shaft`, since `2 * sy0 / h` is `1 - shaft`. (Keynote itself
+  // centres in the bounding box; the shaft is what DrawingML's own `rightArrow`
+  // gives text, and is what this looks right at.)
+  def text_w = w - hw * shaft
   // Down the descent, not down the whole box: a line of text is as tall as its font,
   // and what is drawn of it stops at the baseline unless something in it has a tail.
   // Centring the box therefore hangs the letters half a descent high -- which on a
   // label of capitals and x-height, which is what these are, is the whole of what
   // makes it look off centre.
   overlay(~horiz: #'left, ~vert: #'top,
-          ~dx: (w - content.width) / 2,
+          ~dx: (text_w - content.width) / 2,
           ~dy: (h - (content.height - content.descent)) / 2,
           shape, content)
 
