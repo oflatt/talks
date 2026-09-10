@@ -1681,15 +1681,15 @@ fun chain_safe(~root: root) :: List:
 // as data flowing down. The numbers below are its answer with a few nudged by eye.
 // `python3 graph_layout.py` checks the table as it stands and names anything it
 // breaks, which is what makes nudging safe; `--solve` searches again from scratch.
-def chain_rows: [210.0, 296.0, 436.0, 524.0, 612.0, 700.0, 788.0]
+def chain_rows: [210.0, 300.0, 460.0, 556.0, 652.0, 748.0, 844.0]
 def chain_pos:
-  { #'x: [1475.0, 0], #'one: [1583.0, 0],
-    #'a: [1302.0, 1], #'xp: [1411.0, 1], #'s0: [1607.0, 1],
-    #'u1: [1525.0, 2],
-    #'us: [1112.0, 3], #'s1: [1542.0, 3],
-    #'v3: [1117.0, 4], #'v1: [1318.0, 4], #'u2: [1444.0, 4],
-    #'s3: [1329.0, 5], #'s2: [1483.0, 5], #'v2: [1592.0, 5],
-    #'ret: [1439.0, 6] }
+  { #'x: [1332.1, 0], #'one: [1466.1, 0],
+    #'a: [1150.6, 1], #'xp: [1287.6, 1], #'s0: [1476.6, 1],
+    #'u1: [1474.8, 2],
+    #'us: [1112.6, 3], #'s1: [1535.9, 3],
+    #'v3: [1096.8, 4], #'v1: [1311.1, 4], #'u2: [1460.1, 4],
+    #'s3: [1322.8, 5], #'s2: [1500.0, 5], #'v2: [1634.5, 5],
+    #'ret: [1475.9, 6] }
 
 // Where each callout's body sits. Placed by eye, not solved -- but kept here
 // beside the layout it has to live in, because a bubble is a box like any other
@@ -1699,7 +1699,7 @@ def chain_bubbles:
   { #'ask: [1150.0, 850.0],           // "extract", below the return
     #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
     #'redundant: [1645.0, 550.0],     // "Redundant update", below the write it kills
-    #'idea: [1380.0, 520.0] }         // "an effect-safe program", where the answer left room
+    #'idea: [1200.0, 780.0] }         // "an effect-safe program", under the answer
 
 fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
 def chain_layers = (chain_rows :~ List).length()
@@ -2719,15 +2719,15 @@ fun slide_fork():
   // audience has seen the walk, and what is new is where it goes instead.
   def safe = chain_safe(~root: chain_root)
   def safe_edges = edges_among(safe)
-  def safe_ask_over:
-    { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
+  fun safe_ask_over(~at: at :~ List = chain_spots[#'ret]) :: Map:
+    { #'ask: [bubble_at(chain_plain[#'ret], ~spot: at,
                         ~body: (chain_bubbles :~ Map)[#'ask], ~color: talk_green,
                         ~content: prose_stack([[["extract", #'bold]],
                                                [["effect-safely", #'bold]]])),
               0.0, 0.0, band_callout] }
   fun again(~picks: picks :: List = [], ~point: point = #false) :: Frame:
     Frame(~picts: chain_node_picts(chain_spots, picks) ++ rule_over
-                    ++ rule_classes_under ++ safe_ask_over
+                    ++ rule_classes_under ++ safe_ask_over()
                     ++ (if point == #false
                         | {}
                         | { #'point: [chain_pointer, & chain_point_at(point)] }),
@@ -2740,7 +2740,31 @@ fun slide_fork():
   // and what it comes back with, which is the program we wanted: one write, no
   // memory read twice, and cheaper than the program we started from
   def safe_term:
-    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ safe_ask_over,
+    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ safe_ask_over(),
+          ~edges: safe_edges)
+
+  // Then the answer settles into the shape of the term it is. The places the graph
+  // gave these nodes were solved for the whole graph, and with two thirds of it
+  // gone they are the wrong places: what the write returns is off to one side, so
+  // the `return`'s two arrows leave it at almost the same angle and lie over each
+  // other. So the write moves under the middle of its own arguments and its results
+  // line up beneath it, value on the left, and the `return` sits under the two of
+  // them. Nothing arrives or leaves -- every node is in both frames -- so the press
+  // is the answer tidying itself, not a new picture.
+  // The leaves stay where the graph had them; what moves is everything below. The
+  // write comes up a row -- the write it competed with is gone, so the row is free
+  // -- and centres under its three arguments; its results line up beneath it, value
+  // on the left as the `return` reads them; and the `return` sits under the two of
+  // them, so its arrows leave at opposite angles instead of together.
+  def answer_spots:
+    { #'x: chain_spots[#'x], #'one: chain_spots[#'one],
+      #'a: chain_spots[#'a], #'xp: chain_spots[#'xp], #'s0: chain_spots[#'s0],
+      #'us: [1256.0, chain_y(2)],
+      #'v3: [1256.0, chain_y(3)], #'s3: [1390.0, chain_y(3)],
+      #'ret: [1265.0, chain_y(4)] }
+  def answer:
+    Frame(~picts: chain_node_picts(answer_spots, safe) ++ rule_over
+                    ++ safe_ask_over(~at: answer_spots[#'ret]),
           ~edges: safe_edges)
 
   // and what the rest of the talk is for
@@ -2759,13 +2783,13 @@ fun slide_fork():
     // side of the picture, and dropping them empties it
     { #'idea: [body, & (chain_bubbles :~ Map)[#'idea], band_callout] }
   def wanted:
-    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ idea_over,
+    Frame(~picts: chain_node_picts(answer_spots, safe) ++ rule_over ++ idea_over,
           ~edges: safe_edges)
 
   chain_slide(
     page,
     chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
-      ++ [term, blamed] ++ rewalk ++ [safe_term, wanted])
+      ++ [term, blamed] ++ rewalk ++ [safe_term, answer, wanted])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
