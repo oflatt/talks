@@ -24,6 +24,9 @@ import:
 export:
   code_parts
   update_rule
+  chain_statewalks
+  chain_class_of
+  chain_pure_classes
   slide_width
   slide_height
   all_slides
@@ -1855,6 +1858,92 @@ fun chain_safe(~root: root) :: List:
     for values(best :~ List = answers[0]) (answer :~ List in answers):
       if (answer[0] :~ Int) < (best[0] :~ Int) | answer | best
   best[1] :~ List
+
+
+// -------------------------------------------------------------------------------------
+// The statewalk DP algorithm, run on the graph above.
+//
+// The talk's third section shows this executing, so it is computed here rather than
+// drawn by hand: the slide renders whatever these functions return, and an edit to
+// the graph moves the animation with it instead of leaving it saying something the
+// graph no longer does.
+//
+// A *statewalk* is the chain of effectful terms from the argument state to some
+// effectful class: each one takes the last as its state operand. Its *extractable
+// set* is the pure classes it puts within reach -- a pure term is only usable if
+// every effectful subterm it needs is on the walk. Two walks that reach the same
+// class and reach the same pure classes are interchangeable, so the table is
+// indexed by (class, extractable set) and keeps one walk per pair.
+
+// Which nodes carry state: the state values themselves, and whatever takes one.
+def chain_state_classes :~ List:
+  for List (k in chain_states :~ List): chain_class_of[k]
+fun chain_eff_node(key) :: Boolean:
+  (chain_states :~ List).contains(key)
+    || (for values(any = #false) (a in chain_args_of(chain_graph)[key] :~ List):
+          any || chain_state_classes.contains(a))
+// and a class is effectful if the nodes in it are
+fun chain_eff_class(c) :: Boolean:
+  for values(any = #false) (k in chain_members_of[c] :~ List): any || chain_eff_node(k)
+
+// Every class, in the order the graph lists them, which is what puts an extractable
+// set in a fixed order so two of them can be compared as lists.
+def chain_all_classes :~ List:
+  for values(acc :~ List = []) ([_, c, _] in chain_graph :~ List):
+    if acc.contains(c) | acc | acc ++ [c]
+def chain_pure_classes :~ List:
+  for List (c in chain_all_classes): keep_when !chain_eff_class(c); c
+fun chain_as_set(l :~ List) :: List:
+  for List (c in chain_all_classes): keep_when l.contains(c); c
+
+// ExtractMap: a representative pure term per class, using only the effectful terms
+// the walk holds. Standard bottom-up extraction with that one restriction, which is
+// the whole of why what it returns is effect-safe with this walk.
+fun chain_extract_map(walk :~ List) :: Map:
+  def on_walk: for List (k in walk): chain_class_of[k]
+  recur loop(e :~ Map = {}):
+    def next:
+      for values(e :~ Map = e) ([key, c, ka] in chain_graph :~ List):
+        skip_when chain_eff_node(key) || e.has_key(c)
+        def ok:
+          for values(all = #true) (a in ka :~ List):
+            all && (if chain_eff_class(a) | on_walk.contains(a) | e.has_key(a))
+        if ok | e ++ { c: key } | e
+    if next.length() == e.length() | e | loop(next)
+fun chain_es_of(walk :~ List) :: List:
+  chain_as_set(chain_extract_map(walk).keys())
+
+// The ways one walk can be extended: an effectful node that takes the walk's class,
+// whose pure operands the walk already reaches. Comes back as [node, its class].
+fun chain_grow(c, es :~ List) :: List:
+  for values(acc :~ List = []) ([key, kc, ka] in chain_graph :~ List):
+    skip_when !chain_eff_node(key)
+    skip_when !((ka :~ List).contains(c))
+    def ok:
+      for values(all = #true) (a in ka :~ List):
+        all && (chain_eff_class(a) || es.contains(a))
+    if ok | acc ++ [[key, kc]] | acc
+
+// The table, as the rows the worklist writes, in order: [class, extractable set,
+// walk]. The rows *are* the worklist -- a new one is appended and `i` says how far
+// the queue has been read -- so the list that comes back is both the table and the
+// order the slide fills it in.
+fun chain_statewalks() :: List:
+  def first = [chain_class_of[#'s0], chain_es_of([#'s0]), [#'s0]]
+  recur loop(rows :~ List = [first], i = 0):
+    cond
+    | i == rows.length(): rows
+    | ~else:
+        def [c, es, walk] = rows[i] :~ List
+        def more:
+          for values(rows :~ List = rows) ([key, kc] in chain_grow(c, es)):
+            def walk2 = (walk :~ List) ++ [key]
+            def es2 = chain_es_of(walk2)
+            def seen:
+              for values(any = #false) (row :~ List in rows):
+                any || (row[0] == kc && row[1] == es2)
+            if seen | rows | rows ++ [[kc, es2, walk2]]
+        loop(more, i + 1)
 
 // Where the nodes go: the y of each row, and each node's left edge and row.
 //
