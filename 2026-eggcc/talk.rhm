@@ -3404,15 +3404,23 @@ fun slide_41():
                                          [[["Refine the semantics to", #'plain]],
                                           [["only ", #'plain], ["effect-safe", #'bold],
                                            [" programs", #'plain]]])) }
+  // Green, like the other two: these are the three things that go right, and a
+  // bubble in the diagram's own blue reads as another stage of it rather than as a
+  // remark about one.
   def worry:
     { #'worry: flow_callout(page, safe[#'rules_box], ~body: [706.0, 840.0],
-                            ~color: talk_blue,
+                            ~color: talk_green,
                             ~content: prose_stack([[["Write rules", #'bold]],
                                                    [["without worry", #'bold]]])) }
+  // A press per thing to say. What extraction becomes and the bubble about it are
+  // two of those things, not one: the picture changing is what happened, and the
+  // bubble is what to make of it, so the arrow is renamed on its own press and the
+  // bubble arrives on the next.
   magic_slide(page,
               [workflow_frame(pure, flow_all),
                workflow_frame(effectful, flow_all),
                workflow_frame(with_ir, ir_keys, ~ir: #true, ~over: threading),
+               workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading),
                workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading ++ refine),
                workflow_frame(safe, ir_keys, ~ir: #true,
                               ~over: threading ++ refine ++ worry)],
