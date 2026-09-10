@@ -689,9 +689,11 @@ fun slide_12():
      [#'op_aside, #'plus_r, #'a]]
   // what the first rule made equal, until the third rule makes a bigger class of
   // it and the tube says so instead
-  def es_same: [[#'eq_blue, #'minus, #'plus_r]]
-  def es_zero: [[#'eq_orange, #'minus_r, #'zero]]
-  def es_graph = es_term ++ es_rewrite ++ es_same ++ es_zero
+  // The operand arrows. The equalities are not here: each one is the dashed line a
+  // rule's `→` turned into, laid by `eq_of` as a pict of its own.
+  def es_graph = es_term ++ es_rewrite
+  // the dashed line a rule concluded, once it has fired
+  fun eq_of(key) :: Map: rule_arrow(key, ~as_line: #true)
 
   // The data-flow arrow, left of the graph, on a layer of its own: it arrives with
   // the term and stays put, so no press has anything to do to it. It sits out at
@@ -720,7 +722,10 @@ fun slide_12():
   // a pointer that passes a node goes behind it. It goes back to the list
   // afterwards, so the next rule finds the place free.
   def rule_stage = [800.0, 276.0]
-  def rule_stage_scale = 0.85
+  // The same size it is written at in the list, not a smaller one: a key drawn with
+  // the *same* pict in both frames is moved and nothing else, while two sizes of it
+  // cross-fade, which reads as the words smearing on the way over.
+  def rule_stage_scale = 1.0
   fun rule_box(key, ~staged: staged :: Boolean) :: List:
     def rule :~ Map = rule_of[key]
     def factor = if staged | rule_stage_scale | 1.0
@@ -773,6 +778,81 @@ fun slide_12():
       keep_when binds.has_key(name)
                   && (only == #false || (only :~ List).contains(name))
       [#'point, [#'match, name], binds[name]]
+  // What each rule concludes, as the dashed line that says it: the two nodes it
+  // makes equal, and -- for the third rule, whose two classes become one -- the very
+  // curve the region round them is drawn along, so the line and the wash agree from
+  // end to end by construction.
+  fun rule_eq_line(key) :: List:
+    def color = (rule_of[key] :~ Map)[#'color]
+    fun straight(a, b) :: List:
+      def p = border_toward(a, b)
+      def q = border_toward(b, a)
+      eq_line(p, p, q, q, ~dash: color)
+    match key
+    | #'rule1: straight(#'minus, #'plus_r)
+    | #'rule2: straight(#'minus_r, #'zero)
+    | ~else:
+        def corner = [middle(#'plus_r)[0], middle(#'minus)[1]]
+        eq_line(middle(#'minus), corner, corner, middle(#'a), ~dash: color)
+  // where a line between two nodes leaves the first of them
+  fun border_toward(from, to) :: List:
+    def [fx, fy] = middle(from)
+    def [tx, ty] = middle(to)
+    def dx = tx - fx
+    def dy = ty - fy
+    def far = 1.0e9
+    def t:
+      math.min(if math.abs(dx) > 1.0e-9 | (nd / 2) / math.abs(dx) | far,
+               if math.abs(dy) > 1.0e-9 | (nd / 2) / math.abs(dy) | far)
+    [fx + dx * t, fy + dy * t]
+
+  // The `→` of a rule, keyed by the equality it becomes. `~as_line` is the far end
+  // of that: the dashed line, where it belongs in the picture. The glyph is padded
+  // out to the line's own size so the two share a top left corner, which is what
+  // puts the words in the middle of the line they turn into rather than at its end.
+  fun rule_arrow(key, ~as_line: as_line :: Boolean = #false,
+                 ~staged: staged :: Boolean = #true) :: Map:
+    def rule :~ Map = rule_of[key]
+    def line :~ List = rule_eq_line(key)
+    def [line_pict, lx, ly] = line
+    cond
+    | as_line: { [#'same, key]: [line_pict, lx, ly, band_wires] }
+    | ~else:
+        def [_, factor, x, y] = rule_box(key, ~staged: staged)
+        def [glyph, dx] = rule[#'arrow]
+        def small = (glyph :~ pc.Pict).scale(factor)
+        def whole :~ pc.Pict = rule[#'pict]
+        def dy = whole.height - (glyph :~ pc.Pict).height
+        def padded:
+          pc.overlay(pc.blank(~width: (line_pict :~ pc.Pict).width,
+                              ~height: (line_pict :~ pc.Pict).height),
+                     small)
+        { [#'same, key]: [padded,
+                          x + factor * dx - (padded.width - small.width) / 2,
+                          y + factor * dy - (padded.height - small.height) / 2,
+                          band_wires] }
+
+  // The nodes a rule adds, drawn as nodes, in a row under the rule that names them:
+  // applying a rule is then two presses, the words becoming boxes and the boxes
+  // moving out into the graph, rather than one press doing both at once.
+  //
+  // Under the rule rather than exactly where the words are, because a node is 100
+  // wide and the words that name two of them are 50 apart -- boxes where the words
+  // stand would overlap each other. They are laid out around the middle of the side
+  // they come from, so each one still starts under its own word.
+  fun rule_nodes_below(key) :: Map:
+    def rule :~ Map = rule_of[key]
+    def [_, factor, x, y] = rule_box(key, ~staged: #true)
+    def [segs, dx0] = rule[#'rhs]
+    def line :~ pc.Pict = rule[#'pict]
+    def added :~ List = rule[#'adds]
+    def pitch = nd + 20.0
+    def mid = x + factor * (dx0 + (segs_pict(segs) :~ pc.Pict).width / 2)
+    def top = y + factor * line.height + 12.0
+    for values(m :~ Map = {}) (name in added, i in 0..):
+      def left:
+        mid - (added.length() * pitch - (pitch - nd)) / 2 + i * pitch
+      m ++ { name: [plain[name], left, top, band_flight] }
   fun rule_flight(key) :: Map:
     def rule :~ Map = rule_of[key]
     def [_, factor, x, y] = rule_box(key, ~staged: #true)
@@ -828,7 +908,7 @@ fun slide_12():
       laid(laid(blank_slide, region_of(#'a, #'a, ~fill: eclass_solid)),
            region_of(#'minus, #'plus_r, ~fill: eclass_solid))
     [eclass_tube(flat, middle(#'minus), corner, corner, middle(#'a),
-                 ~dash: rule_green, ~thickness: nd + 2 * eclass_pad,
+                 ~thickness: nd + 2 * eclass_pad,
                  // square ends, so that the tube meets those rectangles flush
                  ~cap: #'projecting, ~solid: #true),
      0.0, 0.0, band_below]
@@ -938,29 +1018,44 @@ fun slide_12():
      Frame(~picts: rules_over ++ flow_over ++ spots_of(keys_term, []),
            ~edges: es_term),
      // ------------------------------------------------------ and then the rewrites
-     // The first rule comes over to what it matched, and its variables light up and
-     // point at the nodes they stand for. `β` and `γ` both point at the `1`, which
-     // is a thing worth seeing: one node, matched twice.
+     // Applying a rule is four movements, and each gets a press: it comes over to
+     // what it matched and its variables light up and point at the nodes they stand
+     // for; the pointers move to the other side of the arrow, where the same
+     // variables stand; the words on that side become the nodes they name, where
+     // they stand; and those nodes move out into the graph while the `→` between the
+     // two sides becomes the dashed line that says the two terms are one value.
+     //
+     // `β` and `γ` both pointing at the `1` is worth the first of those presses on
+     // its own: one node, matched twice.
      Frame(~picts: spots_of(keys_term, [], ~gold: rule_matched(#'rule1))
-                     ++ rules_with(#'rule1) ++ flow_over ++ rule_chips(#'rule1),
+                     ++ rules_with(#'rule1) ++ flow_over ++ rule_chips(#'rule1)
+                     ++ rule_arrow(#'rule1),
            ~edges: es_term ++ rule_points(#'rule1)),
-     // the pointers move to the other side of the arrow, where the same variables
-     // stand: the same bindings, now saying what the rule builds
      Frame(~picts: spots_of(keys_term, [], ~gold: rule_matched(#'rule1))
                      ++ rules_with(#'rule1) ++ flow_over
-                     ++ rule_chips(#'rule1, ~side: #'rhs) ++ rule_flight(#'rule1),
+                     ++ rule_chips(#'rule1, ~side: #'rhs) ++ rule_flight(#'rule1)
+                     ++ rule_arrow(#'rule1),
            ~edges: es_term ++ rule_points(#'rule1, ~side: #'rhs)),
-     // and what it builds flies out of it and becomes two nodes, with the dashed
-     // line that says the term it matched and the term it made are one value
-     Frame(~picts: spots_of(keys_rewrite, []) ++ rules_over ++ flow_over,
-           ~edges: es_term ++ es_rewrite ++ es_same),
+     Frame(~picts: spots_of(keys_term, [], ~gold: rule_matched(#'rule1))
+                     ++ rules_with(#'rule1) ++ flow_over
+                     ++ rule_nodes_below(#'rule1) ++ rule_arrow(#'rule1),
+           ~edges: es_term),
+     Frame(~picts: spots_of(keys_rewrite, []) ++ rules_over ++ flow_over ++ eq_of(#'rule1),
+           ~edges: es_term ++ es_rewrite),
      // The second rule the same way, with nothing to move to its right-hand side:
      // what it concludes is a constant, so the match is the whole of the matching.
      Frame(~picts: spots_of(keys_rewrite, [], ~gold: rule_matched(#'rule2))
                      ++ rules_with(#'rule2) ++ flow_over
-                     ++ rule_chips(#'rule2) ++ rule_flight(#'rule2),
-           ~edges: es_term ++ es_rewrite ++ es_same ++ rule_points(#'rule2)),
-     Frame(~picts: spots_of(keys_all, []) ++ rules_over ++ flow_over,
+                     ++ rule_chips(#'rule2) ++ rule_flight(#'rule2)
+                     ++ eq_of(#'rule1) ++ rule_arrow(#'rule2),
+           ~edges: es_term ++ es_rewrite ++ rule_points(#'rule2)),
+     Frame(~picts: spots_of(keys_rewrite, [], ~gold: rule_matched(#'rule2))
+                     ++ rules_with(#'rule2) ++ flow_over
+                     ++ rule_nodes_below(#'rule2)
+                     ++ eq_of(#'rule1) ++ rule_arrow(#'rule2),
+           ~edges: es_term ++ es_rewrite),
+     Frame(~picts: spots_of(keys_all, []) ++ rules_over ++ flow_over
+                     ++ eq_of(#'rule1) ++ eq_of(#'rule2),
            ~edges: es_graph)]
 
   // The third rule concludes nothing new: its right-hand side is one variable, so
@@ -993,18 +1088,23 @@ fun slide_12():
                         | {}
                         | { #'point: [pointer, & point_at(point)] })
                     ++ (if merged | merged_under | classes_under)
+                    // Every equality on the slide is the dashed line one rule's `→`
+                    // turned into. Once the two classes merge, the first rule's line
+                    // is the one the merged region is drawn along, and the third
+                    // rule's `→` becomes that line -- so the first rule's own goes.
+                    ++ eq_of(#'rule2)
+                    ++ (if merged | eq_of(#'rule3) | eq_of(#'rule1))
                     ++ rules_over ++ flow_over
                     ++ (if third
                         | (if matching == #false
                            | third_over
                            | rule_over(#'rule3, ~staged: #true)
                                ++ rule_chips(#'rule3, ~side: matching)
-                               ++ union_chip(matching))
+                               ++ union_chip(matching)
+                               ++ rule_arrow(#'rule3))
                         | {})
                     ++ (if task | task_over | {}),
-          // once the classes merge the tube draws that equality, so the line the
-          // first rule left behind would be a second one down the same lane
-          ~edges: es_term ++ es_rewrite ++ es_zero ++ (if merged | [] | es_same)
+          ~edges: es_graph
                     ++ (if matching == #false
                         | []
                         | rule_points(#'rule3, ~side: matching)
@@ -1698,8 +1798,7 @@ def chain_pos:
 def chain_bubbles:
   { #'ask: [1150.0, 850.0],           // "extract", below the return
     #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
-    #'redundant: [1645.0, 550.0],     // "Redundant update", below the write it kills
-    #'idea: [1200.0, 780.0] }         // "an effect-safe program", under the answer
+    #'redundant: [1645.0, 550.0] }    // "Redundant update", below the write it names
 
 fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
 def chain_layers = (chain_rows :~ List).length()
@@ -1854,6 +1953,19 @@ fun slide_egraph():
       skip_when !targets.has_key(role)
       m ++ { targets[role]: [piece, line_x() + dx, line_y(k), band_flight] }
 
+  // The first write stores a value that the second one throws away. That is worth
+  // saying as soon as the graph is up and before any rule is stated, because it is
+  // the reason there is a rule at all -- so the slide that builds the graph ends on
+  // it. It comes up from below, since the two boxes right under that write are its
+  // own results.
+  def redundant_over:
+    { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
+                              ~body: (chain_bubbles :~ Map)[#'redundant],
+                              ~color: talk_blue,
+                              ~content: pc.stack(~sep: 2.0, ~horiz: #'center,
+                                                 small_prose("Redundant"),
+                                                 small_prose("update"))),
+                    0.0, 0.0, band_callout] }
   chain_slide(
     page,
     [Frame(),
@@ -1864,7 +1976,9 @@ fun slide_egraph():
                               ++ line_copies(k),
                     ~edges: chain_edges(k)),
               Frame(~picts: chain_node_picts(chain_spots_upto(k + 1), []) ++ mark,
-                    ~edges: chain_edges(k + 1))])])
+                    ~edges: chain_edges(k + 1))]),
+     Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ redundant_over,
+           ~edges: chain_edges(3))])
 
 // -------------------------------------------------------------------------------------
 // slide_rue: a rule over `update`, and the rule applied.
@@ -1964,6 +2078,9 @@ fun rw_rule(~lhs: lhs :~ List, ~rhs: rhs :~ List,
     // each side, and how far into the line it starts
     #'lhs: [lhs, 0.0],
     #'rhs: [rhs, lhs_pict.width + to.width],
+    // and the arrow between them, which is the equality the rule concludes: when
+    // the rule fires, this piece becomes the dashed line that says so
+    #'arrow: [to, lhs_pict.width],
     #'binds: binds, #'adds: adds, #'color: color }
 
 def rules_blue = draw.Color(4, 51, 255)
@@ -2164,7 +2281,10 @@ def eclass_solid = draw.Color(146, 146, 146)
 def eclass_grey = draw.Color(146, 146, 146, eclass_alpha)
 def eclass_width = 64.0 + 2 * eclass_pad     // a node, plus its padding
 fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
-                ~dash: dash_color,
+                // the dashed line down the middle of the tube, or `#false` for the
+                // wash on its own -- which is what a class wants when the rule that
+                // made it turns its own `→` into that line
+                ~dash: dash_color = #false,
                 // how fat the tube is: a node, plus its padding, and a slide whose
                 // nodes are bigger says so
                 ~thickness: thickness :: Real = eclass_width,
@@ -2198,7 +2318,28 @@ fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
   let p = if solid | (p :~ pc.Pict).alpha(eclass_alpha, ~composite: #true) | p
   // `#'show_dash` is this enum's spelling of the short dash the other equivalence
   // lines are drawn with; there is no `#'short_dash` in it.
-  put(p, stroked(draw.Pen(~color: dash_color, ~width: 4, ~style: #'show_dash)), 0.0, 0.0)
+  if dash_color == #false
+  | p
+  | put(p, stroked(draw.Pen(~color: dash_color, ~width: 4, ~style: #'show_dash)),
+        0.0, 0.0)
+
+// One of those dashed lines on its own, as a pict with a place of its own: what a
+// rule's `→` turns into when the rule fires. Cropped to what it draws, so the press
+// that turns the one into the other is a move and not a fade in place.
+fun eq_line(from :: List, c1 :: List, c2 :: List, to :: List, ~dash: dash_color) :: List:
+  def pad = 12.0
+  def xs = [from[0], c1[0], c2[0], to[0]]
+  def ys = [from[1], c1[1], c2[1], to[1]]
+  def left = (for values(m :~ Real = xs[0]) (v in xs): math.min(m, v)) - pad
+  def top = (for values(m :~ Real = ys[0]) (v in ys): math.min(m, v)) - pad
+  def right = (for values(m :~ Real = xs[0]) (v in xs): math.max(m, v)) + pad
+  def bottom = (for values(m :~ Real = ys[0]) (v in ys): math.max(m, v)) + pad
+  fun local(q :~ List) :: List: [q[0] - left, q[1] - top]
+  [eclass_tube(pc.blank(~width: right - left, ~height: bottom - top),
+               local(from), local(c1), local(c2), local(to),
+               ~dash: dash_color, ~thickness: 0.0,
+               ~width: right - left, ~height: bottom - top),
+   left, top]
 
 // The middle of a node placed at (x, y), which is where a tube through it runs.
 fun node_middle(node, x :: Real, y :: Real) :: List:
@@ -2281,9 +2422,6 @@ fun chain_point_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
 // A chain slide: its frames, over a page that no press touches.
 // What is drawn over what, bottom to top:
 //
-//   band_point   the pointers a rule lays over the picture while it matches, under
-//                the rule itself, so each reads as leaving the box's edge rather
-//                than crossing what is written in the box
 //   band_rule    the rule box -- under the picture it is about, so a region or a
 //                node that arrives while the rule is still up is drawn over it
 //   band_below   the regions round the classes
@@ -2291,18 +2429,21 @@ fun chain_point_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
 //   band_wires   the graph's own arrows, over the nodes and the regions, so an
 //                arrowhead is never tucked behind a box and a dashed equivalence
 //                inside a class is not washed out by it
+//   band_point   the pointers a rule lays over the picture while it matches -- over
+//                the rule too, so each one reads from the variable it starts at
+//                rather than from the point where it leaves the box
 //   band_chip    the chips laid over the rule's variables -- a band of their own,
 //                since two things in one band have no order between them and a chip
 //                behind the box it is laid on is invisible
 //   band_callout the bubbles
 //   band_flight  whatever is in flight, so a copy on its way from the rule into the
 //                graph is never behind the box it left
-def band_point = band_below - 2
 def band_rule = band_below - 1
 def band_wires = band_nodes + 1
-def band_chip = band_nodes + 2
-def band_callout = band_nodes + 3
-def band_flight = band_nodes + 4
+def band_point = band_nodes + 2
+def band_chip = band_nodes + 3
+def band_callout = band_nodes + 4
+def band_flight = band_nodes + 5
 
 fun chain_slide(page :: pc.Pict, frames :~ List) :: pc.Pict:
   magic_slide(page, frames, ~wire: chain_wire_specs, ~edge_band: band_wires,
@@ -2366,18 +2507,12 @@ def chain_ask_over:
 //   the conclusion  by the node it *becomes*, so text turns into a box
 //   an equality     by the class region it becomes, so text turns into a region
 
-// Where the rule goes when it fires, and how much smaller it is there. It steps down
-// out of the code box's column into the empty half of the slide under it, and it
-// keeps very nearly its size: the graph is over on the right, so the room is there,
-// and a rule that shrinks to half on being used reads as being put away rather than
-// as being applied.
-def rule_match_at = [150.0, 688.0]
-def rule_match_scale = 0.85
-
-// The rule box as drawn: how wide it is, and where its top left corner sits.
-fun rule_box(parts :~ Map, ~moved: moved :: Boolean) :: List:
-  def w = (parts[#'frame] :~ pc.Pict).width * (if moved | rule_match_scale | 1.0)
-  [w] ++ (if moved | rule_match_at | [rule_x, rule_y])
+// The rule box as drawn: how wide it is, and where its top left corner sits. It is
+// said beside the code and it stays there: a press whose whole content is the box
+// getting smaller is a press that says nothing, and the copies lifted off it read as
+// copies precisely because the box they came from has not moved.
+fun rule_box(parts :~ Map) :: List:
+  [(parts[#'frame] :~ pc.Pict).width, rule_x, rule_y]
 fun rule_factor(box :~ List, rule :~ Map) :: Real:
   box[0] / (rule[#'pict] :~ pc.Pict).width
 // a place inside the rule box, in the slide's own coordinates
@@ -2391,9 +2526,8 @@ fun rule_place(box :~ List, factor :: Real, at :~ List, dx :: Real = 0.0) :: Lis
 // Bind the result once per slide and hand that around: these are picts, and a frame
 // naming a rebuilt one is naming a different thing, which fades out and in over
 // itself instead of staying where it is.
-fun chain_rule_over(parts :~ Map, ~value: value :: Boolean,
-                    ~moved: moved :: Boolean = #false) :: Map:
-  def box = rule_box(parts, ~moved: moved)
+fun chain_rule_over(parts :~ Map, ~value: value :: Boolean) :: Map:
+  def box = rule_box(parts)
   { #'rule: [fill_width((update_rule(~value: value) :~ Map)[#'pict], box[0]),
              box[1], box[2], band_rule],
     #'band0: band_of(parts, 0) ++ [band_above],
@@ -2437,12 +2571,11 @@ fun gold_chip(p :: pc.Pict) :: pc.Pict:
 // the line the rule concludes; `~only` keeps the ones named, for the step where the
 // pointers slide down and only the variables the conclusion uses again have one.
 fun chain_rule_chips(parts :~ Map, ~value: value :: Boolean,
-                     ~moved: moved :: Boolean = #true,
                      ~lit: lit :: Boolean = #false,
                      ~from: from = #'premises,
                      ~only: only :~ List = []) :: Map:
   def rule :~ Map = update_rule(~value: value)
-  def box = rule_box(parts, ~moved: moved)
+  def box = rule_box(parts)
   def factor = rule_factor(box, rule)
   def slots :~ Map = (rule_slots(rule) :~ Map)[from]
   for values(m :~ Map = {}) (role in slots.keys()):
@@ -2478,17 +2611,33 @@ fun chain_match_edges(chips :~ Map, ~only: only :~ List = []) :: List:
     [#'m, key, role]
 
 // The line the rule concludes, in pieces, each keyed by the node it becomes. Only the
-// nodes the rule *adds* fly: the variables it uses again are already on the slide,
-// and their pieces are the chips above.
-fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
+// nodes the rule *adds* are here: the variables it uses again are already on the
+// slide, and their pieces are the chips above.
+//
+// `~as_nodes` draws each piece as the node it becomes, standing where the words
+// stood, which is the first half of applying the rule; the second half is the same
+// key at its place in the graph. Two presses, because one press asks the audience to
+// read a morph and a journey at the same time -- and because the node pict is then
+// the *same* pict in both frames, so the second press is a move with no fade in it.
+fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean,
+                      ~as_nodes: as_nodes :: Boolean = #false) :: Map:
   def rule :~ Map = update_rule(~value: value)
-  def box = rule_box(parts, ~moved: #true)
+  def box = rule_box(parts)
   def factor = rule_factor(box, rule)
   def added = (chain_reveals :~ List)[(chain_reveals :~ List).length() - 1] :~ List
   for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(rule[#'segs])):
     skip_when !added.contains(role)
-    m ++ { role: [(piece :~ pc.Pict).scale(factor),
-                  & rule_place(box, factor, rule[#'at], dx), band_flight] }
+    def small = (piece :~ pc.Pict).scale(factor)
+    def [x, y] = rule_place(box, factor, rule[#'at], dx)
+    m ++ { role: (if as_nodes
+                  | block:
+                      // the box grows around the word it replaces
+                      def node :~ pc.Pict = as_pict(chain_plain[role])
+                      [chain_plain[role],
+                       x - (node.width - small.width) / 2,
+                       y - (node.height - small.height) / 2,
+                       band_flight]
+                  | [small, x, y, band_flight]) }
 
 // The equalities, each keyed by the region it becomes. A copy is padded out to the
 // region's own size so that the two share a top left corner: a press interpolates one
@@ -2496,7 +2645,7 @@ fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
 // region they turn into rather than at its corner.
 fun chain_eq_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
   def rule :~ Map = update_rule(~value: value)
-  def box = rule_box(parts, ~moved: #true)
+  def box = rule_box(parts)
   def factor = rule_factor(box, rule)
   for values(m :~ Map = {}) ([class_key, eq, at] in rule[#'equalities] :~ List):
     def region :~ pc.Pict = ((chain_regions :~ Map)[class_key] :~ List)[0]
@@ -2535,9 +2684,10 @@ fun chain_walk_frames(~graph: graph :~ List,
                     ++ (if rule | rule_over | {})
                     ++ (if ask | ask_over | {}),
           ~edges: chain_edges(4))
-  [scene(),
-   scene(~rule: #true),
-   scene(~rule: #true, ~union: #true),
+  // It opens on the graph, the rule and the two classes the rule made -- which is
+  // where the slide before it left off, and the press that leaves that slide is what
+  // puts them here. Building them again would be the same three presses twice.
+  [scene(~rule: #true, ~union: #true),
    scene(~rule: #true, ~union: #true, ~ask: #true),
    & for List (row in 0..chain_layers):
        scene(~rule: #true, ~union: #true, ~ask: #true, ~point: row,
@@ -2552,31 +2702,12 @@ fun slide_rue():
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   def rule_over = chain_rule_over(parts, ~value: #true)
 
-  // The first write stores a value that the second one throws away, so the rule
-  // says so: a bubble on that write, once the rule has been stated and the write it
-  // adds is in the graph. It comes up from below, since the two boxes right under
-  // that write are its own results.
-  def redundant_over:
-    { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
-                              // in the corridor between the two writes, where it
-                              // can point straight at the one it is about. Smaller
-                              // than the deck's other bubbles, because that
-                              // corridor is only as wide as the gap between them.
-                              ~body: (chain_bubbles :~ Map)[#'redundant],
-                              ~color: talk_red,
-                              ~content: pc.stack(~sep: 2.0, ~horiz: #'center,
-                                                 small_prose("Redundant"),
-                                                 small_prose("update"))),
-                    0.0, 0.0, band_callout] }
-
-  // Applying the rule, a movement to a press -- see the block above `rule_match_at`
-  // for what each copy is keyed by, which is what makes each press a move.
+  // Applying the rule, a movement to a press -- see the block above `rule_box` for
+  // what each copy is keyed by, which is what makes each press a move.
   def rule_here = chain_rule_over(parts, ~value: #true)
-  def rule_there = chain_rule_over(parts, ~value: #true, ~moved: #true)
   // a chip per variable, and none for the operators: see `chain_matched`
   def chips_here:
-    chain_rule_chips(parts, ~value: #true, ~moved: #false, ~only: chain_matched)
-  def chips_there = chain_rule_chips(parts, ~value: #true, ~only: chain_matched)
+    chain_rule_chips(parts, ~value: #true, ~only: chain_matched)
   def chips_lit:
     chain_rule_chips(parts, ~value: #true, ~lit: #true, ~only: chain_matched)
   // the variables the conclusion uses again, which are the pointers that stay
@@ -2592,6 +2723,7 @@ fun slide_rue():
   // somewhere to go in the next press
   def pointed = reused
   def conclusion = chain_rule_pieces(parts, ~value: #true)
+  def conclusion_nodes = chain_rule_pieces(parts, ~value: #true, ~as_nodes: #true)
   def equalities = chain_eq_pieces(parts, ~value: #true)
 
   def program = chain_node_picts(chain_spots_upto(3), [])
@@ -2605,22 +2737,22 @@ fun slide_rue():
      Frame(~picts: program, ~edges: chain_edges(3)),
      // the rule, said beside the two lines of the program it is about
      Frame(~picts: program ++ rule_here ++ chips_here, ~edges: chain_edges(3)),
-     // it comes over to what it matched
-     Frame(~picts: program ++ rule_there ++ chips_there, ~edges: chain_edges(3)),
      // its variables light up and point at the nodes they matched
-     Frame(~picts: lit ++ rule_there ++ chips_lit,
+     Frame(~picts: lit ++ rule_here ++ chips_lit,
            ~edges: chain_edges(3) ++ chain_match_edges(chips_lit, ~only: pointed)),
      // and the pointers slide down to the line it concludes, taking the place of the
      // variables written there: the same bindings, now saying what the rule adds
-     Frame(~picts: lit ++ rule_there ++ chips_below ++ conclusion ++ equalities,
+     Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion ++ equalities,
            ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
-     // that line flies out and becomes a write of its own
-     Frame(~picts: with_rule ++ rule_there ++ equalities, ~edges: chain_edges(4)),
-     // and the equalities fly out and become the regions round the classes they make
-     Frame(~picts: with_rule ++ rule_there ++ rule_classes_under,
-           ~edges: chain_edges(4)),
-     // last, a word about the write the rule has just made redundant
-     Frame(~picts: with_rule ++ rule_there ++ rule_classes_under ++ redundant_over,
+     // the words of that line become the nodes they name, standing where the words
+     // stood
+     Frame(~picts: lit ++ rule_here ++ conclusion_nodes ++ equalities,
+           ~edges: chain_edges(3)),
+     // and those nodes move out into the graph, bringing their arrows
+     Frame(~picts: with_rule ++ rule_here ++ equalities, ~edges: chain_edges(4)),
+     // last, the equalities fly out and become the regions round the classes they
+     // make
+     Frame(~picts: with_rule ++ rule_here ++ rule_classes_under,
            ~edges: chain_edges(4))])
 
 // -------------------------------------------------------------------------------------
@@ -2676,26 +2808,29 @@ fun slide_fork():
       keep_when taken.has_key(cls)
       def kind = if e[0] == #'s && red.contains(e[1]) | #'f | e[0]
       [kind, e[1], taken[cls]]
-  def term_edges = edges_among(kept, ~red: readers)
+  // What the walk came back with, on its own: the nodes it picked, in place, with
+  // everything it did not pick gone. Nothing is red yet -- the term is worth a beat
+  // as an answer before it is an accusation.
   def term:
+    Frame(~picts: chain_node_picts(spots_of(kept), kept) ++ rule_over,
+          ~edges: edges_among(kept))
+
+  // Then what is wrong with it. The memory the program started with and the two
+  // writes that both read it turn red, and the two state edges that read it turn red
+  // with them, which is the diamond: one memory, two writes hanging off it.
+  def term_edges = edges_among(kept, ~red: readers)
+  def reddened:
     Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red) ++ rule_over,
           ~edges: term_edges)
 
-  // And the same term laid out as the shape it is. Only the memory is kept: what
-  // the writes compute is what they are for, but the diamond is about which memory
-  // each of them reads, so the operands fade and what is left is the shape -- the
-  // memory the program started with at the apex, the two writes that both read it
-  // hanging off it, and the two paths meeting again at the `return`. Every node in
-  // it is in the frame before, so the press is the term falling into the shape it
-  // always had.
-  // What is wrong with it, said where it is wrong. The two writes that read the
+  // and then the words for it. The two writes that read the
   // same memory and the memory itself are already red, and that *is* the diamond --
   // one memory with two writes hanging off it -- so there is nothing to relayout;
   // the callout only has to name what the red is saying.
   //
-  // It points at a write rather than at the memory: the memory sits directly above
-  // the two of them, so a spike from anywhere with room for the words would have a
-  // write in the way. Of the two, the one nearer the words.
+  // The callout points at a write rather than at the memory: the memory sits
+  // directly above the two of them, so a spike from anywhere with room for the words
+  // would have a write in the way. Of the two, the one nearer the words.
   def blamed_write:
     def [bx, _] = (chain_bubbles :~ Map)[#'fork]
     fun far(key): math.abs((chain_spots[key] :~ List)[0] - bx)
@@ -2767,29 +2902,10 @@ fun slide_fork():
                     ++ safe_ask_over(~at: answer_spots[#'ret]),
           ~edges: safe_edges)
 
-  // and what the rest of the talk is for
-  def idea_over:
-    def body:
-      make_bubble(~color: talk_green,
-                  as_pict(linebox(~width: 470.0, ~height: 128.0,
-                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                  para(~align: #'center,
-                                       run("we want to extract an", ~font: prose_font,
-                                           ~size: 46.0, ~bold: #true)),
-                                  para(~align: #'center,
-                                       run("effect-safe program!", ~font: prose_font,
-                                           ~size: 46.0, ~bold: #true)))))
-    // in the room the answer leaves: the two writes it did not take were on this
-    // side of the picture, and dropping them empties it
-    { #'idea: [body, & (chain_bubbles :~ Map)[#'idea], band_callout] }
-  def wanted:
-    Frame(~picts: chain_node_picts(answer_spots, safe) ++ rule_over ++ idea_over,
-          ~edges: safe_edges)
-
   chain_slide(
     page,
     chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
-      ++ [term, blamed] ++ rewalk ++ [safe_term, answer, wanted])
+      ++ [term, reddened, blamed] ++ rewalk ++ [safe_term, answer])
 
 // -------------------------------------------------------------------------------------
 // slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
