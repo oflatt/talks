@@ -126,7 +126,15 @@ fun draws_between(a :: Frame, b :: Frame, t :: Real) :: List:
 // The moment `t` of the way from `a` to `b`, over a `base` no press touches.
 fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                   ~wire: wire :: Function.of_arity(3) = fun (layer, specs, at): layer,
-                  ~edge_band: edge_band :: Int = band_edges) :: pc.Pict:
+                  ~edge_band: edge_band :: Int = band_edges,
+                  // A second layer of edges, drawn in a band of its own. Some lines
+                  // belong over the picture and some under a piece of it -- a graph's
+                  // own arrows over its nodes, a pointer out of a floating box under
+                  // that box, so that it reads as leaving the box's edge rather than
+                  // crossing what is written in it. Both layers are handed every
+                  // spec; each draws the ones it is for.
+                  ~under_wire: under_wire :: maybe(Function.of_arity(3)) = #false,
+                  ~under_band: under_band :: Int = band_below) :: pc.Pict:
   def blank = pc.blank(~width: base.width, ~height: base.height)
   def draws :~ List = draws_between(a, b, t)
   def at :~ Map = picts_between(a, b, t)
@@ -141,19 +149,27 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
   def both_es: for List (e in a.edges): keep_when b.edges.contains(e); e
   def gone_es: for List (e in a.edges): skip_when b.edges.contains(e); e
   def new_es: for List (e in b.edges): skip_when a.edges.contains(e); e
-  def edge_layers:
+  fun layers_of(draw_them :: Function.of_arity(3)) :: List:
     for List ([specs, al] in [[both_es, 1.0], [gone_es, 1.0 - t], [new_es, t]]):
       keep_when specs != [] && al > 0.0
-      wire(ghosts, specs, at).alpha(al)
-  def bands :~ List = (for List (d :~ List in draws): d[0]) ++ [edge_band]
+      draw_them(ghosts, specs, at).alpha(al)
+  def edge_layers = layers_of(wire)
+  def under_layers = if under_wire | layers_of(under_wire) | []
+  def bands :~ List:
+    (for List (d :~ List in draws): d[0]) ++ [edge_band]
+      ++ (if under_wire | [under_band] | [])
   def lo = for values(m :~ Int = bands[0]) (v in bands): math.min(m, v)
   def hi = for values(m :~ Int = bands[0]) (v in bands): math.max(m, v)
   for values(q :~ pc.Pict = base) (band in lo..hi + 1):
     // the edges of the band, and then everything placed in it
     def wired:
+      def with_under:
+        if band != under_band
+        | q
+        | for values(q :~ pc.Pict = q) (l in under_layers): put(q, l, 0.0, 0.0)
       if band != edge_band
-      | q
-      | for values(q :~ pc.Pict = q) (l in edge_layers): put(q, l, 0.0, 0.0)
+      | with_under
+      | for values(q :~ pc.Pict = with_under) (l in edge_layers): put(q, l, 0.0, 0.0)
     for values(q :~ pc.Pict = wired) (d :~ List in draws):
       skip_when d[0] != band || (d[4] :~ Real) == 0.0
       put(q, as_pict(d[1]).alpha(d[4]), d[2], d[3])
