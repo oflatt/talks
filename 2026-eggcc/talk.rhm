@@ -27,6 +27,7 @@ export:
   chain_statewalks
   chain_class_of
   chain_pure_classes
+  slide_dp
   slide_width
   slide_height
   all_slides
@@ -1671,19 +1672,25 @@ def chain_box:
 // rather than a mark laid over it.
 fun chain_nodes(~picked: picked :: List = [],
                 ~forked: forked :: List = [],
-                ~matched: matched :: List = []) :: Map:
+                ~matched: matched :: List = [],
+                // key -> [fill] or [fill, second fill], for the statewalk DP, which
+                // fills a class by the extractable sets it has stored a walk for
+                ~fills: fills :: Map = {}) :: Map:
   fun label(s): run(s, ~font: node_font, ~size: 40.0)
   fun sub(i): run(to_string(i), ~font: node_font, ~size: 40.0, ~baseline: -0.06)
   fun node(key, color, lw, runs):
     def w = (chain_box :~ Map)[key] :~ Real
+    def two :~ List = if fills.has_key(key) | fills[key] | []
     graph_node(~width: w, ~height: if w > 100 | 64.0 | 63.486,
                ~adj: if w > 100 | "33349" | "33878",
                ~line: color, ~line_width: lw,
                ~fill: (cond
+                       | two != []: two[0]
                        | forked.contains(key): node_fork
                        | matched.contains(key): node_match
                        | picked.contains(key): node_green
                        | ~else: node_white),
+               ~fill2: if two.length() > 1 | two[1] | #false,
                & runs)
   fun leaf(key, s): node(key, "000000", 3.0, [label(s)])
   fun value(key, i): node(key, "000000", 3.0, [label("v"), sub(i)])
@@ -1945,6 +1952,38 @@ fun chain_statewalks() :: List:
             if seen | rows | rows ++ [[kc, es2, walk2]]
         loop(more, i + 1)
 
+// The distinct extractable sets, in the order the table first writes one. A set is
+// then a number, and a number is a colour: white for the one the bare argument state
+// reaches, and the two fills for the two the writes open up.
+def chain_es_list :~ List:
+  for values(acc :~ List = []) (row :~ List in chain_statewalks()):
+    if acc.contains(row[1]) | acc | acc ++ [row[1]]
+fun chain_es_index(es :~ List) :: Int:
+  recur look(i = 0): if (chain_es_list[i] :~ List) == es | i | look(i + 1)
+// a function, not a list: the fills are defined with the rest of the node colours,
+// which is further down the file than this
+fun chain_es_fill(i :: Int) :: String:
+  [node_white, node_es_1, node_es_2][i]
+
+// Which sets each class ends up holding a walk for, in the order it gets them. A
+// class with two is one the table could not merge: two walks that reach it and do
+// not reach the same pure classes, which is what statewalk width 2 looks like.
+def chain_dp_sets :~ Map:
+  for values(m :~ Map = {}) (row :~ List in chain_statewalks()):
+    def c = row[0]
+    def i = chain_es_index(row[1] :~ List)
+    def had :~ List = if m.has_key(c) | m[c] | []
+    if had.contains(i) | m | m ++ { c: had ++ [i] }
+
+// and the same thing per node, which is what draws it: every member of a class is
+// filled by what the class holds
+fun chain_dp_fills() :: Map:
+  for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
+    if !chain_dp_sets.has_key(c)
+    | m
+    | m ++ { key: for List (i in chain_dp_sets[c] :~ List): chain_es_fill(i) }
+
+// -------------------------------------------------------------------------------------
 // Where the nodes go: the y of each row, and each node's left edge and row.
 //
 // Solved by `graph_layout.py` in this directory, which is told the graph above and
@@ -2177,14 +2216,68 @@ def node_green = "B7E3A6"                     // what extraction picked
 def node_fork = "F9C4C4"                      // and what it picked twice
 def node_match = "FFE9A3"                     // and what a rule has just matched
 def stateful_hex = "0433FF"
+
+// The two extractable sets the statewalk DP finds on this graph, as fills. They are
+// one hue in two strengths rather than two hues: the sets are nested -- the deeper
+// one is the paler one and `v2` besides -- so deeper reading as *more* is what they
+// mean, and a pair that differs in lightness stays two things under any colour
+// vision. Both are pale enough to read black text.
+def node_es_1 = "EDE3F8"                      // what every walk through one write reaches
+def node_es_2 = "B9A0DC"                      // and that, plus the redundant write's value
+
+// The runtime's `hex` builds the runtime's own colour, which is not the one the
+// drawing library takes; a six-digit fill written for `shape_pict` has to be read
+// again to paint with it directly. `draw.Color` of a string is a colour *name*, and
+// an unknown name is black.
+fun hex_color(h :: String) :: draw.Color:
+  fun part(i :: Int) :: Int: String.to_number(h.substring(i, i + 2), ~radix: 16)
+  draw.Color(part(0), part(2), part(4))
+
+// A rounded-rect path matching what the `roundRect` preset draws, inset by half a
+// line width so that a fill drawn with it stays under the border rather than beside
+// it. `adj` is thousandths of a percent of the shorter side, as OOXML has it.
+fun round_rect_path(w :: Real, h :: Real, adj :: String, inset :: Real) :: draw.Path:
+  def r = (String.to_number(adj) :~ Real) / 100000.0 * math.min(w, h)
+  def p = draw.Path()
+  p.rounded_rectangle([inset, inset, w - 2 * inset, h - 2 * inset],
+                      math.max(0.0, r - inset))
+  p
+
+// A node of an e-graph. `~fill2` gives it a second fill over the part of it right of
+// `~split`, for a class the DP has stored two statewalks for: one box in two
+// colours, rather than two boxes or a mark laid on top.
 fun graph_node(~width: w :: Real, ~height: h :: Real, ~adj: adj :: String,
                ~line: line :: String, ~line_width: lw :: Real,
-               ~fill: fill :: String = node_white, & runs):
-  shape_pict(~width: w, ~height: h,
-             ~geom: preset_geom("roundRect", [pair("adj", "val " +& adj)]),
-             ~fill: hex(fill), ~line: make_stroke(hex(line), ~width: lw),
-             ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                         para(~align: #'center, & runs)))
+               ~fill: fill :: String = node_white,
+               ~fill2: fill2 :: maybe(String) = #false,
+               ~split: split :: Real = 0.5, & runs):
+  def shape:
+    shape_pict(~width: w, ~height: h,
+               ~geom: preset_geom("roundRect", [pair("adj", "val " +& adj)]),
+               ~fill: if fill2 | #false | hex(fill),
+               ~line: make_stroke(hex(line), ~width: lw),
+               ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                           para(~align: #'center, & runs)))
+  cond
+  | !fill2: shape
+  | ~else:
+      def path = round_rect_path(w, h, adj, lw / 2)
+      def under:
+        pc.dc(fun (target :: draw.DC, dx, dy):
+                target.save()
+                target.pen := draw.Pen(~color: draw.Color(0, 0, 0, 0.0), ~width: 0)
+                fun paint(color :: String):
+                  target.brush := draw.Brush(~color: hex_color(color))
+                  target.path(path, ~dx: dx, ~dy: dy)
+                paint(fill)
+                // the far side again, through a window cut where the split falls
+                def window = draw.Region()
+                window.rectangle([dx + w * split, dy, w * (1 - split), h])
+                target.clipping_region := window
+                paint(fill2)
+                target.restore(),
+              ~width: w, ~height: h)
+      pc.overlay(under, as_pict(shape))
 
 // The pointer that walks an extraction down a graph, a press per class, in the
 // blue the bubbles are drawn in. Both extraction walks use it, so a press means
@@ -2546,6 +2639,15 @@ fun chain_point_at(layer :: Int) :: List:
 
 // The nodes of a frame: where each one goes, and which of its three drawings to
 // use -- plain, picked, or picked by two things at once.
+// The same, filled by what the statewalk DP has stored rather than by what a walk
+// has picked: a class the table holds two walks for comes out as one box in two
+// colours.
+fun chain_dp_picts(spots :~ Map, fills :~ Map) :: Map:
+  def nodes :~ Map = chain_nodes(~fills: fills)
+  for values(m :~ Map = {}) (key in spots.keys()):
+    def [x, y] = spots[key] :~ List
+    m ++ { key: [nodes[key], x, y] }
+
 fun chain_node_picts(spots :~ Map, picks :~ List,
                      ~red: red :~ List = [],
                      ~gold: gold :~ List = []) :: Map:
@@ -3608,6 +3710,16 @@ fun slide_41():
                workflow_frame(safe, ir_keys, ~ir: #true,
                               ~over: threading ++ refine ++ worry)],
               ~wire: workflow_wire)
+
+// -------------------------------------------------------------------------------------
+// slide_dp: the statewalk DP algorithm, run on the update example.
+//
+// A sketch: the graph as the table leaves it, so that the fills can be looked at.
+fun slide_dp():
+  def canvas = titled("The Statewalk DP Algorithm")
+  chain_slide(as_pict(canvas),
+              [Frame(~picts: chain_dp_picts(chain_spots, chain_dp_fills()),
+                     ~edges: chain_edges(4))])
 
 def all_slides:
   [slide_1,
