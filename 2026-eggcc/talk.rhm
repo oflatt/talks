@@ -1964,13 +1964,15 @@ fun chain_es_index(es :~ List) :: Int:
 // a function, not a list: the fills are defined with the rest of the node colours,
 // which is further down the file than this
 fun chain_es_fill(i :: Int) :: String:
-  [node_white, node_es_1, node_es_2][i]
+  [node_es_0, node_es_1, node_es_2][i]
 
 // Which sets each class ends up holding a walk for, in the order it gets them. A
 // class with two is one the table could not merge: two walks that reach it and do
 // not reach the same pure classes, which is what statewalk width 2 looks like.
-def chain_dp_sets :~ Map:
-  for values(m :~ Map = {}) (row :~ List in chain_statewalks()):
+// Takes the rows rather than reading them all, so that a slide can ask what the
+// table looks like part way through filling in.
+fun chain_dp_sets(rows :~ List) :: Map:
+  for values(m :~ Map = {}) (row :~ List in rows):
     def c = row[0]
     def i = chain_es_index(row[1] :~ List)
     def had :~ List = if m.has_key(c) | m[c] | []
@@ -1978,11 +1980,12 @@ def chain_dp_sets :~ Map:
 
 // and the same thing per node, which is what draws it: every member of a class is
 // filled by what the class holds
-fun chain_dp_fills() :: Map:
+fun chain_dp_fills(rows :~ List) :: Map:
+  def sets :~ Map = chain_dp_sets(rows)
   for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
-    if !chain_dp_sets.has_key(c)
+    if !sets.has_key(c)
     | m
-    | m ++ { key: for List (i in chain_dp_sets[c] :~ List): chain_es_fill(i) }
+    | m ++ { key: for List (i in sets[c] :~ List): chain_es_fill(i) }
 
 // -------------------------------------------------------------------------------------
 // Where the nodes go: the y of each row, and each node's left edge and row.
@@ -2223,8 +2226,9 @@ def stateful_hex = "0433FF"
 // one is the paler one and `v2` besides -- so deeper reading as *more* is what they
 // mean, and a pair that differs in lightness stays two things under any colour
 // vision. Both are pale enough to read black text.
-def node_es_1 = "EDE3F8"                      // what every walk through one write reaches
-def node_es_2 = "B9A0DC"                      // and that, plus the redundant write's value
+def node_es_0 = "E9DDF8"                      // what the bare argument state reaches
+def node_es_1 = "C3A9E8"                      // what every walk through one write reaches
+def node_es_2 = "8E6BC4"                      // and that, plus the redundant write's value
 
 // The runtime's `hex` builds the runtime's own colour, which is not the one the
 // drawing library takes; a six-digit fill written for `shape_pict` has to be read
@@ -2694,6 +2698,10 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     // node is memory read twice
     | e[0] == #'f: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: talk_red)
     | e[0] == #'m: q
+    // a statewalk being laid down, in the colour of the extractable set it reaches
+    | e[0] == #'w0: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_0))
+    | e[0] == #'w1: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_1))
+    | e[0] == #'w2: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_2))
     | ~else: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: keynote_blue)
 
 // and the pointers, thin, gold and dashed, so they read as something laid over the
@@ -4069,12 +4077,93 @@ fun slide_41():
 // -------------------------------------------------------------------------------------
 // slide_dp: the statewalk DP algorithm, run on the update example.
 //
-// A sketch: the graph as the table leaves it, so that the fills can be looked at.
+// It opens where the last slide left the picture -- the program, the rule and the
+// graph -- and then the code box goes and the graph takes the slide. After that
+// every press is one row of the table: the walk that row stores is drawn along the
+// state edges, the classes it puts within reach light up in that row's colour, and
+// the class it is stored at keeps that colour. A class the table stores two walks
+// for ends up half one colour and half the other, which is the whole point.
 fun slide_dp():
   def canvas = titled("The Statewalk DP Algorithm")
-  chain_slide(as_pict(canvas),
-              [Frame(~picts: chain_dp_picts(chain_spots, chain_dp_fills()),
-                     ~edges: chain_edges(4))])
+  def parts = code_parts()
+  def rows :~ List = chain_statewalks()
+
+  // ------------------------------------------------------------ where the graph goes
+  // The same graph, moved into the middle of the slide once the code box has gone,
+  // and grown by as much as the height allows. Not stretched: the columns keep the
+  // spacing the layout solved for, the picture just takes the room the code had.
+  fun node_size(key) :: List:
+    def w = (chain_box :~ Map)[key] :~ Real
+    [w, if w > 100 | 64.0 | 63.486]
+  def home_box:
+    for values(b :~ List = [1.0e9, 1.0e9, -1.0e9, -1.0e9]) (key in chain_spots.keys()):
+      def [x, y] = (chain_spots :~ Map)[key] :~ List
+      def [w, h] = node_size(key)
+      [math.min(b[0], x), math.min(b[1], y),
+       math.max(b[2], x + w), math.max(b[3], y + h)]
+  def dp_top = 216.0
+  def dp_bottom = 1032.0
+  def dp_scale:
+    math.min(1.25, (dp_bottom - dp_top) / ((home_box[3] :~ Real) - (home_box[1] :~ Real)))
+  def dp_left:
+    (slide_width - ((home_box[2] :~ Real) - (home_box[0] :~ Real)) * dp_scale) / 2
+  fun moved(spots :~ Map) :: Map:
+    for values(m :~ Map = {}) (key in spots.keys()):
+      def [x, y] = spots[key] :~ List
+      m ++ { key: [dp_left + (x - (home_box[0] :~ Real)) * dp_scale,
+                   dp_top + (y - (home_box[1] :~ Real)) * dp_scale] }
+  def away :~ Map = moved(chain_spots)
+
+  // The nodes at the size they are drawn there. A node is one pict at one scale, so
+  // the press that moves the graph cross-fades each node from its old drawing to its
+  // new one while it travels -- at this little difference in size, a move.
+  fun picts_at(spots :~ Map, fills :~ Map, ~scale: k :: Real) :: Map:
+    def nodes :~ Map = chain_nodes(~fills: fills)
+    for values(m :~ Map = {}) (key in spots.keys()):
+      def [x, y] = spots[key] :~ List
+      // a node with one fill is the runtime's shape, a split one is already a pict
+      def n = nodes[key]
+      def q :~ pc.Pict = if n is_a pc.Pict | n | as_pict(n)
+      m ++ { key: [q.scale(k), x, y] }
+
+  // --------------------------------------------------------------- what a row draws
+  // The walk of one row, as edges between the terms it is made of, tagged with which
+  // of the three extractable sets it ends up reaching.
+  fun walk_edges(row :~ List) :: List:
+    def walk :~ List = row[2]
+    def kind = [#'w0, #'w1, #'w2][chain_es_index(row[1] :~ List)]
+    for List (j in 0..walk.length() - 1): [kind, walk[j + 1], walk[j]]
+  // and the classes that walk puts within reach, filled in the same colour: this is
+  // the extractable set, shown where it means something rather than written out
+  fun reach_fills(row :~ List) :: Map:
+    def fill = chain_es_fill(chain_es_index(row[1] :~ List))
+    for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
+      if (row[1] :~ List).contains(c) | m ++ { key: [fill] } | m
+
+  fun step(n :: Int, ~reach: reach :: Boolean) :: Frame:
+    def row :~ List = rows[n]
+    Frame(~picts: picts_at(away,
+                           chain_dp_fills(rows.sublist(0, n + 1))
+                             ++ (if reach | reach_fills(row) | {}),
+                           ~scale: dp_scale),
+          ~edges: chain_edges(4) ++ walk_edges(row))
+
+  chain_slide(
+    as_pict(canvas),
+    [// where the last slide left it: the program, the rule, and the graph
+     Frame(~picts: picts_at(chain_spots, {}, ~scale: 1.0)
+                     ++ { #'code: [code_pict(parts, ~states: #true),
+                                   code_x, code_y, band_below] }
+                     ++ chain_rule_over(parts, ~value: #true),
+           ~edges: chain_edges(4)),
+     // and then the graph has the slide to itself
+     Frame(~picts: picts_at(away, {}, ~scale: dp_scale), ~edges: chain_edges(4)),
+     // the walk that is nothing but the argument state, and then -- on a press of
+     // its own, because it is the idea the rest of the slide is made of -- what that
+     // walk puts within reach
+     step(0, ~reach: #false),
+     step(0, ~reach: #true),
+     & for List (n in 1..rows.length()): step(n, ~reach: #true)])
 
 def all_slides:
   [slide_1,
