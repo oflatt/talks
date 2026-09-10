@@ -4133,19 +4133,45 @@ fun slide_dp():
     def walk :~ List = row[2]
     def kind = [#'w0, #'w1, #'w2][chain_es_index(row[1] :~ List)]
     for List (j in 0..walk.length() - 1): [kind, walk[j + 1], walk[j]]
-  // and the classes that walk puts within reach, filled in the same colour: this is
-  // the extractable set, shown where it means something rather than written out
-  fun reach_fills(row :~ List) :: Map:
+  // ------------------------------------------------------- and what it puts in reach
+  // The extractable set is drawn as one pale mass under the picture rather than as a
+  // mark on each node: a class is in reach or it is not, and a shape that covers the
+  // ones that are says so in one look.
+  //
+  // It is built out of a blob per node, all in one flat opaque colour, so that two
+  // that touch read as one mass rather than as a darker patch where they overlap.
+  // Every node keeps its blob in every press, which is what animates the set growing:
+  // a node not yet in reach parks a *blank* blob at the head of the walk, so the
+  // press that brings it into reach interpolates that blank travelling out to the
+  // node and swelling into a blob on the way. The set grows out of the walk, which
+  // is where it comes from.
+  def blob_pad = 26.0
+  fun blob_of(key, fill :: String) :: pc.Pict:
+    def [w, h] = node_size(key)
+    pc.rectangle(~width: (w + 2 * blob_pad) * dp_scale,
+                 ~height: (h + 2 * blob_pad) * dp_scale,
+                 ~fill: hex_color(fill), ~line: #false, ~rounded: -0.75)
+  fun blobs(row :~ List) :: Map:
     def fill = chain_es_fill(chain_es_index(row[1] :~ List))
+    def walk :~ List = row[2]
+    def head = walk[walk.length() - 1]
+    def [hx, hy] = (away :~ Map)[head] :~ List
     for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
-      if (row[1] :~ List).contains(c) | m ++ { key: [fill] } | m
+      def covered = walk.contains(key) || (row[1] :~ List).contains(c)
+      def [x, y] = (away :~ Map)[key] :~ List
+      def [w, h] = node_size(key)
+      m ++ { [#'blob, key]:
+               (if covered
+                | [blob_of(key, fill),
+                   x - blob_pad * dp_scale, y - blob_pad * dp_scale, band_below]
+                // parked at the head of the walk, with nothing drawn of it yet
+                | [pc.blank(~width: 1.0, ~height: 1.0), hx, hy, band_below]) }
 
   fun step(n :: Int, ~reach: reach :: Boolean) :: Frame:
     def row :~ List = rows[n]
-    Frame(~picts: picts_at(away,
-                           chain_dp_fills(rows.sublist(0, n + 1))
-                             ++ (if reach | reach_fills(row) | {}),
-                           ~scale: dp_scale),
+    Frame(~picts: picts_at(away, chain_dp_fills(rows.sublist(0, n + 1)),
+                           ~scale: dp_scale)
+                    ++ (if reach | blobs(row) | {}),
           ~edges: chain_edges(4) ++ walk_edges(row))
 
   chain_slide(
