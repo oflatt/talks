@@ -779,18 +779,6 @@ fun slide_12():
   // then puts it up.
   def third_over = rule_over(#'rule3)
 
-  // The class `a` joins when the third rule fires. No rectangle around its three
-  // members can draw it: `+` is a class of its own sitting between `a` and the
-  // root in the same column, and this shape threads between `+` and the `1 - 1`
-  // class to get past it. It is Keynote's own freehand blob, kept for that reason
-  // and recoloured to match the rest.
-  def root_region:
-    shape_pict(~width: 367.991, ~height: 524.05, ~flip_v: #true,
-               ~geom: custom_geom(
-                                 [[[#'move, pair(1897, 196)], [#'curve, pair(3336, -282), pair(4709, 236), pair(6155, 481)], [#'curve, pair(6884, 605), pair(7647, 652), pair(8380, 751)], [#'curve, pair(9135, 853), pair(9858, 1007), pair(10575, 1115)], [#'curve, pair(11465, 1249), pair(12411, 1336), pair(13337, 1153)], [#'curve, pair(14189, 984), pair(14929, 587), pair(15761, 398)], [#'curve, pair(16611, 204), pair(17463, 208), pair(18256, 301)], [#'curve, pair(19039, 392), pair(19830, 578), pair(20511, 1046)], [#'curve, pair(21355, 1628), pair(21563, 2431), pair(21400, 3196)], [#'curve, pair(21231, 3986), pair(20673, 4792), pair(19596, 5279)], [#'curve, pair(18734, 5668), pair(17667, 5755), pair(16731, 6057)], [#'curve, pair(15503, 6453), pair(14591, 7173), pair(13870, 7953)], [#'curve, pair(12906, 8995), pair(12203, 10178), pair(11414, 11327)], [#'curve, pair(10870, 12120), pair(10279, 12897), pair(9558, 13608)], [#'curve, pair(8707, 14447), pair(7632, 15256), pair(7572, 16263)], [#'curve, pair(7537, 16873), pair(7881, 17451), pair(8040, 18050)], [#'curve, pair(8237, 18790), pair(8157, 19537), pair(7561, 20109)], [#'curve, pair(7004, 20644), pair(6076, 20940), pair(5058, 21072)], [#'curve, pair(3154, 21318), pair(1245, 20975), pair(410, 19876)], [#'curve, pair(24, 19368), pair(-22, 18777), pair(7, 18198)], [#'curve, pair(36, 17621), pair(128, 17011), pair(580, 16463)], [#'curve, pair(1273, 15622), pair(2563, 15165), pair(3744, 14653)], [#'curve, pair(4936, 14136), pair(6056, 13531), pair(6859, 12730)], [#'curve, pair(7671, 11917), pair(8205, 11006), pair(8786, 10107)], [#'curve, pair(9676, 8730), pair(10242, 6974), pair(11999, 6156)], [#'curve, pair(12608, 5872), pair(13280, 5659), pair(13632, 5289)], [#'curve, pair(14021, 4879), pair(13994, 4383), pair(13461, 3932)], [#'curve, pair(12555, 3165), pair(10957, 3388), pair(9549, 3825)], [#'curve, pair(9054, 3979), pair(8547, 4138), pair(8075, 4325)], [#'curve, pair(6983, 4758), pair(6087, 5468), pair(4855, 5666)], [#'curve, pair(3978, 5807), pair(3062, 5672), pair(2270, 5371)], [#'curve, pair(1563, 5102), pair(980, 4723), pair(586, 4232)], [#'curve, pair(-10, 3487), pair(-37, 2631), pair(184, 1899)], [#'curve, pair(401, 1184), pair(903, 527), pair(1897, 196)], [#'close]]],
-                                 21451, 21147),
-               ~fill: hex("929292", ~alpha: 0.3))
-
   // A class, drawn as the region round the nodes it holds -- the box its members
   // span, grown a little. The two classes with two members each have both of them
   // side by side in a row, which is what lets a rectangle say it. Each is built
@@ -1958,7 +1946,6 @@ def rule_ident:
 
 def rules_line_1 = rule_assoc[#'pict] :~ pc.Pict
 def rules_line_2 = rule_zero[#'pict] :~ pc.Pict
-def rules_line_3 = rule_ident[#'pict] :~ pc.Pict
 // where the three of them sit, under the term, and where the label above them does
 def rules_label_at = [99.0, 340.0]
 def rules_line_1_at = [129.0, 416.0]
@@ -2971,7 +2958,6 @@ def stage_greek_face = draw.Font(~name: math_font, ~size: 40.0)
 // other slide draws
 fun stage_code(s :: String) :: pc.Pict: pc.text(s, ~font: stage_code_face)
 fun stage_greek(s :: String) :: pc.Pict: pc.text(s, ~font: stage_greek_face)
-fun stage_sub(s :: String) :: pc.Pict: stage_code(s).scale(0.62)
 fun stage_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
 fun stage_pieces(label :: String, body :: pc.Pict, at :~ List,
