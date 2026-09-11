@@ -21,9 +21,9 @@
 //   results.rhm    the plots
 //   workflow.rhm   the compiler workflow, before effects and after
 //
-// Every slide that Keynote generated still carries its `at(x, y, ~tag: ...)`
-// positions, so `raco glide` can open the file the slide lives in and write back
-// what is dragged.
+// Every slide that Keynote generated still carries its `at(x, y, ~name: ...)`
+// positions. Glide derives opaque editor identities from those call sites while
+// keeping the old Keynote labels readable in the editor.
 
 import:
   lib("glide-pptx/runtime.rhm") open
@@ -61,26 +61,50 @@ export:
   slide_38
   slide_39
 
+// `all_slides` stays a literal list of names so Glide can connect every editor
+// page to one source definition. Section combinators therefore live in these
+// named calls instead of in the list itself.
+fun slide_divider_0(): divider(0, ~shots: section_shots)()
+fun slide_2_in_section(): in_section(0, slide_2)()
+fun slide_40_in_section(): in_section(0, slide_40)()
+fun slide_12_in_section(): in_section(0, slide_12)()
+fun slide_20_in_section(): in_section(0, slide_20)()
+fun slide_divider_1(): divider(1, ~shots: section_shots)()
+fun slide_update_in_section(): in_section(1, slide_update)()
+fun slide_egraph_in_section(): in_section(1, slide_egraph)()
+fun slide_rue_in_section(): in_section(1, slide_rue)()
+fun slide_fork_in_section(): in_section(1, slide_fork)()
+fun slide_41_in_section(): in_section(1, slide_41)()
+fun slide_divider_2(): divider(2, ~shots: section_shots)()
+fun slide_nphard_in_section(): in_section(2, slide_nphard)()
+fun slide_dp_in_section(): in_section(2, slide_dp)()
+fun slide_34_in_section(): in_section(2, slide_34)()
+fun slide_divider_3(): divider(3, ~shots: section_shots)()
+fun slide_36_in_section(): in_section(3, slide_36)()
+fun slide_37_in_section(): in_section(3, slide_37)()
+fun slide_38_in_section(): in_section(3, slide_38)()
+fun slide_39_in_section(): in_section(3, slide_39)()
+
 def all_slides:
   [slide_1,
    // 1 -- why effects belong in an e-graph at all
-   divider(0, ~shots: section_shots),
-   in_section(0, slide_2), in_section(0, slide_40), in_section(0, slide_12),
-   in_section(0, slide_20),
+   slide_divider_0,
+   slide_2_in_section, slide_40_in_section, slide_12_in_section,
+   slide_20_in_section,
    // 2 -- what makes extraction hard once there are effects
-   divider(1, ~shots: section_shots), in_section(1, slide_update), in_section(1, slide_egraph),
-   in_section(1, slide_rue), in_section(1, slide_fork), in_section(1, slide_41),
+   slide_divider_1, slide_update_in_section, slide_egraph_in_section,
+   slide_rue_in_section, slide_fork_in_section, slide_41_in_section,
    // 3 -- what makes it hard, and the algorithm
-   divider(2, ~shots: section_shots),
-   in_section(2, slide_nphard),
+   slide_divider_2,
+   slide_nphard_in_section,
    // and then what the algorithm does instead, on the example the section before
    // this one was about
-   in_section(2, slide_dp),
-   in_section(2, slide_34),
+   slide_dp_in_section,
+   slide_34_in_section,
    // 4 -- the numbers
-   divider(3, ~shots: section_shots),
-   in_section(3, slide_36), in_section(3, slide_37),
-   in_section(3, slide_38), in_section(3, slide_39)]
+   slide_divider_3,
+   slide_36_in_section, slide_37_in_section,
+   slide_38_in_section, slide_39_in_section]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the

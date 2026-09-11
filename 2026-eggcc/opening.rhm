@@ -19,12 +19,12 @@ fun slide_1(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // unknown.png (id 88)
-  at(204.846, -334.58, ~rotate: 90.0, ~tag: "unknown.png",
+  at(204.846, -334.58, ~rotate: 90.0, ~name: "unknown.png",
      image_pict(media("image1.png"), 1510.306, 1925.056, ~crop: [0.0, 0.013, 0.514, 0.0],
                 ~opacity: 0.351)),
   // Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,… (id 89)
   at(26.843, 896.485,
-     ~tag: "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,…",
+     ~name: "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,…",
      textbox(~width: 1833.914, ~height: 101.563, ~autofit: #'shrink,
              ~insets: insets(3.6, 3.6, 3.6, 3.6),
              para(
@@ -35,7 +35,7 @@ fun slide_1(): slide_canvas(
                   run("Chandrakana Nandi, Eli Rosenthal, Zachary Tatlock, Haobin Ni",
                       ~font: prose_font, ~size: 39.0)))),
   // Efficient Extraction from Effectful E-Graphs (id 90)
-  at(95.0, 202.755, ~tag: "Efficient Extraction from Effectful E-Graphs",
+  at(95.0, 202.755, ~name: "Efficient Extraction from Effectful E-Graphs",
      textbox(~width: 1730.0, ~height: 366.0, ~anchor: #'bottom, ~autofit: #'shrink,
              ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.8),
@@ -43,38 +43,38 @@ fun slide_1(): slide_canvas(
                       ~font: prose_font, ~size: 116.0, ~bold: #true,
                       ~spacing: -3.0)))),
   // unknown.png (2) (id 91)
-  at(-4.619, 984.406, ~tag: "unknown.png (2)",
+  at(-4.619, 984.406, ~name: "unknown.png (2)",
      image_pict(media("image2.png"), 616.548, 101.578,
                 ~crop: [0.121, 0.318, 0.135, 0.37])),
   // unknown.png (3) (id 92)
-  at(172.867, 743.613, ~tag: "unknown.png (3)",
+  at(172.867, 743.613, ~name: "unknown.png (3)",
      image_pict(media("image3.png"), 115.0, 115.0)),
   // unknown.png (4) (id 93)
-  at(809.334, 743.633, ~tag: "unknown.png (4)",
+  at(809.334, 743.633, ~name: "unknown.png (4)",
      image_pict(media("image4.png"), 115.0, 115.0, ~crop: [0.0, 0.02, 0.0, 0.02])),
   // unknown.png (5) (id 94)
-  at(1127.567, 743.662, ~tag: "unknown.png (5)",
+  at(1127.567, 743.662, ~name: "unknown.png (5)",
      image_pict(media("image5.png"), 115.0, 115.0, ~crop: [0.0, 0.052, 0.0, 0.198])),
   // unknown.png (6) (id 95)
-  at(331.984, 743.623, ~tag: "unknown.png (6)",
+  at(331.984, 743.623, ~name: "unknown.png (6)",
      image_pict(media("image6.png"), 115.0, 115.0)),
   // unknown.png (7) (id 96)
-  at(650.217, 743.563, ~tag: "unknown.png (7)",
+  at(650.217, 743.563, ~name: "unknown.png (7)",
      image_pict(media("image7.png"), 115.0, 115.065, ~crop: [0.0, 0.123, 0.0, 0.123])),
   // unknown.png (8) (id 97)
-  at(491.1, 743.662, ~tag: "unknown.png (8)",
+  at(491.1, 743.662, ~name: "unknown.png (8)",
      image_pict(media("image8.png"), 115.0, 115.0, ~crop: [0.0, 0.0, 0.0, 0.093])),
   // pasted-movie.png (id 98)
-  at(1286.684, 743.584, ~tag: "pasted-movie.png",
+  at(1286.684, 743.584, ~name: "pasted-movie.png",
      image_pict(media("image9.png"), 115.0, 115.0)),
   // unknown.png (9) (id 99)
-  at(1427.083, 743.584, ~tag: "unknown.png (9)",
+  at(1427.083, 743.584, ~name: "unknown.png (9)",
      image_pict(media("image10.png"), 479.167, 115.0)),
   // pasted-movie.png (2) (id 100)
-  at(13.75, 743.613, ~tag: "pasted-movie.png (2)",
+  at(13.75, 743.613, ~name: "pasted-movie.png (2)",
      image_pict(media("image11.png"), 115.0, 115.0)),
   // pasted-movie.png (3) (id 101)
-  at(968.45, 743.613, ~tag: "pasted-movie.png (3)",
+  at(968.45, 743.613, ~name: "pasted-movie.png (3)",
      image_pict(media("image12.png"), 115.0, 115.0))
 )
 
@@ -104,23 +104,23 @@ fun slide_2():
     slide_canvas(
       ~width: slide_width, ~height: slide_height,
       ~background: hex("FFFFFF"),
-      at(52.084, 64.475, ~tag: "E-Graphs are Super Useful!",
+      at(52.084, 64.475, ~name: "E-Graphs are Super Useful!",
          textbox(~width: 1730.0, ~height: 112.848, ~autofit: #'shrink,
                  ~insets: insets(4.0, 4.0, 4.0, 4.0),
                  para(~line_spacing: pair(#'percent, 0.8),
                       run("E-Graphs are Super Useful!", ~font: prose_font, ~size: 85.0,
                           ~bold: #true, ~spacing: -2.01)))),
-      at(1890.408, 1044.894, ~tag: "Slide Number",
+      at(1890.408, 1044.894, ~name: "Slide Number",
          shape_pict(~width: 19.008, ~height: 29.496)))
 
   // adds 'Floating point'
   def stage_1:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(35.955, 236.25, ~tag: "Group (5)",
+               at(35.955, 236.25, ~name: "Group (5)",
                   group_pict(~width: 558.478, ~height: 292.287,
-                             at(0.0, 42.089, ~tag: "pasted-movie.png (5)",
+                             at(0.0, 42.089, ~name: "pasted-movie.png (5)",
                                 image_pict(media("image17.png"), 558.478, 250.198)),
-                             at(31.222, -51.323, ~tag: "Floating point",
+                             at(31.222, -51.323, ~name: "Floating point",
                                 linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -134,11 +134,11 @@ fun slide_2():
   // adds 'Python Simulations'
   def stage_2:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(620.266, 236.144, ~tag: "Group",
+               at(620.266, 236.144, ~name: "Group",
                   group_pict(~width: 350.833, ~height: 320.995,
-                             at(70.107, 40.268, ~tag: "pasted-movie.png",
+                             at(70.107, 40.268, ~name: "pasted-movie.png",
                                 image_pict(media("image13.png"), 280.727, 280.727)),
-                             at(0.0, -51.217, ~tag: "Python Simulations",
+                             at(0.0, -51.217, ~name: "Python Simulations",
                                 linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -152,9 +152,9 @@ fun slide_2():
   // adds 'RTL Optimization'
   def stage_3:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1099.052, 247.464, ~tag: "Group (7)",
+               at(1099.052, 247.464, ~name: "Group (7)",
                   group_pict(~width: 371.484, ~height: 269.86,
-                             at(7.51, -62.537, ~tag: "RTL Optimization",
+                             at(7.51, -62.537, ~name: "RTL Optimization",
                                 linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -164,17 +164,17 @@ fun slide_2():
                                                "RTL Optimization",
                                                ~font: prose_font,
                                                ~size: 48.0)))),
-                             at(0.0, 23.789, ~tag: "pasted-movie.png (7)",
+                             at(0.0, 23.789, ~name: "pasted-movie.png (7)",
                                 image_pict(media("image19.png"), 371.484, 246.071)))))
 
   // adds 'ML Kernels', 'Luminal'
   def stage_4:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1571.646, 211.913, ~tag: "Group (6)",
+               at(1571.646, 211.913, ~name: "Group (6)",
                   group_pict(~width: 264.568, ~height: 437.154,
-                             at(0.0, 45.622, ~tag: "pasted-movie.png (6)",
+                             at(0.0, 45.622, ~name: "pasted-movie.png (6)",
                                 image_pict(media("image18.png"), 264.568, 264.568)),
-                             at(1.976, -26.986, ~tag: "ML Kernels",
+                             at(1.976, -26.986, ~name: "ML Kernels",
                                 linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -184,7 +184,7 @@ fun slide_2():
                                                "ML Kernels",
                                                ~font: prose_font,
                                                ~size: 48.0)))),
-                             at(40.664, 337.154, ~tag: "(Luminal)",
+                             at(40.664, 337.154, ~name: "(Luminal)",
                                 linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -198,11 +198,11 @@ fun slide_2():
   // adds 'SQL'
   def stage_5:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(39.033, 623.282, ~tag: "Group (3)",
+               at(39.033, 623.282, ~name: "Group (3)",
                   group_pict(~width: 312.321, ~height: 345.402,
-                             at(35.938, 59.801, ~tag: "pasted-movie.png (3)",
+                             at(35.938, 59.801, ~name: "pasted-movie.png (3)",
                                 image_pict(media("image15.png"), 276.435, 285.65)),
-                             at(0.0, -12.807, ~tag: "SQL",
+                             at(0.0, -12.807, ~name: "SQL",
                                 linebox(~width: 104.136, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
@@ -211,12 +211,12 @@ fun slide_2():
   // adds 'CAD'
   def stage_6:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(391.284, 662.932, ~tag: "Group (2)",
+               at(391.284, 662.932, ~name: "Group (2)",
                   group_pict(~width: 375.394, ~height: 336.667,
-                             at(0.0, 40.848, ~tag: "pasted-movie.png (2)",
+                             at(0.0, 40.848, ~name: "pasted-movie.png (2)",
                                 image_pict(media("image14.png"), 375.394, 295.819,
                                            ~crop: [0.0, 0.0, 0.1, 0.0])),
-                             at(5.164, -52.457, ~tag: "CAD",
+                             at(5.164, -52.457, ~name: "CAD",
                                 linebox(~width: 100.0, ~height: 64.608,
                                         ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
@@ -229,11 +229,11 @@ fun slide_2():
   // adds 'WASM'
   def stage_7:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(806.567, 630.163, ~tag: "Group (4)",
+               at(806.567, 630.163, ~name: "Group (4)",
                   group_pict(~width: 407.253, ~height: 301.018,
-                             at(2.627, 68.882, ~tag: "pasted-movie.png (4)",
+                             at(2.627, 68.882, ~name: "pasted-movie.png (4)",
                                 image_pict(media("image16.png"), 404.626, 232.136)),
-                             at(0.0, -19.688, ~tag: "WASM",
+                             at(0.0, -19.688, ~name: "WASM",
                                 linebox(~width: 158.904, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
@@ -242,21 +242,21 @@ fun slide_2():
   // adds 'User DSL Optimizations'
   def stage_8:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1256.336, 640.14, ~tag: "Group (8)",
+               at(1256.336, 640.14, ~name: "Group (8)",
                   group_pict(~width: 633.867, ~height: 311.723,
-                             at(61.05, -29.665, ~tag: "WASM (2)",
+                             at(61.05, -29.665, ~name: "WASM (2)",
                                 linebox(~width: 538.008, ~height: 64.608, ~autofit: #'grow,
                                         ~insets: insets(4.0, 4.0, 4.0, 4.0),
                                         para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                              run("User DSL Optimizations",
                                                  ~font: prose_font, ~size: 48.0)))),
-                             at(0.0, 58.176, ~tag: "pasted-movie.png (8)",
+                             at(0.0, 58.176, ~name: "pasted-movie.png (8)",
                                 image_pict(media("image20.png"), 633.867, 253.547)))))
 
   // adds '…and more!'
   def stage_9:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(1625.216, 967.946, ~tag: "…and more!",
+               at(1625.216, 967.946, ~name: "…and more!",
                   linebox(~width: 280.2, ~height: 64.608,
                           ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
@@ -283,19 +283,19 @@ fun slide_20():
   // than bounding box, because the logos carry very different bottom padding.
   def notes:
     group_pict(~width: slide_width, ~height: slide_height,
-               at(228.358, 522.666, ~tag: "(Herbie)",
+               at(228.358, 522.666, ~name: "(Herbie)",
                   linebox(~width: 181.512, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                run("(Herbie)", ~font: prose_font,
                                    ~size: 48.0)))),
-               at(905.804, 943.181, ~tag: "(Cranelift)",
+               at(905.804, 943.181, ~name: "(Cranelift)",
                   linebox(~width: 222.408, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
                                run("(Cranelift)", ~font: prose_font,
                                    ~size: 48.0)))),
-               at(489.157, 1011.599, ~tag: "(Szalinski)",
+               at(489.157, 1011.599, ~name: "(Szalinski)",
                   linebox(~width: 230.424, ~height: 64.608, ~autofit: #'grow,
                           ~insets: insets(4.0, 4.0, 4.0, 4.0),
                           para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
