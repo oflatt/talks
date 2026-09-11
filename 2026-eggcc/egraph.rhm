@@ -18,6 +18,7 @@ export:
   chain_wire
   chip_at
   chip_line_color
+  eclass_alpha
   eclass_grey
   eclass_pad
   eclass_region

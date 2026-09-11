@@ -345,20 +345,6 @@ fun slide_12():
   // nodes they stand for. Two variables that matched one node land either side of
   // its middle, which is where the pair of arrows the graph draws for them arrives.
   def inline_pitch = nd + 20.0
-  // Two variables that matched one node land exactly on it, not either side: a box
-  // the size of the node it lands on sticks out however little it is offset, and the
-  // pair of arrows the graph draws for them separates on the press after anyway.
-  def inline_pair = 0.0
-  // A copy of the node each variable matched, laundered and built once. Laundered
-  // because the same pict drawn twice in a frame -- here and in the graph, which is
-  // exactly what the last of these presses does -- is ambiguous to the finders the
-  // arrows are aimed with; and once, because a copy rebuilt per frame is a different
-  // pict and would fade in place instead of moving.
-  def var_copy:
-    for values(m :~ Map = {}) (key in [#'rule1, #'rule2, #'rule3]):
-      def binds :~ Map = (rule_of[key] :~ Map)[#'binds]
-      for values(m :~ Map = m) (name in binds.keys()):
-        m ++ { [key, name]: as_pict(gold[binds[name]]).launder() }
   fun rule_term(key, ~home: home :: Boolean = #false) :: Map:
     def rule :~ Map = rule_of[key]
     def binds :~ Map = rule[#'binds]
@@ -366,44 +352,38 @@ fun slide_12():
     def [_, factor, x, y] = rule_box(key, ~staged: #true)
     def [segs, dx0] = rule[#'rhs]
     def line :~ pc.Pict = rule[#'pict]
-    // the pieces of the side that stand for something, in the order they are written
+    // The pieces of that side the rule *adds*, in the order they are written. Its
+    // variables are not among them: a variable stands for a node that is already in
+    // the picture, and a second copy of that node laid over it is a lie about what
+    // the rule builds. The arrows reach down to the real one instead -- see
+    // `rule_term_edges` -- so the term is the new operators, hanging off the graph
+    // it is about to join.
     def named:
       for List ([name, _, _] in segs_pieces(segs)):
-        keep_when binds.has_key(name) || adds.contains(name)
+        keep_when adds.contains(name)
         name
     def mid = x + factor * (dx0 + (segs_pict(segs) :~ pc.Pict).width / 2)
     def top = y + factor * line.height + 12.0
     for values(m :~ Map = {}) (name in named, i in 0..):
       // a variable keeps a key of its own: the node it matched is already on the
       // slide, and a frame holds one pict per key
-      def node = if adds.contains(name) | name | [#'match, name]
-      def pict = if adds.contains(name) | plain[name] | var_copy[[key, name]]
       def spot:
-        cond
-        | !home:
-            [mid - (named.length() * inline_pitch - (inline_pitch - nd)) / 2
-               + i * inline_pitch,
-             top]
-        | adds.contains(name): spot_of(name)
-        | ~else:
-            // either side of the middle, if another variable matched the same node
-            def same:
-              for List (other in named):
-                keep_when !adds.contains(other) && binds[other] == binds[name]
-                other
-            def [nx, ny] = spot_of(binds[name])
-            def slot = for values(n :~ Int = 0) (other in same, j in 0..):
-                         if other == name | j | n
-            [nx + (if same.length() > 1
-                   | inline_pair * (2.0 * slot - (same.length() - 1))
-                   | 0.0),
-             ny]
-      m ++ { node: [pict, & spot, band_flight] }
+        if home
+        | spot_of(name)
+        | [mid - (named.length() * inline_pitch - (inline_pitch - nd)) / 2
+             + i * inline_pitch,
+           top]
+      m ++ { name: [plain[name], & spot, band_flight] }
   // the arrows inside that term, over whichever keys it is drawn under
+  // The arrows of that term. An operand the rule adds is one of its own boxes; an
+  // operand that is a variable is the node that variable matched, where it already
+  // stands -- so the arrow is drawn to the graph from the first press, and the press
+  // that sends the term home moves only the end that is moving.
   fun rule_term_edges(key) :: List:
     def rule :~ Map = rule_of[key]
     def adds :~ List = rule[#'adds]
-    fun node(name): if adds.contains(name) | name | [#'match, name]
+    def binds :~ Map = rule[#'binds]
+    fun node(name): if adds.contains(name) | name | binds[name]
     List.append(
       & for List ([parent, kids] in rule[#'builds] :~ List):
           for List (kid in kids :~ List): [#'op_blue, node(parent), node(kid)])
@@ -449,24 +429,51 @@ fun slide_12():
   // region and the dashed line agree from end to end by construction, instead of
   // being two shapes that have to be lined up by hand.
   //
-  // The rectangles are not there only to save drawing them: a stroked curve cannot
-  // turn a square corner, and `+_r` sits exactly at the corner, so a tube on its own
-  // leaves that node's outer half outside the class. It stays covered by the
-  // rectangle it was already in.
-  //
-  // All of it is one layer, in this order, because the dashed line has to be drawn
-  // over every piece of grey: the two rectangles first, then the tube, whose own
-  // call draws its grey and then its dash.
+  // It is drawn the way the extractable sets on the algorithm slide are: one flat
+  // colour, faded once at the end, so that the pieces it is made of do not show
+  // where they overlap. The pieces are a lobe on each of the three nodes and a neck
+  // running from one to the next, both stroked with a round cap and a round join --
+  // so the blob has no corner anywhere, and the turn under `+_r` is a curve rather
+  // than the square elbow a projecting cap left there.
   def merged_region:
+    def neck = nd + 2 * eclass_pad
+    def lobe = nd * 1.34
+    def through = [middle(#'minus), middle(#'plus_r), middle(#'a)]
     def corner = [middle(#'plus_r)[0], middle(#'minus)[1]]
-    fun laid(p :: pc.Pict, r :~ List) :: pc.Pict: put(p, r[0], r[1], r[2])
     def flat:
-      laid(laid(blank_slide, region_of(#'a, #'a, ~fill: eclass_solid)),
-           region_of(#'minus, #'plus_r, ~fill: eclass_solid))
-    [eclass_tube(flat, middle(#'minus), corner, corner, middle(#'a),
-                 ~thickness: nd + 2 * eclass_pad,
-                 // square ends, so that the tube meets those rectangles flush
-                 ~cap: #'projecting, ~solid: #true),
+      pc.dc(fun (target :: draw.DC, dx, dy):
+              target.save()
+              // no brush for the neck: `path` fills as well as strokes, and an open
+              // polyline filled is the triangle between its ends
+              target.brush := draw.Brush.none
+              target.pen := draw.Pen(~color: eclass_solid, ~width: neck,
+                                     ~cap: #'round, ~join: #'round)
+              // a curve and not two straight runs: the outside of a stroked elbow
+              // is rounded by the join, but the inside of one is always square, and
+              // a class with a right angle cut into it is what this was before
+              def path = draw.Path()
+              def a0 = through[0] :~ List
+              def a2 = through[2] :~ List
+              path.move_to([dx + (a0[0] :~ Real), dy + (a0[1] :~ Real)])
+              path.curve_to([dx + (corner[0] :~ Real), dy + (corner[1] :~ Real)],
+                            [dx + (corner[0] :~ Real), dy + (corner[1] :~ Real)],
+                            [dx + (a2[0] :~ Real), dy + (a2[1] :~ Real)])
+              target.path(path)
+              target.brush := draw.Brush(~color: eclass_solid)
+              target.pen := draw.Pen(~color: draw.Color(0, 0, 0, 0.0), ~width: 0)
+              for (p :~ List in through :~ List):
+                def blob = draw.Path()
+                blob.rounded_rectangle([dx + (p[0] :~ Real) - lobe / 2,
+                                        dy + (p[1] :~ Real) - lobe / 2, lobe, lobe],
+                                       lobe * 0.44)
+                target.path(blob)
+              target.restore(),
+            ~width: slide_width, ~height: slide_height)
+    // and the line that says what the blob means, along the same curve, which runs
+    // down the middle of it
+    [eclass_tube(flat.alpha(eclass_alpha, ~composite: #true),
+                 middle(#'minus), corner, corner, middle(#'a),
+                 ~thickness: 0.0, ~dash: rule_green),
      0.0, 0.0, band_below]
   def classes_under:
     { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row,
