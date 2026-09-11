@@ -292,6 +292,28 @@ fun slide_dp():
                           ~content: prose([["extractable set", #'bold]])),
                 0.0, 0.0, band_callout] }
 
+  // ------------------------------------------------------------------- the key idea
+  // What the whole slide is an instance of, said once, in the empty half of the
+  // slide the code box used to fill. It arrives just before the first walk is
+  // extended -- late enough that "extend" and "extractable set" both mean something,
+  // early enough to be what the stepping is read against -- and stays up for the
+  // rest of the stepping.
+  def key_idea:
+    def robot = image_pict(media("robot-idea.png"), 132.0, 160.5)
+    def words:
+      prose_stack([[["Key idea:", #'bold]],
+                   [["extend the statewalk", #'plain]],
+                   [["one term at a time,", #'plain]],
+                   [["keep one walk per", #'plain]],
+                   [["extractable set", #'bold]]])
+    // scaled as a whole rather than set in a smaller face: the deck has one prose
+    // size and this is that size, standing further off. What it has to fit in is the
+    // margin left of the graph, which is 500 wide.
+    def content:
+      pc.beside(~sep: 18.0, ~vert: #'center, as_pict(robot), words).scale(0.72)
+    { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
+               100.0, 596.0, band_callout] }
+
   // --------------------------------------------------------------------- the presses
   // The pointer the other extractions use, on the class being considered. It stands
   // to the left of it, which is clear on this graph for every class a walk ends in
@@ -334,17 +356,20 @@ fun slide_dp():
 
   fun beat(shown :~ List,
            ~walk: walk = #false, ~over: over = #false,
-           ~point: point = #false, ~name: name :: Boolean = #false) :: Frame:
+           ~point: point = #false, ~name: name :: Boolean = #false,
+           ~idea: idea :: Boolean = #false) :: Frame:
     Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away)
                     ++ (if point == #false | {} | pointer_at(point))
+                    ++ (if idea | key_idea | {})
                     ++ (if name | reach_bubble(walk :~ List) | {}),
           ~edges: chain_edges(4)
                     ++ (if walk == #false | [] | walk_edges(walk :~ List))
                     ++ (if walk == #false | [] | blob_marks(walk :~ List))
                     ++ (if over == #false | [] | blob_marks(over :~ List)))
-  fun step(i :: Int, ~name: name :: Boolean = #false) :: Frame:
+  fun step(i :: Int, ~name: name :: Boolean = #false,
+           ~idea: idea :: Boolean = #true) :: Frame:
     def walk :~ List = (order :~ List)[i]
-    beat(stored(i + 1), ~walk: row_for(walk), ~name: name,
+    beat(stored(i + 1), ~walk: row_for(walk), ~name: name, ~idea: idea,
          ~point: walk[walk.length() - 1])
 
   def w_root_a = [#'s0, #'us, #'s3, #'ret]
@@ -387,7 +412,11 @@ fun slide_dp():
      Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
      // The walk that is nothing but the argument state, and what it puts within
      // reach -- the idea the rest of the slide is made of, so it is named here.
-     step(0, ~name: #true),
+     step(0, ~name: #true, ~idea: #false),
+     // and then what the rest of the slide is an instance of, before the first walk
+     // is extended: it is what the stepping is to be read against
+     beat(stored(1), ~walk: row_for((order :~ List)[0] :~ List), ~idea: #true,
+          ~point: #'s0),
      // the write the rule added, and the state it leaves
      step(1), step(2),
      // then the program's own first write, the state it leaves, its second write --
@@ -400,7 +429,7 @@ fun slide_dp():
      beat(stored((order :~ List).length()),
           ~walk: row_for((order :~ List)[6] :~ List),
           ~over: row_for((order :~ List)[2] :~ List),
-          ~point: #'s2),
+          ~point: #'s2, ~idea: #true),
      // The root is reached both ways too, for the same reason, so there are two
      // answers to choose between.
      beat(all_stored, ~point: #'ret),
