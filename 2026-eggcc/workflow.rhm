@@ -212,7 +212,7 @@ fun flow_callout(page :: pc.Pict, target :~ List,
 // slide_40: the workflow, a stage per press, and then the handoff -- the term and
 // the rules fly out of their boxes to the places the next slide draws them.
 fun slide_40():
-  def page = titled(flow_title)
+  def page = titled(flow_title, ~tag: "Pure workflow title", ~nudge: [0.0, 0.0])
   def scene = workflow_scene(~section: 0)
   def handoff:
     { #'program: [input_line, term_x, term_y, band_nodes],
@@ -235,7 +235,7 @@ fun slide_40():
 // written as if nothing had effects; and extraction is the part that has to be
 // taught about them, which is the rest of the talk.
 fun slide_41():
-  def page = titled(flow_title)
+  def page = titled(flow_title, ~tag: "Effectful workflow title", ~nudge: [0.0, 0.0])
   def pure = workflow_scene(~section: 0)
   def effectful = workflow_scene(~section: 1)
   def with_ir = workflow_scene(~section: 1, ~ir: #true)

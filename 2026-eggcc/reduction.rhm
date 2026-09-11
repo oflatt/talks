@@ -212,7 +212,8 @@ def np_picked_keys:
 // chain of assignments, a clause class at a time, the root, and last the thing the
 // whole picture is for: an effect-safe extraction is a satisfying assignment.
 fun slide_nphard():
-  def page = with_icon(titled("Effect-Safe Extraction is NP-Hard"))
+  def page = with_icon(titled("Effect-Safe Extraction is NP-Hard",
+                              ~tag: "NP-hardness title", ~nudge: [0.0, 0.0]))
   // A label, and a node with one in the middle of it.
   //
   // The box is drawn empty and the label laid over it as a pict, rather than handed
