@@ -185,19 +185,25 @@ fun slide_dp():
         if c1 == c2 && k1 != k2 && covered.contains(k1) && covered.contains(k2)
         | acc ++ [[k1, k2]]
         | acc
+  // A mass carries its own colour, so that one press can show two of them: the set
+  // the table already had and the set the walk that just arrived reaches. Listed
+  // later is drawn later, and the two are nested, so putting the smaller one last
+  // leaves the bigger one showing exactly where it is bigger -- which is the whole
+  // difference between the two entries, and the reason both are kept.
   fun blob_marks(row :~ List) :: List:
-    [[#'bhue, branch_blob(branch(row[2] :~ List))]]
-      ++ (for List (k in blob_nodes(row)): [#'blob, k])
-      ++ (for List ([f, t] in blob_links(row)): [#'blink, f, t])
+    def hue = branch_blob(branch(row[2] :~ List))
+    (for List (k in blob_nodes(row)): [#'blob, k, hue])
+      ++ (for List ([f, t] in blob_links(row)): [#'blink, f, t, hue])
 
   fun smooth(u :: Real) :: Real:
     def v = math.max(0.0, math.min(1.0, u))
     v * v * (3.0 - 2.0 * v)
   fun marks_of(f :: Frame, tag) :: List:
     for List (e :~ List in f.edges): keep_when e[0] == tag; e.rest
-  fun hue_of(f :: Frame, fallback :: String) :: String:
-    for values(h :: String = fallback) (e :~ List in f.edges):
-      if e[0] == #'bhue | (e[1] :~ String) | h
+  // the masses a frame shows, in the order they are to be drawn
+  fun hues_of(f :: Frame) :: List:
+    for values(acc :~ List = []) (m :~ List in marks_of(f, #'blob)):
+      if acc.contains(m[1]) | acc | acc ++ [m[1]]
 
   // The mass is drawn by the press rather than by either frame, because what has to
   // happen between two presses is that it *grows*: a shape that arrives as a second
@@ -205,57 +211,66 @@ fun slide_dp():
   // nothing, and the ones further from the mass that is already there start later, so
   // it runs outwards from the walk instead of blinking on all at once.
   fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
-    def was :~ List = for List (m :~ List in marks_of(a, #'blob)): m[0]
-    def now :~ List = for List (m :~ List in marks_of(b, #'blob)): m[0]
-    def links :~ List = if now == [] | marks_of(a, #'blink) | marks_of(b, #'blink)
-    def hue = hue_of(b, hue_of(a, blob_seed))
-    fun reach_dist(key) :: Real:
-      def [cx, cy] = middle(away, key)
-      for values(d :~ Real = 1.0e9) (o in was):
-        def [ox, oy] = middle(away, o)
+    // a piece of a mass is a colour and a node, so that two masses can be in flight
+    // at once without either one's growth being confused for the other's
+    def was :~ List = for List (m :~ List in marks_of(a, #'blob)): [m[1], m[0]]
+    def now :~ List = for List (m :~ List in marks_of(b, #'blob)): [m[1], m[0]]
+    def links :~ List = marks_of(a, #'blink) ++ marks_of(b, #'blink)
+    fun reach_dist(item :~ List) :: Real:
+      def [cx, cy] = middle(away, item[1])
+      for values(d :~ Real = 1.0e9) (o :~ List in was):
+        def [ox, oy] = middle(away, o[1])
         math.min(d, math.sqrt((cx - ox) * (cx - ox) + (cy - oy) * (cy - oy)))
     def coming :~ List: for List (k in now): keep_when !was.contains(k); k
     def far: for values(m :~ Real = 1.0) (k in coming): math.max(m, reach_dist(k))
     def size :~ Map:
-      for values(m :~ Map = {}) (key in now ++ was):
+      for values(m :~ Map = {}) (item in now ++ was):
         def f:
           cond
-          | was.contains(key) && now.contains(key): 1.0
-          | now.contains(key):
-              def start = 0.5 * (if far > 0.0 | reach_dist(key) / far | 0.0)
+          | was.contains(item) && now.contains(item): 1.0
+          | now.contains(item):
+              def start = 0.5 * (if far > 0.0 | reach_dist(item :~ List) / far | 0.0)
               smooth((t - start) / math.max(0.05, 1.0 - start))
           | ~else: smooth(1.0 - t)
-        m ++ { key: f }
-    fun at(key) :: Real: if size.has_key(key) | (size[key] :~ Real) | 0.0
+        m ++ { item: f }
+    fun at(hue, key) :: Real:
+      if size.has_key([hue, key]) | (size[[hue, key]] :~ Real) | 0.0
+    def order :~ List:
+      for values(acc :~ List = hues_of(a)) (h in hues_of(b)):
+        if acc.contains(h) | acc | acc ++ [h]
     pc.dc(fun (target :: draw.DC, dx, dy):
             target.save()
-            target.brush := draw.Brush(~color: hex_color(hue))
-            // the necks first, so a node's own blob is drawn over where they meet it
-            target.pen := draw.Pen(~color: hex_color(hue), ~width: blob_neck * dp_scale,
-                                   ~cap: #'round, ~join: #'round)
-            for ([f, tk] in links):
-              def anchor = if at(f) >= at(tk) | f | tk
-              def other = if anchor == f | tk | f
-              def u = math.min(at(f), at(tk))
-              skip_when u <= 0.02
-              def [ax, ay] = middle(away, anchor)
-              def [ox, oy] = middle(away, other)
-              def path = draw.Path()
-              path.move_to([dx + ax, dy + ay])
-              path.line_to([dx + ax + (ox - ax) * u, dy + ay + (oy - ay) * u])
-              target.path(path)
-            target.pen := draw.Pen(~color: hex_color(hue), ~width: 0, ~cap: #'round)
-            for (key in size.keys()):
-              def f = (size[key] :~ Real)
-              skip_when f <= 0.02
-              def [cx, cy] = middle(away, key)
-              def [w, h] = node_size(key)
-              def bw = (w + 2 * blob_pad) * dp_scale * f
-              def bh = (h + 2 * blob_pad) * dp_scale * f
-              def path = draw.Path()
-              path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
-                                     math.min(bw, bh) * 0.45)
-              target.path(path)
+            for (hue in order):
+              target.brush := draw.Brush(~color: hex_color(hue))
+              // the necks first, so a node's own blob is drawn over where they meet
+              target.pen := draw.Pen(~color: hex_color(hue),
+                                     ~width: blob_neck * dp_scale,
+                                     ~cap: #'round, ~join: #'round)
+              for ([f, tk, h] in links):
+                skip_when h != hue
+                def anchor = if at(hue, f) >= at(hue, tk) | f | tk
+                def other = if anchor == f | tk | f
+                def u = math.min(at(hue, f), at(hue, tk))
+                skip_when u <= 0.02
+                def [ax, ay] = middle(away, anchor)
+                def [ox, oy] = middle(away, other)
+                def path = draw.Path()
+                path.move_to([dx + ax, dy + ay])
+                path.line_to([dx + ax + (ox - ax) * u, dy + ay + (oy - ay) * u])
+                target.path(path)
+              target.pen := draw.Pen(~color: hex_color(hue), ~width: 0, ~cap: #'round)
+              for (item :~ List in size.keys()):
+                skip_when item[0] != hue
+                def f = (size[item] :~ Real)
+                skip_when f <= 0.02
+                def [cx, cy] = middle(away, item[1])
+                def [w, h] = node_size(item[1])
+                def bw = (w + 2 * blob_pad) * dp_scale * f
+                def bh = (h + 2 * blob_pad) * dp_scale * f
+                def path = draw.Path()
+                path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
+                                       math.min(bw, bh) * 0.45)
+                target.path(path)
             target.restore(),
           ~width: slide_width, ~height: slide_height)
 
@@ -278,18 +293,66 @@ fun slide_dp():
                 0.0, 0.0, band_callout] }
 
   // --------------------------------------------------------------------- the presses
-  // A beat is: what the table has stored so far, and which walk we are pointing at.
-  fun beat(shown :~ List, ~walk: walk = #false, ~name: name :: Boolean = #false) :: Frame:
+  // The pointer the other extractions use, on the class being considered. It stands
+  // to the left of it, which is clear on this graph for every class a walk ends in
+  // except two, and those two say where they want it.
+  def point_w = 96.0
+  def point_h = 38.0
+  def dp_point_right:
+    as_pict(walk_arrow(~facing: "rightArrow", ~width: point_w, ~height: point_h))
+  def dp_point_left:
+    as_pict(walk_arrow(~facing: "leftArrow", ~width: point_w, ~height: point_h))
+  // It stands to the left of the class it names, which is clear on this graph for
+  // every one a walk ends in except the argument state -- `x+1` is in that lane, so
+  // that one is pointed at from the other side.
+  def point_side = { #'s0: #'right }
+  fun pointer_at(key) :: Map:
+    def [x, y] = (away :~ Map)[key] :~ List
+    def [w, h] = node_size(key)
+    def right = point_side.has_key(key)
+    { #'point: [(if right | dp_point_left | dp_point_right),
+                (if right | x + w * dp_scale + 20.0 | x - point_w - 20.0),
+                y + (h * dp_scale - point_h) / 2, band_above] }
+
+  // One press per term the walk grows by, in the order a reader would try them:
+  // everything the first write opens up, and then everything the second does, so
+  // that the two arrive at the same class one after the other rather than
+  // interleaved. The last of them is the point of the slide.
+  def order:
+    [[#'s0],
+     [#'s0, #'us], [#'s0, #'us, #'s3],
+     [#'s0, #'u1], [#'s0, #'u1, #'s1],
+     [#'s0, #'u1, #'s1, #'u2], [#'s0, #'u1, #'s1, #'u2, #'s2]]
+  fun row_for(walk :~ List) :: List:
+    for values(found :~ List = []) (row :~ List in rows):
+      if (row[2] :~ List) == walk | row | found
+  // what the table holds once the first `n` of those have been taken
+  fun stored(n :: Int) :: List:
+    for values(acc :~ List = []) (i in 0..n):
+      for values(acc :~ List = acc) (row :~ List in rows_along((order :~ List)[i] :~ List)):
+        if acc.contains(row) | acc | acc ++ [row]
+
+  fun beat(shown :~ List,
+           ~walk: walk = #false, ~over: over = #false,
+           ~point: point = #false, ~name: name :: Boolean = #false) :: Frame:
     Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away)
+                    ++ (if point == #false | {} | pointer_at(point))
                     ++ (if name | reach_bubble(walk :~ List) | {}),
           ~edges: chain_edges(4)
-                    ++ (if walk == #false
-                        | []
-                        | walk_edges(walk :~ List) ++ blob_marks(walk :~ List)))
-  def after_a = rows_along(r_a[2] :~ List)
-  def after_b = after_a ++ rows_along(r_b[2] :~ List)
-  def after_root = after_b ++ rows_along(r_root_a[2] :~ List)
-                     ++ rows_along(r_root_b[2] :~ List)
+                    ++ (if walk == #false | [] | walk_edges(walk :~ List))
+                    ++ (if walk == #false | [] | blob_marks(walk :~ List))
+                    ++ (if over == #false | [] | blob_marks(over :~ List)))
+  fun step(i :: Int, ~name: name :: Boolean = #false) :: Frame:
+    def walk :~ List = (order :~ List)[i]
+    beat(stored(i + 1), ~walk: row_for(walk), ~name: name,
+         ~point: walk[walk.length() - 1])
+
+  def w_root_a = [#'s0, #'us, #'s3, #'ret]
+  def w_root_b = [#'s0, #'u1, #'s1, #'u2, #'s2, #'ret]
+  def all_stored:
+    def more = rows_along(w_root_a) ++ rows_along(w_root_b)
+    for values(acc :~ List = stored((order :~ List).length())) (row :~ List in more):
+      if acc.contains(row) | acc | acc ++ [row]
 
   // Where the answer goes once it is on its own. Placed by hand: the graph puts the
   // two members of the value class at opposite ends of a row, and an answer that
@@ -323,24 +386,27 @@ fun slide_dp():
      // and then the graph has the slide to itself
      Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
      // The walk that is nothing but the argument state, and what it puts within
-     // reach -- which is the idea the rest of the slide is made of, so it gets a
-     // press of its own and a name.
-     beat([r_seed], ~walk: r_seed, ~name: #true),
-     // The class where the two writes meet, by way of the write the rule added...
-     beat(after_a, ~walk: r_a),
-     // ...and by way of both of the program's own writes. Same class, longer walk,
-     // and one more thing within reach: the value the second write returns, which
-     // only a walk that performs that write can have.
-     beat(after_b, ~walk: r_b),
-     // So the table keeps both. Half one colour and half the other is a class it
-     // could not merge.
-     beat(after_b),
-     // The root is the same story, and it is the one that matters: two walks reach
-     // it, so there are two answers to choose between.
-     beat(after_root),
+     // reach -- the idea the rest of the slide is made of, so it is named here.
+     step(0, ~name: #true),
+     // the write the rule added, and the state it leaves
+     step(1), step(2),
+     // then the program's own first write, the state it leaves, its second write --
+     // which is the one that puts `v2` within reach, since only a walk that performs
+     // it can have the value it returns -- and the state that leaves
+     step(3), step(4), step(5), step(6),
+     // That last state is a class the table already had a walk for. The set it
+     // reaches is drawn over the set that walk reaches: the same, but for the one
+     // lobe, so the two are not interchangeable and both are kept.
+     beat(stored((order :~ List).length()),
+          ~walk: row_for((order :~ List)[6] :~ List),
+          ~over: row_for((order :~ List)[2] :~ List),
+          ~point: #'s2),
+     // The root is reached both ways too, for the same reason, so there are two
+     // answers to choose between.
+     beat(all_stored, ~point: #'ret),
      // The cheaper of them, and the term it stands for. The value the `return` takes
      // is the one this walk's write returned -- on this walk there is no other.
-     Frame(~picts: picts_at(away, fills_of(after_root)) ++ regions_at(away)
+     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away)
                      ++ green_at(away, answer),
            ~edges: chain_edges(4) ++ walk_edges(r_best)),
      // and then just that term, laid out as the tree it is
