@@ -11,7 +11,7 @@ import:
 // to and nothing else.
 //
 //   xvfb-run -a racket snapshot.rhm before
-//   ... edit talk.rhm ...
+//   ... edit a slide ...
 //   xvfb-run -a racket snapshot.rhm after
 //   diff -rq before after
 //

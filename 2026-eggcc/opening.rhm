@@ -1,0 +1,343 @@
+#lang rhombus/and_meta
+// The slides the talk opens with: the title, the grid of tools built on e-graphs,
+// and that same grid again with the ones that need effects marked.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  pict as pc
+
+export:
+  slide_1
+  slide_2
+  slide_20
+
+// -------------------------------------------------------------------------------------
+// slide_1
+fun slide_1(): slide_canvas(
+  ~width: slide_width, ~height: slide_height,
+  ~background: hex("FFFFFF"),
+  // unknown.png (id 88)
+  at(204.846, -334.58, ~rotate: 90.0, ~tag: "unknown.png",
+     image_pict(media("image1.png"), 1510.306, 1925.056, ~crop: [0.0, 0.013, 0.514, 0.0],
+                ~opacity: 0.351)),
+  // Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,… (id 89)
+  at(26.843, 896.485,
+     ~tag: "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,…",
+     textbox(~width: 1833.914, ~height: 101.563, ~autofit: #'shrink,
+             ~insets: insets(3.6, 3.6, 3.6, 3.6),
+             para(
+                  run(
+                      "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
+                      ~font: prose_font, ~size: 39.0)),
+             para(
+                  run("Chandrakana Nandi, Eli Rosenthal, Zachary Tatlock, Haobin Ni",
+                      ~font: prose_font, ~size: 39.0)))),
+  // Efficient Extraction from Effectful E-Graphs (id 90)
+  at(95.0, 202.755, ~tag: "Efficient Extraction from Effectful E-Graphs",
+     textbox(~width: 1730.0, ~height: 366.0, ~anchor: #'bottom, ~autofit: #'shrink,
+             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.8),
+                  run("Efficient Extraction from Effectful E-Graphs",
+                      ~font: prose_font, ~size: 116.0, ~bold: #true,
+                      ~spacing: -3.0)))),
+  // unknown.png (2) (id 91)
+  at(-4.619, 984.406, ~tag: "unknown.png (2)",
+     image_pict(media("image2.png"), 616.548, 101.578,
+                ~crop: [0.121, 0.318, 0.135, 0.37])),
+  // unknown.png (3) (id 92)
+  at(172.867, 743.613, ~tag: "unknown.png (3)",
+     image_pict(media("image3.png"), 115.0, 115.0)),
+  // unknown.png (4) (id 93)
+  at(809.334, 743.633, ~tag: "unknown.png (4)",
+     image_pict(media("image4.png"), 115.0, 115.0, ~crop: [0.0, 0.02, 0.0, 0.02])),
+  // unknown.png (5) (id 94)
+  at(1127.567, 743.662, ~tag: "unknown.png (5)",
+     image_pict(media("image5.png"), 115.0, 115.0, ~crop: [0.0, 0.052, 0.0, 0.198])),
+  // unknown.png (6) (id 95)
+  at(331.984, 743.623, ~tag: "unknown.png (6)",
+     image_pict(media("image6.png"), 115.0, 115.0)),
+  // unknown.png (7) (id 96)
+  at(650.217, 743.563, ~tag: "unknown.png (7)",
+     image_pict(media("image7.png"), 115.0, 115.065, ~crop: [0.0, 0.123, 0.0, 0.123])),
+  // unknown.png (8) (id 97)
+  at(491.1, 743.662, ~tag: "unknown.png (8)",
+     image_pict(media("image8.png"), 115.0, 115.0, ~crop: [0.0, 0.0, 0.0, 0.093])),
+  // pasted-movie.png (id 98)
+  at(1286.684, 743.584, ~tag: "pasted-movie.png",
+     image_pict(media("image9.png"), 115.0, 115.0)),
+  // unknown.png (9) (id 99)
+  at(1427.083, 743.584, ~tag: "unknown.png (9)",
+     image_pict(media("image10.png"), 479.167, 115.0)),
+  // pasted-movie.png (2) (id 100)
+  at(13.75, 743.613, ~tag: "pasted-movie.png (2)",
+     image_pict(media("image11.png"), 115.0, 115.0)),
+  // pasted-movie.png (3) (id 101)
+  at(968.45, 743.613, ~tag: "pasted-movie.png (3)",
+     image_pict(media("image12.png"), 115.0, 115.0))
+)
+
+// -------------------------------------------------------------------------------------
+// slide_2: Keynote's 10-stage build of Slide 2, as one animated pict.
+//
+// The generator gives each build stage its own slide; every object was a
+// superset of the stage before, so they collapse back into one.
+//
+// One `fade_in` per stage, so the deck takes the same number of clicks it did.
+//
+// The application labels are 64.608 tall, which is what a single line of 48pt
+// Helvetica Neue Medium measures in this deck -- the height Keynote gave the
+// labels it exported as real text boxes (SQL, WASM, …and more!). The ones it
+// exported as `line` shapes carried a placeholder 100x100 instead, and since
+// `~anchor: #'center` centres the text in its box, that sat them 17.7pt lower
+// than their neighbours and pushed them down onto the logos.
+fun slide_2():
+  // Labels sit on one line per row. Keynote left each label at its own group's
+  // top, and the groups sit at different heights, so the labels stepped up and
+  // down across the row and every one of them ran into its logo. These offsets
+  // put each row's labels on a common bottom edge, 8pt clear of the highest
+  // logo *ink* in that row -- ink, not bounding box, because the logos carry
+  // very different amounts of transparent padding. The logos have not moved.
+  // the picture before the first reveal
+  def base_canvas:
+    slide_canvas(
+      ~width: slide_width, ~height: slide_height,
+      ~background: hex("FFFFFF"),
+      at(52.084, 64.475, ~tag: "E-Graphs are Super Useful!",
+         textbox(~width: 1730.0, ~height: 112.848, ~autofit: #'shrink,
+                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.8),
+                      run("E-Graphs are Super Useful!", ~font: prose_font, ~size: 85.0,
+                          ~bold: #true, ~spacing: -2.01)))),
+      at(1890.408, 1044.894, ~tag: "Slide Number",
+         shape_pict(~width: 19.008, ~height: 29.496)))
+
+  // adds 'Floating point'
+  def stage_1:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(35.955, 236.25, ~tag: "Group (5)",
+                  group_pict(~width: 558.478, ~height: 292.287,
+                             at(0.0, 42.089, ~tag: "pasted-movie.png (5)",
+                                image_pict(media("image17.png"), 558.478, 250.198)),
+                             at(31.222, -51.323, ~tag: "Floating point",
+                                linebox(~width: 100.0, ~height: 64.608,
+                                        ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9),
+                                             ~space_before: 45.0,
+                                             run(
+                                               "Floating point",
+                                               ~font: prose_font,
+                                               ~size: 48.0)))))))
+
+  // adds 'Python Simulations'
+  def stage_2:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(620.266, 236.144, ~tag: "Group",
+                  group_pict(~width: 350.833, ~height: 320.995,
+                             at(70.107, 40.268, ~tag: "pasted-movie.png",
+                                image_pict(media("image13.png"), 280.727, 280.727)),
+                             at(0.0, -51.217, ~tag: "Python Simulations",
+                                linebox(~width: 100.0, ~height: 64.608,
+                                        ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9),
+                                             ~space_before: 45.0,
+                                             run(
+                                               "Python Simulations",
+                                               ~font: prose_font,
+                                               ~size: 48.0)))))))
+
+  // adds 'RTL Optimization'
+  def stage_3:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(1099.052, 247.464, ~tag: "Group (7)",
+                  group_pict(~width: 371.484, ~height: 269.86,
+                             at(7.51, -62.537, ~tag: "RTL Optimization",
+                                linebox(~width: 100.0, ~height: 64.608,
+                                        ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9),
+                                             ~space_before: 45.0,
+                                             run(
+                                               "RTL Optimization",
+                                               ~font: prose_font,
+                                               ~size: 48.0)))),
+                             at(0.0, 23.789, ~tag: "pasted-movie.png (7)",
+                                image_pict(media("image19.png"), 371.484, 246.071)))))
+
+  // adds 'ML Kernels', 'Luminal'
+  def stage_4:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(1571.646, 211.913, ~tag: "Group (6)",
+                  group_pict(~width: 264.568, ~height: 437.154,
+                             at(0.0, 45.622, ~tag: "pasted-movie.png (6)",
+                                image_pict(media("image18.png"), 264.568, 264.568)),
+                             at(1.976, -26.986, ~tag: "ML Kernels",
+                                linebox(~width: 100.0, ~height: 64.608,
+                                        ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9),
+                                             ~space_before: 45.0,
+                                             run(
+                                               "ML Kernels",
+                                               ~font: prose_font,
+                                               ~size: 48.0)))),
+                             at(40.664, 337.154, ~tag: "(Luminal)",
+                                linebox(~width: 100.0, ~height: 64.608,
+                                        ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9),
+                                             ~space_before: 45.0,
+                                             run(
+                                               "Luminal",
+                                               ~font: prose_font,
+                                               ~size: 48.0)))))))
+
+  // adds 'SQL'
+  def stage_5:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(39.033, 623.282, ~tag: "Group (3)",
+                  group_pict(~width: 312.321, ~height: 345.402,
+                             at(35.938, 59.801, ~tag: "pasted-movie.png (3)",
+                                image_pict(media("image15.png"), 276.435, 285.65)),
+                             at(0.0, -12.807, ~tag: "SQL",
+                                linebox(~width: 104.136, ~height: 64.608, ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                                             run("SQL", ~font: prose_font, ~size: 48.0)))))))
+
+  // adds 'CAD'
+  def stage_6:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(391.284, 662.932, ~tag: "Group (2)",
+                  group_pict(~width: 375.394, ~height: 336.667,
+                             at(0.0, 40.848, ~tag: "pasted-movie.png (2)",
+                                image_pict(media("image14.png"), 375.394, 295.819,
+                                           ~crop: [0.0, 0.0, 0.1, 0.0])),
+                             at(5.164, -52.457, ~tag: "CAD",
+                                linebox(~width: 100.0, ~height: 64.608,
+                                        ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9),
+                                             ~space_before: 45.0,
+                                             run(
+                                               "CAD", ~font: prose_font,
+                                               ~size: 48.0)))))))
+
+  // adds 'WASM'
+  def stage_7:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(806.567, 630.163, ~tag: "Group (4)",
+                  group_pict(~width: 407.253, ~height: 301.018,
+                             at(2.627, 68.882, ~tag: "pasted-movie.png (4)",
+                                image_pict(media("image16.png"), 404.626, 232.136)),
+                             at(0.0, -19.688, ~tag: "WASM",
+                                linebox(~width: 158.904, ~height: 64.608, ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                                             run("WASM", ~font: prose_font, ~size: 48.0)))))))
+
+  // adds 'User DSL Optimizations'
+  def stage_8:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(1256.336, 640.14, ~tag: "Group (8)",
+                  group_pict(~width: 633.867, ~height: 311.723,
+                             at(61.05, -29.665, ~tag: "WASM (2)",
+                                linebox(~width: 538.008, ~height: 64.608, ~autofit: #'grow,
+                                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                                        para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                                             run("User DSL Optimizations",
+                                                 ~font: prose_font, ~size: 48.0)))),
+                             at(0.0, 58.176, ~tag: "pasted-movie.png (8)",
+                                image_pict(media("image20.png"), 633.867, 253.547)))))
+
+  // adds '…and more!'
+  def stage_9:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(1625.216, 967.946, ~tag: "…and more!",
+                  linebox(~width: 280.2, ~height: 64.608,
+                          ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                               run("…and more!", ~font: prose_font, ~size: 48.0)))))
+
+  staged(base_canvas, [stage_1, stage_2, stage_3, stage_4, stage_5, stage_6, stage_7, stage_8, stage_9])
+
+// -------------------------------------------------------------------------------------
+// slide_20: slide_2 again, marking which of those tools need effects.
+//
+// This *is* slide_2: it starts from slide_2's own settled frame rather than
+// repeating the grid. Editing slide_2 moves this slide with it. The two had been
+// written out separately and had drifted -- to different logo positions and
+// different logo scales -- which is exactly what deriving one from the other stops.
+fun slide_20():
+  // slide_2 as it stands once every application has appeared. It is a function
+  // now -- a slide is built when it is shown -- so it is called, once, rather
+  // than named twice.
+  def grid = slide_2()
+  def shown = grid.snapshot(grid.duration - 1, 1.0)
+
+  // Which of these need effectful e-graphs. Each sits just under its logo's ink,
+  // the way slide_2's own "Luminal" sits under the ML Kernels logo -- ink rather
+  // than bounding box, because the logos carry very different bottom padding.
+  def notes:
+    group_pict(~width: slide_width, ~height: slide_height,
+               at(228.358, 522.666, ~tag: "(Herbie)",
+                  linebox(~width: 181.512, ~height: 64.608, ~autofit: #'grow,
+                          ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                               run("(Herbie)", ~font: prose_font,
+                                   ~size: 48.0)))),
+               at(905.804, 943.181, ~tag: "(Cranelift)",
+                  linebox(~width: 222.408, ~height: 64.608, ~autofit: #'grow,
+                          ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                               run("(Cranelift)", ~font: prose_font,
+                                   ~size: 48.0)))),
+               at(489.157, 1011.599, ~tag: "(Szalinski)",
+                  linebox(~width: 230.424, ~height: 64.608, ~autofit: #'grow,
+                          ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                          para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.0,
+                               run("(Szalinski)", ~font: prose_font,
+                                   ~size: 48.0)))))
+
+  // the notes are part of the picture from the moment the slide arrives; the
+  // bubble is the one thing revealed on a click
+  def base:
+    pc.overlay(~horiz: #'left, ~vert: #'top, shown, as_pict(notes))
+
+  def stage_1:
+    // The body goes in the band between the two rows, right of centre: the left of
+    // that band is taken by "(Herbie)" and the right by the "Luminal" note, and this
+    // is the clear stretch between them. Sitting between the rows it points into is
+    // what lets two spikes leave upwards and two downwards, rather than four of them
+    // crossing the picture from one side.
+    def slot = pc.blank(~width: 1.0, ~height: 1.0)
+    // Each marker is one logo's ink. Two of these images have no alpha channel and
+    // are opaque white to their edges, so the extent has to come from where the
+    // drawing stops being white -- MLIR's artwork is 507pt of its 634pt box, and
+    // aiming at the box would leave the spike short of the logo by 60pt.
+    def m_numba = pc.blank(~width: 256.0, ~height: 250.4)
+    def m_luminal = pc.blank(~width: 264.6, ~height: 264.6)
+    def m_cranelift = pc.blank(~width: 404.6, ~height: 232.1)
+    def m_mlir = pc.blank(~width: 507.1, ~height: 169.5)
+    fun place(base, p, x, y):
+      pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, p)
+    def placed:
+      place(place(place(place(place(pc.blank(~width: slide_width, ~height: slide_height),
+                                    slot, 950.0, 530.0),
+                              m_numba, 702.7, 288.8),
+                        m_luminal, 1571.6, 257.5),
+                  m_cranelift, 809.2, 699.1),
+            m_mlir, 1319.7, 740.3)
+    multi_callout(~on: placed, ~place: slot,
+                  ~at: [m_numba, m_luminal, m_cranelift, m_mlir],
+                  ~color: talk_red, ~padding: 10.0,
+                  as_pict(linebox(~width: 404.2, ~height: 57.6, ~autofit: #'grow,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("need side effects!", ~font: prose_font,
+                                           ~size: 48.0, ~bold: #true)))))
+
+  staged(base, [stage_1])

@@ -1,0 +1,281 @@
+#lang rhombus/and_meta
+// How an e-graph is drawn: a node, the tube round a class, the dashed line that
+// says two things are equal, the arrow from a node to what it is built from, and
+// the gold chip that marks a rule variable as bound.
+//
+// Nothing here knows *which* e-graph. The `update` example's own graph is in
+// `chain.rhm` and the SAT reduction's is in `reduction.rhm`; both draw themselves
+// out of this.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  pict as pc
+  draw
+
+export:
+  chain_wire
+  chip_at
+  chip_line_color
+  eclass_grey
+  eclass_pad
+  eclass_region
+  eclass_solid
+  eclass_tube
+  eq_line
+  graph_node
+  hex_color
+  node_blob
+  node_es_0
+  node_es_1
+  node_es_2
+  node_fork
+  node_green
+  node_match
+  node_middle
+  node_white
+  state_class
+  stateful_hex
+  value_class
+  walk_arrow
+
+// One edge, border to border, with an arrowhead at the end that says what the
+// node contains. There used to be two other kinds -- one that came up under the
+// row it pointed into, one that bowed around a box in the way -- and the layout
+// solver made both unnecessary: an edge that has to dodge something is a layout
+// that has not been solved.
+fun chain_wire(q :: pc.Pict, n :~ Map, es :~ List,
+               ~color: color = "black", ~line_width: lw :: Real = 4,
+               ~dash: dash :: Boolean = #false) :~ pc.Pict:
+  for values(acc :~ pc.Pict = q) (e :~ List in es):
+    arrow(~on: acc, n[e[0]], n[e[1]], ~color: color, ~line_width: lw, ~gap: 4,
+          ~line_style: if dash | #'short_dash | #'solid)
+
+// A node of an e-graph: a rounded box with a label in the middle. Both graphs in
+// the deck draw their nodes with this, which is what lets a node picked by
+// extraction be drawn as *the same node with a green background* -- a ring is a
+// second thing laid on top, and a translucent wash over the box tints the label
+// along with it.
+//
+// Blue is what says a thing is stateful, as the original deck had it: the state
+// values and the `update`s that thread them carry a blue border, the edges between
+// them are blue, and everything pure is black.
+def node_white = "FFFFFF"
+def node_green = "B7E3A6"                     // what extraction picked
+def node_fork = "F9C4C4"                      // and what it picked twice
+def node_match = "FFE9A3"                     // and what a rule has just matched
+def stateful_hex = "0433FF"
+
+// The two extractable sets the statewalk DP finds on this graph, as fills. They are
+// one hue in two strengths rather than two hues: the sets are nested -- the deeper
+// one is the paler one and `v2` besides -- so deeper reading as *more* is what they
+// mean, and a pair that differs in lightness stays two things under any colour
+// vision. Both are pale enough to read black text.
+def node_blob = "EFE6FA"                      // the mass an extractable set covers
+def node_es_0 = "E9DDF8"                      // what the bare argument state reaches
+def node_es_1 = "C3A9E8"                      // what every walk through one write reaches
+def node_es_2 = "8E6BC4"                      // and that, plus the redundant write's value
+
+// The runtime's `hex` builds the runtime's own colour, which is not the one the
+// drawing library takes; a six-digit fill written for `shape_pict` has to be read
+// again to paint with it directly. `draw.Color` of a string is a colour *name*, and
+// an unknown name is black.
+fun hex_color(h :: String) :: draw.Color:
+  fun part(i :: Int) :: Int: String.to_number(h.substring(i, i + 2), ~radix: 16)
+  draw.Color(part(0), part(2), part(4))
+
+// A rounded-rect path matching what the `roundRect` preset draws, inset by half a
+// line width so that a fill drawn with it stays under the border rather than beside
+// it. `adj` is thousandths of a percent of the shorter side, as OOXML has it.
+fun round_rect_path(w :: Real, h :: Real, adj :: String, inset :: Real) :: draw.Path:
+  def r = (String.to_number(adj) :~ Real) / 100000.0 * math.min(w, h)
+  def p = draw.Path()
+  p.rounded_rectangle([inset, inset, w - 2 * inset, h - 2 * inset],
+                      math.max(0.0, r - inset))
+  p
+
+// A node of an e-graph. `~fill2` gives it a second fill over the part of it right of
+// `~split`, for a class the DP has stored two statewalks for: one box in two
+// colours, rather than two boxes or a mark laid on top.
+fun graph_node(~width: w :: Real, ~height: h :: Real, ~adj: adj :: String,
+               ~line: line :: String, ~line_width: lw :: Real,
+               ~fill: fill :: String = node_white,
+               ~fill2: fill2 :: maybe(String) = #false,
+               ~split: split :: Real = 0.5, & runs):
+  def shape:
+    shape_pict(~width: w, ~height: h,
+               ~geom: preset_geom("roundRect", [pair("adj", "val " +& adj)]),
+               ~fill: if fill2 | #false | hex(fill),
+               ~line: make_stroke(hex(line), ~width: lw),
+               ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                           para(~align: #'center, & runs)))
+  cond
+  | !fill2: shape
+  | ~else:
+      def path = round_rect_path(w, h, adj, lw / 2)
+      def under:
+        pc.dc(fun (target :: draw.DC, dx, dy):
+                target.save()
+                target.pen := draw.Pen(~color: draw.Color(0, 0, 0, 0.0), ~width: 0)
+                fun paint(color :: String):
+                  target.brush := draw.Brush(~color: hex_color(color))
+                  target.path(path, ~dx: dx, ~dy: dy)
+                paint(fill)
+                // the far side again, through a window cut where the split falls
+                def window = draw.Region()
+                window.rectangle([dx + w * split, dy, w * (1 - split), h])
+                target.clipping_region := window
+                paint(fill2)
+                target.restore(),
+              ~width: w, ~height: h)
+      pc.overlay(under, as_pict(shape))
+
+// The pointer that walks an extraction down a graph, a press per class, in the
+// blue the bubbles are drawn in. Both extraction walks use it, so a press means
+// the same thing on either slide; each says where to put it, since the two graphs
+// leave the room for it in different places.
+def walk_hex = "2684EB"                       // `talk_blue`, as the runtime spells it
+fun walk_arrow(~facing: facing :: String = "rightArrow",
+               ~width: w :: Real = 80.0, ~height: h :: Real = 34.0):
+  shape_pict(~width: w, ~height: h,
+             ~geom: preset_geom(facing,
+                                [pair("adj1", "val 45000"), pair("adj2", "val 60000")]),
+             ~fill: hex(walk_hex))
+
+
+def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
+def value_class = draw.Color(255, 147, 0)     // v2 ≡ x
+
+// Nodes marked as sharing an e-class: a ring around each, in the class's own
+// colour, drawn over the picture.
+//
+// A ring rather than a filled capsule, and over rather than under. Under is
+// invisible: a slide carries its own white background, so anything behind it is
+// behind that too. Over, a translucent fill would tint the node's border and
+// label -- the state boxes are already blue -- while a ring outside the box
+// leaves both alone and still reads as one thing enclosing another, which is what
+// an e-class is.
+// An e-class whose members are apart, drawn the way the background slide draws
+// one: a translucent grey region round the nodes it holds, with a dashed line
+// between them saying they are the same value.
+//
+// The region is a tube: one wide round-capped stroke along the very curve the
+// dashed line runs down, so the two agree from end to end by construction. Drawn
+// instead as two padded boxes joined by a bar, they do not: the dashed line
+// between two nodes that are neither in a column nor in a row has to bend round
+// whatever stands between them, and a bar does not bend, so the line leaves the
+// region at the corner. One stroke also means the region is an even wash rather
+// than darker where two translucent pieces of it overlap.
+def eclass_pad = 12.0
+// The grey a class is drawn in, and the same grey with nothing taken off it. Two
+// translucent pieces that overlap show their overlap as a darker patch, so a region
+// built out of more than one piece is drawn in the flat colour and faded once.
+def eclass_alpha = 0.3
+def eclass_solid = draw.Color(146, 146, 146)
+def eclass_grey = draw.Color(146, 146, 146, eclass_alpha)
+def eclass_width = 64.0 + 2 * eclass_pad     // a node, plus its padding
+fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
+                // the dashed line down the middle of the tube, or `#false` for the
+                // wash on its own -- which is what a class wants when the rule that
+                // made it turns its own `→` into that line
+                ~dash: dash_color = #false,
+                // how fat the tube is: a node, plus its padding, and a slide whose
+                // nodes are bigger says so
+                ~thickness: thickness :: Real = eclass_width,
+                // How the tube ends. A round cap stops in a dome, which leaves the
+                // corners of a square node at the end of the tube outside it; a
+                // projecting one ends square, half a thickness past the middle of
+                // that node, which is exactly the rectangle `region` would draw
+                // round it.
+                ~cap: cap :: draw.Pen.Cap = #'round,
+                // Draw the tube in the flat grey and fade the whole layer once at
+                // the end -- `p` included, so that a caller which has already laid
+                // other pieces of the same class on it gets one even grey rather
+                // than a darker patch wherever two of them overlap.
+                ~solid: solid :: Boolean = #false,
+                ~width: w :: Real = slide_width,
+                ~height: h :: Real = slide_height) :: pc.Pict:
+  def path = draw.Path()
+  path.move_to(from)
+  path.curve_to(c1, c2, to)
+  fun stroked(pen :: draw.Pen) :: pc.Pict:
+    pc.dc(fun (target :: draw.DC, dx, dy):
+            target.save()
+            target.pen := pen
+            target.brush := draw.Brush.none
+            target.path(path, ~dx: dx, ~dy: dy)
+            target.restore(),
+          ~width: w, ~height: h)
+  let p = put(p, stroked(draw.Pen(~color: (if solid | eclass_solid | eclass_grey),
+                                  ~width: thickness, ~cap: cap)),
+              0.0, 0.0)
+  let p = if solid | (p :~ pc.Pict).alpha(eclass_alpha, ~composite: #true) | p
+  // `#'show_dash` is this enum's spelling of the short dash the other equivalence
+  // lines are drawn with; there is no `#'short_dash` in it.
+  if dash_color == #false
+  | p
+  | put(p, stroked(draw.Pen(~color: dash_color, ~width: 4, ~style: #'show_dash)),
+        0.0, 0.0)
+
+// One of those dashed lines on its own, as a pict with a place of its own: what a
+// rule's `→` turns into when the rule fires. Cropped to what it draws, so the press
+// that turns the one into the other is a move and not a fade in place.
+fun eq_line(from :: List, c1 :: List, c2 :: List, to :: List, ~dash: dash_color) :: List:
+  def pad = 12.0
+  def xs = [from[0], c1[0], c2[0], to[0]]
+  def ys = [from[1], c1[1], c2[1], to[1]]
+  def left = (for values(m :~ Real = xs[0]) (v in xs): math.min(m, v)) - pad
+  def top = (for values(m :~ Real = ys[0]) (v in ys): math.min(m, v)) - pad
+  def right = (for values(m :~ Real = xs[0]) (v in xs): math.max(m, v)) + pad
+  def bottom = (for values(m :~ Real = ys[0]) (v in ys): math.max(m, v)) + pad
+  fun local(q :~ List) :: List: [q[0] - left, q[1] - top]
+  [eclass_tube(pc.blank(~width: right - left, ~height: bottom - top),
+               local(from), local(c1), local(c2), local(to),
+               ~dash: dash_color, ~thickness: 0.0,
+               ~width: right - left, ~height: bottom - top),
+   left, top]
+
+// The middle of a node placed at (x, y), which is where a tube through it runs.
+fun node_middle(node, x :: Real, y :: Real) :: List:
+  def q :~ pc.Pict = as_pict(node)
+  [x + q.width / 2, y + q.height / 2]
+
+// The region for a class whose members are apart, as a pict with a place of its
+// own rather than as a drawing on a slide-sized layer. That is what lets the
+// equality in the rule box fly out and *become* the region: a press interpolates
+// one position per key, so the thing arriving has to have a position to arrive at.
+fun eclass_region(from :~ List, to :~ List, ~dash: dash) :: List:
+  def pad = eclass_width / 2 + 6.0
+  def left = math.min(from[0], to[0]) - pad
+  def top = math.min(from[1], to[1]) - pad
+  def here = [from[0] - left, from[1] - top]
+  def there = [to[0] - left, to[1] - top]
+  [eclass_tube(pc.blank(~width: math.abs(from[0] - to[0]) + 2 * pad,
+                        ~height: math.abs(from[1] - to[1]) + 2 * pad),
+               here, here, there, there, ~dash: dash,
+               ~width: math.abs(from[0] - to[0]) + 2 * pad,
+               ~height: math.abs(from[1] - to[1]) + 2 * pad),
+   left, top]
+
+// A variable of the rule, marked as bound: the words in a gold box a little bigger
+// than they are, laid over the rule's own text.
+def chip_pad = 4.0
+def chip_line = "9A6B00"
+// the same colour for a line rather than a fill: `hex` builds the runtime's colour,
+// which is not the one `arrow` takes
+def chip_line_color = draw.Color(0x9A, 0x6B, 0x00)
+fun chip_at(piece :: pc.Pict, x :: Real, y :: Real,
+            ~lit: lit :: Boolean, ~band: band :: Int) :: List:
+  if lit
+  | [gold_chip(piece), x - chip_pad, y - chip_pad, band]
+  | [piece, x, y, band]
+
+fun gold_chip(p :: pc.Pict) :: pc.Pict:
+  pc.overlay(as_pict(shape_pict(~width: p.width + 2 * chip_pad,
+                                ~height: p.height + 2 * chip_pad,
+                                ~geom: preset_geom("roundRect",
+                                                   [pair("adj", "val 20000")]),
+                                ~fill: hex(node_match),
+                                ~line: make_stroke(hex(chip_line), ~width: 1.0))),
+             p)

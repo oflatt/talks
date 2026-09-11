@@ -1,0 +1,278 @@
+#lang rhombus/and_meta
+// The compiler workflow, drawn twice -- once for a program without effects and
+// once for one with them -- and the two slides that walk through it.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "magicmove.rhm" open
+  "theme.rhm" open
+  "term.rhm" open
+  "codebox.rhm" open
+  "rules.rhm" open
+  pict as pc
+  draw
+
+export:
+  slide_40
+  slide_41
+
+// -------------------------------------------------------------------------------------
+// The workflow, drawn twice.
+//
+// The first picture says what an e-graph optimizer is: a program and a pile of rules
+// go in, an e-graph holds every version of the program the rules can reach, and
+// extraction picks one of them out. The second draws the same picture again, later,
+// to say what this work changes about it -- the program has effects now, it is put
+// into a dataflow IR where an effect is a value threaded from one operation to the
+// next, the rules are still written as if nothing had effects, and extraction is the
+// part that has to be taught about them.
+//
+// One description draws both, so the second picture is the first with pieces changed
+// rather than a second drawing to keep in step with it. The second one *opens* on
+// the first, exactly as it was left, and changes a piece at a time: the audience has
+// seen this picture, and what is worth a press is each way it is now different.
+//
+// It is a scene rather than a finished page -- every piece under a key, in the way
+// `magicmove` wants -- for three reasons. The first picture arrives a stage at a
+// time, which is how the audience is walked through it. A press can change one piece
+// and leave the rest alone, which is how the second picture grows out of the first.
+// And the last press of each slide sends the pieces the *next* slide draws to where
+// that slide draws them, at the size it draws them, so the click between the two
+// slides is a match cut: the boxes hold the real thing at its real size, and the
+// handoff is a move rather than a redraw.
+
+// A stage of the workflow: a bubble in the deck's own style, named, with the thing
+// itself inside it. The box and its contents are separate picts, since the contents
+// are what changes and what travels on.
+def stage_name_face = draw.Font(~name: prose_font, ~size: 36.0, ~weight: #'bold)
+def stage_code_face = draw.Font(~name: code_font, ~size: 40.0)
+def stage_greek_face = draw.Font(~name: math_font, ~size: 40.0)
+
+// the same three spellings the code box uses, for the lines a stage holds that no
+// other slide draws
+fun stage_code(s :: String) :: pc.Pict: pc.text(s, ~font: stage_code_face)
+fun stage_greek(s :: String) :: pc.Pict: pc.text(s, ~font: stage_greek_face)
+fun stage_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
+
+fun stage_pieces(label :: String, body :: pc.Pict, at :~ List,
+                 ~width: w :: maybe(Real) = #false,
+                 ~height: h :: maybe(Real) = #false) :: Map:
+  def name = pc.text(label, ~font: stage_name_face)
+  def inside = pc.stack(~sep: 18.0, ~horiz: #'center, name, body)
+  def box:
+    as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
+                        pc.stack(~sep: 18.0, ~horiz: #'center, name, body.ghost())))
+  // where the ghost of the body sits inside that box, so the real one can be drawn
+  // over it and can leave without taking the box with it
+  def top = at[1] + (box.height - inside.height) / 2
+  { #'box: [box, at[0], at[1], band_below],
+    #'body: [body, at[0] + (box.width - body.width) / 2,
+             top + name.height + 18.0, band_nodes] }
+
+// The e-graph is a cog, in both pictures. The slide that draws an e-graph properly
+// comes after the first of them and is the whole of the second's neighbourhood; a
+// small one here would be a picture the audience is asked to read twice, once before
+// they have been told how.
+def flow_gear = make_gear(~size: 190.0, ~teeth: 11)
+
+// The step that reads a program back out, labelled from the inside: it is a stage of
+// the picture like the boxes are, so it is drawn in their clothes. Both pictures give
+// it the same size, so renaming it is a change of words in one place rather than a
+// shape that grows.
+fun extract_arrow(~safe: safe :: Boolean) :: pc.Pict:
+  def face = draw.Font(~name: prose_font, ~size: 30.0, ~weight: #'bold)
+  def label:
+    if safe
+    | pc.stack(~sep: 2.0, ~horiz: #'center,
+               pc.text("Effect-safe", ~font: face), pc.text("extraction!", ~font: face))
+    | pc.text("Extract!", ~font: face)
+  as_pict(make_arrow(~width: 330.0, ~height: 164.0, ~color: talk_blue, label))
+
+// Where each stage sits. Both pictures share these, so the second is the first with
+// the IR stage put in the gap the first one leaves between the program and the
+// rules, and everything else stays where it was.
+def flow_program_at = [95.0, 244.0]
+def flow_ir_at = [95.0, 496.0]
+def flow_rules_at = [95.0, 748.0]
+def flow_egraph_at = [700.0, 380.0]
+def flow_arrow_at = [1020.0, 466.0]
+def flow_optimized_at = [1390.0, 466.0]
+def flow_egraph_size = [280.0, 300.0]
+
+// The boxes hold the very picts the next slide draws, at the size it draws them,
+// wherever that fits: the term is full size, so its handoff is a move and nothing has
+// to be redrawn in flight. The code and the rules are the two things too wide for
+// their column at full size.
+def flow_rules_scale = 0.8
+def flow_code_scale = 0.54
+def flow_rule_scale = 0.55
+
+fun workflow_scene(~section: section :: Int,
+                   ~ir: ir :: Boolean = #false,
+                   ~safe: safe :: Boolean = #false) :: Map:
+  def parts = code_parts()
+  def program_body:
+    if section == 0
+    | input_line
+    | code_updates(parts, ~states: #false).scale(flow_code_scale)
+  // each picture holds the rules its own section works with: the two the term is
+  // rewritten by, and then the one about writes that the last few slides were
+  // about -- which is written as if nothing had effects, and is the point
+  def rule_1 = rules_line_1.scale(flow_rules_scale)
+  def rule_2 = rules_line_2.scale(flow_rules_scale)
+  def rules_body:
+    if section == 0
+    | pc.stack(~sep: 10.0, ~horiz: #'left, rule_1, rule_2)
+    | ((update_rule(~value: #true) :~ Map)[#'body] :~ pc.Pict).scale(flow_rule_scale)
+  def program = stage_pieces("Input Program", program_body, flow_program_at)
+  def rules = stage_pieces("Optimization Rules", rules_body, flow_rules_at)
+  def egraph:
+    stage_pieces("E-Graph", flow_gear, flow_egraph_at,
+                 ~width: flow_egraph_size[0], ~height: flow_egraph_size[1])
+  // what comes out: the term the rules reduce to, and the one write the program's
+  // two come to
+  def optimized_body:
+    if section == 0
+    | pc.text("a", ~font: term_font)
+    | stage_line(stage_code("return update(a, x+1, "),
+                 stage_greek("ω"), stage_code(")")).scale(0.52)
+  def optimized = stage_pieces("Optimized Program", optimized_body, flow_optimized_at)
+  def ir_stage:
+    stage_pieces("Dataflow IR",
+                 code_updates(parts, ~states: #true).scale(flow_code_scale),
+                 flow_ir_at)
+  // the two rules, one under the other inside their box, so each can be sent to its
+  // own place on the slide that states them
+  def [_, rules_body_x, rules_body_y, _] = rules[#'body] :~ List
+  { #'program_box: program[#'box], #'program: program[#'body],
+    #'rules_box: rules[#'box],
+    #'egraph_box: egraph[#'box], #'egraph: egraph[#'body],
+    #'optimized_box: optimized[#'box], #'optimized: optimized[#'body],
+    #'extract: [extract_arrow(~safe: safe), & flow_arrow_at, band_nodes] }
+    // the first picture's two rules are separate picts, since they fly to two
+    // separate places on the slide after it; the second's is one block
+    ++ (if section == 0
+        | { #'rule_1: [rule_1, rules_body_x, rules_body_y, band_nodes],
+            #'rule_2: [rule_2, rules_body_x, rules_body_y + rule_1.height + 10.0,
+                       band_nodes] }
+        | { #'rules_body: rules[#'body] })
+    ++ (if ir | { #'ir_box: ir_stage[#'box], #'ir: ir_stage[#'body] } | {})
+
+// The first picture arrives a stage at a time: what you write, what else you write,
+// what they are put into, and what comes back out.
+def flow_steps:
+  [[#'program_box, #'program],
+   [#'rules_box, #'rule_1, #'rule_2, #'rules_body],
+   [#'egraph_box, #'egraph],
+   [#'extract, #'optimized_box, #'optimized]]
+fun flow_keys(~upto: upto :: Int, ~ir: ir :: Boolean = #false) :: List:
+  List.append(& for List (k in 0..upto): (flow_steps :~ List)[k])
+    ++ (if ir | [#'ir_box, #'ir] | [])
+def flow_all = flow_keys(~upto: (flow_steps :~ List).length())
+
+// The program goes into the e-graph, the rules go into the e-graph, and a program
+// comes back out of it. When the IR stage is there the program goes through it on
+// the way in, so that edge is drawn to the IR box instead. An edge waits for both of
+// its ends, so the arrows arrive with the stages they join.
+fun workflow_edges(~ir: ir :: Boolean, ~shown: shown :~ List) :: List:
+  def wanted:
+    (if ir
+     | [[#'program_box, #'ir_box], [#'ir_box, #'egraph_box]]
+     | [[#'program_box, #'egraph_box]])
+      ++ [[#'rules_box, #'egraph_box]]
+  for List (e :~ List in wanted):
+    keep_when shown.contains(e[0]) && shown.contains(e[1])
+    e
+
+fun workflow_wire(layer :: pc.Pict, specs :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) ([from, to] in specs):
+    arrow(~on: q, at[from], at[to], ~line_width: 6, ~gap: 16, ~color: "black")
+
+fun workflow_frame(scene :~ Map, keys :~ List,
+                   ~ir: ir :: Boolean = #false, ~over: over :~ Map = {}) :: Frame:
+  def shown:
+    for values(m :~ Map = {}) (k in keys):
+      if scene.has_key(k) | m ++ { k: scene[k] } | m
+  Frame(~picts: shown ++ over, ~edges: workflow_edges(~ir: ir, ~shown: keys))
+
+// A bubble on one of the stages, built the way the graph slides build theirs.
+fun flow_callout(page :: pc.Pict, target :~ List,
+                 ~body: body :~ List, ~color: color,
+                 ~content: content :: pc.Pict) :: List:
+  def marker = pc.blank(~width: 1.0, ~height: 1.0)
+  def what = as_pict(target[0])
+  def probe:
+    put(put(page.ghost(), marker, body[0], body[1]), what.ghost(), target[1], target[2])
+  [multi_callout(~on: probe, ~place: marker, ~at: [what],
+                 ~color: color, ~padding: 20.0, content),
+   0.0, 0.0, band_above]
+
+// -------------------------------------------------------------------------------------
+// slide_40: the workflow, a stage per press, and then the handoff -- the term and
+// the rules fly out of their boxes to the places the next slide draws them.
+fun slide_40():
+  def page = titled(flow_title)
+  def scene = workflow_scene(~section: 0)
+  def handoff:
+    { #'program: [input_line, term_x, term_y, band_nodes],
+      #'rule_1: [rules_line_1, & rules_line_1_at, band_nodes],
+      #'rule_2: [rules_line_2, & rules_line_2_at, band_nodes] }
+  magic_slide(page,
+              [& for List (k in 1..(flow_steps :~ List).length() + 1):
+                   workflow_frame(scene, flow_keys(~upto: k)),
+               Frame(~picts: handoff)],
+              ~wire: workflow_wire)
+
+// -------------------------------------------------------------------------------------
+// slide_41: the same workflow, once the program has effects.
+//
+// It comes after the whole of the effectful example, and reads it back as a picture:
+// it opens on the workflow the first section ended with, unchanged, and then says
+// what is different, one press at a time. The program is the one the last four
+// slides were about, and so is the answer; it goes through a dataflow IR, which is
+// what makes an effect a value; the rule is the one those slides wrote, and it is
+// written as if nothing had effects; and extraction is the part that has to be
+// taught about them, which is the rest of the talk.
+fun slide_41():
+  def page = titled(flow_title)
+  def pure = workflow_scene(~section: 0)
+  def effectful = workflow_scene(~section: 1)
+  def with_ir = workflow_scene(~section: 1, ~ir: #true)
+  def safe = workflow_scene(~section: 1, ~ir: #true, ~safe: #true)
+  def ir_keys = flow_keys(~upto: (flow_steps :~ List).length(), ~ir: #true)
+  def threading:
+    { #'threading: flow_callout(page, with_ir[#'ir_box], ~body: [746.0, 202.0],
+                                ~color: talk_green,
+                                ~content: prose_stack(
+                                            [[["Effects modeled by", #'plain]],
+                                             [["threading", #'bold],
+                                              [" functional objects!", #'plain]]])) }
+  def refine:
+    { #'refine: flow_callout(page, safe[#'extract], ~body: [1130.0, 740.0],
+                             ~color: talk_green,
+                             ~content: prose_stack(
+                                         [[["Refine the semantics to", #'plain]],
+                                          [["only ", #'plain], ["effect-safe", #'bold],
+                                           [" programs", #'plain]]])) }
+  // Green, like the other two: these are the three things that go right, and a
+  // bubble in the diagram's own blue reads as another stage of it rather than as a
+  // remark about one.
+  def worry:
+    { #'worry: flow_callout(page, safe[#'rules_box], ~body: [706.0, 840.0],
+                            ~color: talk_green,
+                            ~content: prose_stack([[["Write rules", #'bold]],
+                                                   [["without worry", #'bold]]])) }
+  // A press per thing to say. What extraction becomes and the bubble about it are
+  // two of those things, not one: the picture changing is what happened, and the
+  // bubble is what to make of it, so the arrow is renamed on its own press and the
+  // bubble arrives on the next.
+  magic_slide(page,
+              [workflow_frame(pure, flow_all),
+               workflow_frame(effectful, flow_all),
+               workflow_frame(with_ir, ir_keys, ~ir: #true, ~over: threading),
+               workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading),
+               workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading ++ refine),
+               workflow_frame(safe, ir_keys, ~ir: #true,
+                              ~over: threading ++ refine ++ worry)],
+              ~wire: workflow_wire)

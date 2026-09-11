@@ -1,0 +1,356 @@
+#lang rhombus/and_meta
+// The deck's furniture: the three faces it is set in and the check that they are
+// the ones being drawn with, the page a slide starts from, the words a bubble is
+// written in, and the bands that say what is drawn over what.
+//
+// Everything here is about how the talk looks rather than about what it says, so
+// the scheme is one edit and nothing downstream has an opinion about it.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "magicmove.rhm" open
+  pict as pc
+  pict/text as text
+  draw
+
+export:
+  as_pict
+  band_callout
+  band_chip
+  band_flight
+  band_point
+  band_rule
+  band_wires
+  blank_slide
+  bubble_at
+  code
+  code_face
+  code_font
+  code_indent
+  code_sub
+  divider
+  fill_width
+  frame_box
+  greek
+  in_section
+  keynote_blue
+  linebox
+  math_face
+  math_font
+  media
+  node_font
+  prose
+  prose_face
+  prose_font
+  prose_stack
+  put
+  segs_pict
+  segs_pieces
+  slide_height
+  slide_width
+  small_prose
+  staged
+  titled
+  with_icon
+
+def slide_width = 1920.0
+def slide_height = 1080.0
+
+// ------------------------------------------------------------------------ faces
+// The deck is set in three faces, and every run names one of these rather than a
+// typeface, so the scheme is one edit and a fourth face cannot creep in unnamed:
+//
+//   `prose_font`  titles, captions, callouts -- anything read as English
+//   `code_font`   the code boxes, and the e-graph node labels, which are the same
+//                 program terms drawn as a graph
+//   `math_font`   Greek, primes and the rewrite rules -- the notation, not the code
+//
+// `code_font` is the theme default too, so a run naming no typeface gets it. That
+// default is why the Greek has to be said out loud: PT Mono has no Greek at all,
+// so every unnamed sigma in this file was drawn by whatever racket/draw reached
+// for instead -- Noto Sans on this machine, something else on a Mac. Naming the
+// face is the difference between choosing one and being handed one.
+def prose_font = "Helvetica Neue"
+def code_font = "PT Mono"
+def math_font = "Times New Roman"
+
+// The e-graph node labels get their own name because which face they want is a
+// judgement rather than a fact. They follow the notation: they sit beside the
+// rewrite rules, they hold the same Greek and primes, and PT Mono draws `0` with a
+// slash through it and gives `1` a flag, which is wrong for a term in a graph.
+// Setting this to `code_font` draws them as the code boxes instead -- but then every
+// sigma needs an exception, because PT Mono has no Greek at all.
+def node_font = math_font
+
+current_default_font(code_font)
+
+// ------------------------------------------------------------------------ fonts
+// racket/draw substitutes silently when a family is missing, and a substitute
+// with different metrics is exactly what goes wrong here: line spacing in this
+// runtime is a percentage of the *font size*, so the leading does not move when
+// the face does -- only the substitute's ink height does. With Noto Sans
+// standing in for Helvetica Neue, the 116pt title's two lines overlapped by
+// 5.6pt and ran together.
+//
+// So name every family the deck asks for and refuse to run on the wrong one. A
+// family may declare a stand-in, for the case where it cannot be installed at
+// all (Helvetica Neue is Apple's); the stand-in has to be installed, and the
+// name has to actually resolve to it, which is checked by measuring -- a font
+// reports the face that was asked for, not the one that was drawn.
+//
+// `fonts` is a folder beside this file. Anything in it is loaded before a
+// single glyph is measured, so a deck can carry the faces it is set in rather
+// than hope for them: `raco glide fonts talk.rhm` puts them there.
+register_fonts("fonts")
+//
+// One entry per face the deck is set in. Two entries used to be here that were not
+// faces: Medium is a weight of the sans that Keynote wrote out as a family of its
+// own, and the single Arial run was on an empty string. Both are gone rather than
+// checked.
+check_fonts(
+  [code_font],
+  [prose_font, "Nimbus Sans"],                // Helvetica clone, Helvetica metrics
+  [math_font, "Tinos"]                        // metric-compatible with Times
+)
+
+// Images sit next to this file, so the program travels as a folder.
+def media = media_lookup("media")
+
+// The runtime builds Racket picts, but rhombus/pict's animation works on its own
+// `Pict`. `Pict.from_handle` is glide-pptx's own bridge between the two -- its
+// README calls it exactly that.
+// A Racket pict from the runtime crosses over; a `Pict` is already across.
+fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
+
+// A slide that was several: `base_canvas` is what shows before the first click,
+// and each stage fades in over everything already on screen, one click apiece.
+//
+// `wire(p, k)` adds what is drawn *between* elements -- the edges of a graph --
+// to the picture at stage `k`: to the base for `k = 0`, and for each later stage
+// to a ghost of the base under the stage's own elements, so that an edge can join
+// a node the stage adds to one that was there already, and fades in with it.
+// ---------------------------------------------------------------------------
+// The talk's sections.
+//
+// `divider(k)` is the slide between sections: the bar full size in the middle of
+// the slide, which then magic-moves up into the top margin. `in_section(k, ...)`
+// puts that same bar, at that same size and place, above a content slide -- so the
+// move ends exactly where the next slide's header begins and the bar appears to
+// stay put across the cut.
+//
+// The header's discs sit around y 18..50 and the deck's slide titles start at
+// y 64, which is what the disc and text scales in `header_layout` are chosen
+// against. Retitle a slide higher than that and the two will meet.
+def sections = ["Motivate Effectful E-Graphs", "Example Effectful E-Graph",
+                "Effect-Safe Extraction", "It Works!"]
+
+fun section_canvas():
+  as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
+                       ~background: hex("FFFFFF")))
+
+// The outline and the header are the one text on screen for the whole talk, and the
+// only text that names no face: `slidehelpers` draws them with `current_font`, whose
+// default is slideshow's rather than anything this deck declared or `check_fonts`
+// checked. Both entry points are wrapped so that they are built in the prose face,
+// which also picks up the numbers in the discs.
+fun in_prose_face(mk):
+  fun ():
+    parameterize { text.current_font: text.current_font() with (name = prose_font) }:
+      mk()
+
+fun divider(k :: Int):
+  in_prose_face(
+    fun ():
+      // only the first divider writes the list out; after that the list is familiar
+      // and what matters is which disc is lit
+      outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0))
+
+fun in_section(k :: Int, mk):
+  in_prose_face(
+    fun ():
+      section_header(sections, ~at: k, ~canvas: as_pict(mk())))
+
+fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
+  def base = wire(as_pict(base_canvas), 0)
+  for values(p = base) (st in stages, k in 1..):
+    def extra:
+      wire(pc.overlay(~horiz: #'left, ~vert: #'top, base.ghost(), as_pict(st)), k)
+    fade_in(p, extra, ~horiz: #'left, ~vert: #'top)
+
+// Keynote's blue, which the state parts of the e-graph are drawn in: the state
+// nodes' borders and the edges between them. See `chain_wire`.
+def keynote_blue = draw.Color(4, 51, 255)
+
+// Keynote's centred one-line text box, which the deck has forty-one of. Every one
+// of them spelled out `~anchor: #'center` and `~wrap: #false` again; they say it
+// once here instead. `~width` and `~height` stay the size Keynote gave the box --
+// the glyphs are free to overflow it, and several of them do, which is Keynote's
+// geometry rather than a mistake to correct here.
+//
+// The name is seven letters to match `textbox`, so that swapping one for the other
+// leaves every continuation line in this file at the column shrubbery wants it.
+fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
+  textbox(~width: w, ~height: h, ~anchor: #'center, ~wrap: #false, & paras, ~& kws)
+
+// The size the code box is set at, which the rule under it is scaled to match.
+def code_size = 40.0
+
+def code_face = draw.Font(~name: code_font, ~size: code_size)
+def math_face = draw.Font(~name: math_font, ~size: code_size)
+fun code(s :: String) :: pc.Pict: pc.text(s, ~font: code_face)
+fun code_sub(s :: String) :: pc.Pict: code(s).scale(0.6)
+// the Greek is set in the notation face, as everywhere else in the deck: PT Mono
+// has none
+fun greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face)
+def code_indent = code("  ").width    // the body, inside the signature
+
+// A bordered box. The runtime's shape rather than pict's `rectangle`: a pict
+// outline borrows the pen *style* of the surface it lands on, and the canvas
+// leaves a transparent pen behind it, so a pict's border drawn straight onto a
+// slide comes out invisible. The runtime's shapes set their own pen.
+fun frame_box(w :: Real, h :: Real, ~rounded: r = #false) :: pc.Pict:
+  as_pict(shape_pict(~width: w, ~height: h,
+                     ~geom: if r | preset_geom("roundRect", [pair("adj", "val " +& r)]) | #false,
+                     ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
+
+// A line built from its pieces, in the order they are written. A piece with a role
+// is one that stands for a node in the graph; `#false` is punctuation.
+fun segs_pict(segs :~ List) :: pc.Pict:
+  pc.beside(~vert: #'bottom,
+            & List.append(& for List ([role, ps] in segs): ps))
+
+// The named pieces of a line, as [role, pict, x offset from the line's left].
+fun segs_pieces(segs :~ List) :: List:
+  def values(out, _):
+    for values(acc :~ List = [], dx :~ Real = 0.0) ([role, ps] in segs):
+      def w: for values(t :~ Real = 0.0) (p :~ pc.Pict in ps): t + (p :~ pc.Pict).width
+      values((if role == #false
+              | acc
+              | acc ++ [[role, pc.beside(~vert: #'bottom, & ps), dx]]),
+             dx + w)
+  out
+
+// A pict at (x, y) on `base`, top-left corner; `p` may be one of the runtime's picts.
+fun put(base :: pc.Pict, p, x :: Real, y :: Real) :: pc.Pict:
+  pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: x, ~dy: y, base, as_pict(p))
+
+// A pict scaled to exactly the width it is given, up or down.
+fun fill_width(p :: pc.Pict, w :: Real) :: pc.Pict: p.scale(w / p.width)
+
+// A bubble pointing at a node, on a transparent layer of its own.
+//
+// Built once and handed to every press that shows it: a bubble rebuilt per press is
+// a new pict each time, and a new pict fades in over the old one instead of staying
+// put. What it points at is a laundered ghost of the node placed where that node
+// goes -- the callout needs something to aim at, and a second copy of the node
+// itself would be a second thing to find. `~body` is where the bubble's own corner
+// lands; the spike is worked out from there.
+fun bubble_at(node, ~spot: spot :~ List, ~body: body :~ List,
+              ~color: color, ~content: content :: pc.Pict) :: pc.Pict:
+  def marker = pc.blank(~width: 1.0, ~height: 1.0)
+  def target = as_pict(node).launder().ghost()
+  def probe:
+    put(put(blank_slide, marker, body[0], body[1]), target, spot[0], spot[1])
+  multi_callout(~on: probe, ~place: marker, ~at: [target],
+                ~color: color, ~padding: 18.0, content)
+
+// A word for a bubble that has to fit somewhere narrow.
+def small_face = draw.Font(~name: prose_font, ~size: 32.0, ~weight: #'bold)
+fun small_prose(s :: String) :: pc.Pict: pc.text(s, ~font: small_face)
+
+// A sentence for a bubble, in the deck's Helvetica Neue: each item is a string
+// and how it is set, `#'plain`, `#'bold` or `#'sub`.
+def prose_face = draw.Font(~name: prose_font, ~size: 40.0)
+def prose_bold = prose_face with (weight = #'bold)
+fun prose(items :: List) :: pc.Pict:
+  pc.beside(~vert: #'bottom,
+            & for List ([s, style] in items):
+                match style
+                | #'bold: pc.text(s, ~font: prose_bold)
+                | #'sub: pc.text(s, ~font: prose_face).scale(0.6)
+                | ~else: pc.text(s, ~font: prose_face))
+
+// Several of those, stacked. A bubble beside the code box has the slide's right
+// half to live in, and a sentence long enough to need more than that is broken
+// across lines here rather than left to run off the edge.
+fun prose_stack(rows :: List) :: pc.Pict:
+  pc.stack(~sep: 4.0, ~horiz: #'left, & for List (r in rows): prose(r))
+
+// A slide with the deck's title at the deck's place, and nothing else yet.
+fun titled(title :: String) :: pc.Pict:
+  as_pict(slide_canvas(
+            ~width: slide_width, ~height: slide_height,
+            ~background: hex("FFFFFF"),
+            at(95.0, 85.0, ~tag: title,
+               textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+                       ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                       para(~line_spacing: pair(#'percent, 0.8),
+                            run(title, ~font: prose_font, ~size: 85.0, ~bold: #true,
+                                ~spacing: -1.7))))))
+
+// Keynote's little "program becomes a tree" icon in the top-right corner.
+fun with_icon(canvas :: pc.Pict) :: pc.Pict:
+  fun box():
+    shape_pict(~width: 23.528, ~height: 23.528,
+               ~geom: preset_geom("roundRect", [pair("adj", "val 30640")]),
+               ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0))
+  def [b1, b2, b3, b4, b5, b6, b7] = for List (i in 0..7): box()
+  fun bar(x, y, w):
+    at(x, y, ~tag: "Rectangle", shape_pict(~width: w, ~height: 5.15, ~fill: hex("929292")))
+  def icon:
+    group_pict(~width: 327.683, ~height: 182.827,
+               at(0.0, 62.869, ~tag: "Group (2)",
+                  group_pict(~width: 106.985, ~height: 66.994,
+                             at(0.0, 0.0, ~tag: "Rectangle",
+                                shape_pict(~width: 106.985, ~height: 66.994, ~fill: hex("FFFFFF"),
+                                           ~line: make_stroke(hex("000000"), ~width: 1.0))),
+                             bar(4.646, 4.397, 60.549), bar(11.612, 11.976, 64.295),
+                             bar(11.612, 19.555, 79.846), bar(19.007, 27.133, 34.404),
+                             bar(11.612, 34.712, 49.795), bar(19.007, 42.29, 56.852),
+                             bar(11.612, 49.869, 47.325), bar(11.612, 57.447, 90.727))),
+               at(193.792, 0.0, ~tag: "Group (3)",
+                  group_pict(~width: 133.891, ~height: 182.827,
+                             at(110.363, 159.299, ~tag: "Rounded Rectangle", b1),
+                             at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", b2),
+                             at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", b3),
+                             at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", b4),
+                             at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", b5),
+                             at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", b6),
+                             at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", b7))),
+               at(150.474, 85.484, ~tag: "Arrow",
+                  shape_pict(~width: 37.732, ~height: 21.764,
+                             ~geom: preset_geom("rightArrow",
+                                                [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),
+                             ~fill: hex("000000"))))
+  arrows(~on: put(canvas, icon, 1476.341, 50.118),
+         [[b2, b1], [b2, b3], [b5, b3], [b5, b6], [b7, b4], [b4, b1], [b4, b2], [b4, b5]],
+         ~line_width: 2)
+
+// A transparent slide, for a layer that goes over the page.
+def blank_slide = pc.blank(~width: slide_width, ~height: slide_height)
+
+// What is drawn over what, bottom to top:
+//
+//   band_rule    the rule box -- under the picture it is about, so a region or a
+//                node that arrives while the rule is still up is drawn over it
+//   band_below   the regions round the classes
+//   band_nodes   the nodes
+//   band_wires   the graph's own arrows, over the nodes and the regions, so an
+//                arrowhead is never tucked behind a box and a dashed equivalence
+//                inside a class is not washed out by it
+//   band_point   the pointers a rule lays over the picture while it matches -- over
+//                the rule too, so each one reads from the variable it starts at
+//                rather than from the point where it leaves the box
+//   band_chip    the chips laid over the rule's variables -- a band of their own,
+//                since two things in one band have no order between them and a chip
+//                behind the box it is laid on is invisible
+//   band_callout the bubbles
+//   band_flight  whatever is in flight, so a copy on its way from the rule into the
+//                graph is never behind the box it left
+def band_rule = band_below - 1
+def band_wires = band_nodes + 1
+def band_point = band_nodes + 2
+def band_chip = band_nodes + 3
+def band_callout = band_nodes + 4
+def band_flight = band_nodes + 5

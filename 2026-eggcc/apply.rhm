@@ -1,0 +1,211 @@
+#lang rhombus/and_meta
+// Applying a rule to the example's graph, in five movements: the rule comes over to
+// what it matched; its variables light up and point at the nodes they matched;
+// those pointers slide down into the line it concludes, taking the place of the
+// variables there; that line flies out and becomes new nodes; and its equalities
+// fly out and become the regions round the classes they make.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "magicmove.rhm" open
+  "theme.rhm" open
+  "codebox.rhm" open
+  "egraph.rhm" open
+  "rules.rhm" open
+  "chain.rhm" open
+  pict as pc
+
+export:
+  chain_eq_pieces
+  chain_match_edges
+  chain_matched
+  chain_rule_chips
+  chain_rule_over
+  chain_rule_pieces
+  chain_walk_frames
+  rule_box
+  rule_slots
+
+// -------------------------------------------------------------------------------------
+// Applying the rule, in five movements: it comes over to what it matched; its
+// variables light up and point at the nodes they matched; those pointers slide down
+// to the line it concludes, taking the place of the variables there; that line flies
+// out and becomes new nodes; and its equalities fly out and become the regions round
+// the classes they make.
+//
+// Every one of them is the trick the program's own terms arrive by. A copy of a piece
+// of the rule is made where the rule box draws it -- so it starts exactly where the
+// audience last saw it, invisible against the rule's own text -- and keyed by the
+// thing it is about. The next frame puts that key somewhere else, and the press is a
+// move rather than a fade. What a piece is keyed by is the whole difference between
+// the movements:
+//
+//   a variable      by [#'match, node], since the node it matched is already on the
+//                   slide and a frame holds one pict per key
+//   the conclusion  by the node it *becomes*, so text turns into a box
+//   an equality     by the class region it becomes, so text turns into a region
+
+// The rule box as drawn: how wide it is, and where its top left corner sits. It is
+// said beside the code and it stays there: a press whose whole content is the box
+// getting smaller is a press that says nothing, and the copies lifted off it read as
+// copies precisely because the box they came from has not moved.
+fun rule_box(parts :~ Map) :: List:
+  [(parts[#'frame] :~ pc.Pict).width, rule_x, rule_y]
+fun rule_factor(box :~ List, rule :~ Map) :: Real:
+  box[0] / (rule[#'pict] :~ pc.Pict).width
+// a place inside the rule box, in the slide's own coordinates
+fun rule_place(box :~ List, factor :: Real, at :~ List, dx :: Real = 0.0) :: List:
+  [box[1] + factor * (at[0] + dx), box[2] + factor * at[1]]
+
+// The rule, with a band over each of the two code lines it speaks for. It is scaled
+// to the code box's own measured width, so the two of them share a right edge, until
+// it comes over to the graph.
+//
+// Bind the result once per slide and hand that around: these are picts, and a frame
+// naming a rebuilt one is naming a different thing, which fades out and in over
+// itself instead of staying where it is.
+fun chain_rule_over(parts :~ Map, ~value: value :: Boolean) :: Map:
+  def box = rule_box(parts)
+  { #'rule: [fill_width((update_rule(~value: value) :~ Map)[#'pict], box[0]),
+             box[1], box[2], band_rule],
+    #'band0: band_of(parts, 0) ++ [band_above],
+    #'band1: band_of(parts, 1) ++ [band_above] }
+
+// Where the rule draws each variable it names: the first time in its premises, and
+// again in the line it concludes. A copy keyed by the node a variable matched can go
+// in either place, and a press slides it from the one to the other.
+fun rule_slots(rule :~ Map) :: Map:
+  fun slots(lines :~ List) :: Map:
+    for values(m :~ Map = {}) ([segs, at] in lines):
+      for values(m :~ Map = m) ([role, piece, dx] in segs_pieces(segs)):
+        if m.has_key(role) | m | m ++ { role: [piece, at, dx] }
+  { #'premises: slots(rule[#'premises]),
+    #'conclusion: slots([[rule[#'segs], rule[#'at]]]) }
+
+// The rule's variables, each keyed by the node it matched. `~lit` draws one as a gold
+// chip, which is what says it is bound; `~from` takes it from the premises or from
+// the line the rule concludes; `~only` keeps the ones named, for the step where the
+// pointers slide down and only the variables the conclusion uses again have one.
+fun chain_rule_chips(parts :~ Map, ~value: value :: Boolean,
+                     ~lit: lit :: Boolean = #false,
+                     ~from: from = #'premises,
+                     ~only: only :~ List = []) :: Map:
+  def rule :~ Map = update_rule(~value: value)
+  def box = rule_box(parts)
+  def factor = rule_factor(box, rule)
+  def slots :~ Map = (rule_slots(rule) :~ Map)[from]
+  for values(m :~ Map = {}) (role in slots.keys()):
+    skip_when only != [] && !only.contains(role)
+    def [piece, at, dx] = slots[role]
+    def small = (piece :~ pc.Pict).scale(factor)
+    def [x, y] = rule_place(box, factor, at, dx)
+    m ++ { [#'match, role]: chip_at(small, x, y, ~lit: lit, ~band: band_chip) }
+
+// The nodes a rule's *variables* matched. Its operators match too -- the two
+// `update`s are what makes it a rule about writes -- but that a write matched the
+// word `update` is not news, and lighting them up puts gold on half the graph. The
+// wide boxes are the operators, so the width is what says which is which.
+def chain_matched:
+  def slots :~ Map = (rule_slots(update_rule(~value: #true)) :~ Map)[#'premises]
+  for List (role in slots.keys()):
+    keep_when (chain_pos :~ Map).has_key(role)
+    keep_when ((chain_box :~ Map)[role] :~ Real) <= 150.0
+    role
+
+// The arrows from those chips to the nodes they matched: not edges of the graph, so
+// `chain_wire_specs` draws them thin and gold rather than as something the e-graph
+// contains.
+//
+// Not every chip gets one. Ten arrows out of one box is a thicket, and a chip and
+// the node it matched are already the same colour, which says as much: the arrows
+// are for the two writes the premises are about and for the variables the conclusion
+// uses again, which are the ones that have somewhere to go in the next press.
+fun chain_match_edges(chips :~ Map, ~only: only :~ List = []) :: List:
+  for List (key in chips.keys()):
+    def role = (key :~ List)[1]
+    keep_when only == [] || only.contains(role)
+    [#'m, key, role]
+
+// The line the rule concludes, in pieces, each keyed by the node it becomes. Only the
+// nodes the rule *adds* are here: the variables it uses again are already on the
+// slide, and their pieces are the chips above.
+//
+// `~as_nodes` draws each piece as the node it becomes, standing where the words
+// stood, which is the first half of applying the rule; the second half is the same
+// key at its place in the graph. Two presses, because one press asks the audience to
+// read a morph and a journey at the same time -- and because the node pict is then
+// the *same* pict in both frames, so the second press is a move with no fade in it.
+fun chain_rule_pieces(parts :~ Map, ~value: value :: Boolean,
+                      ~as_nodes: as_nodes :: Boolean = #false) :: Map:
+  def rule :~ Map = update_rule(~value: value)
+  def box = rule_box(parts)
+  def factor = rule_factor(box, rule)
+  def added = (chain_reveals :~ List)[(chain_reveals :~ List).length() - 1] :~ List
+  for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(rule[#'segs])):
+    skip_when !added.contains(role)
+    def small = (piece :~ pc.Pict).scale(factor)
+    def [x, y] = rule_place(box, factor, rule[#'at], dx)
+    m ++ { role: (if as_nodes
+                  | block:
+                      // the box grows around the word it replaces
+                      def node :~ pc.Pict = as_pict(chain_plain[role])
+                      [chain_plain[role],
+                       x - (node.width - small.width) / 2,
+                       y - (node.height - small.height) / 2,
+                       band_flight]
+                  | [small, x, y, band_flight]) }
+
+// The equalities, each keyed by the region it becomes. A copy is padded out to the
+// region's own size so that the two share a top left corner: a press interpolates one
+// position for the key, and the padding is what puts the words in the middle of the
+// region they turn into rather than at its corner.
+fun chain_eq_pieces(parts :~ Map, ~value: value :: Boolean) :: Map:
+  def rule :~ Map = update_rule(~value: value)
+  def box = rule_box(parts)
+  def factor = rule_factor(box, rule)
+  for values(m :~ Map = {}) ([class_key, eq, at] in rule[#'equalities] :~ List):
+    def region :~ pc.Pict = ((chain_regions :~ Map)[class_key] :~ List)[0]
+    def small = (eq :~ pc.Pict).scale(factor)
+    def padded:
+      pc.overlay(pc.blank(~width: region.width, ~height: region.height), small)
+    def [x, y] = rule_place(box, factor, at)
+    m ++ { class_key: [padded,
+                       x - (padded.width - small.width) / 2,
+                       y - (padded.height - small.height) / 2,
+                       band_flight] }
+
+// The presses both extraction slides share, in order: the graph, the rule, the
+// classes the rule makes, the asking, then the walk -- a press a row, the pointer
+// arriving and that row's picks landing with it -- and last the choices nothing
+// reaches fading, which leaves what the root asked for.
+//
+// The two slides differ in the rule they state, and so in the graph the walk runs
+// over and the answer it arrives at. Each of them adds its own last press, which is
+// where that answer goes: one gets a program, the other gets two copies of memory.
+fun chain_walk_frames(~graph: graph :~ List,
+                      ~rule: rule_over :~ Map,
+                      ~classes: classes :~ Map = rule_classes_under,
+                      ~kept: kept :~ List,
+                      ~ask: ask_over :~ Map = chain_ask_over) :: List:
+  // The pointer visits every layer, so it passes nothing without stopping at it.
+  // It is one pict under one key, so it travels between the layers rather than
+  // being taken away and put back one row down.
+  fun scene(~rule: rule = #false, ~union: union = #false, ~ask: ask = #false,
+            ~picks: picks :: List = [], ~point: point = #false) :: Frame:
+    Frame(~picts: chain_node_picts(chain_spots, picks)
+                    ++ (if point == #false
+                        | {}
+                        | { #'point: [chain_pointer, & chain_point_at(point)] })
+                    ++ (if union | classes | {})
+                    ++ (if rule | rule_over | {})
+                    ++ (if ask | ask_over | {}),
+          ~edges: chain_edges(4))
+  // It opens on the graph, the rule and the two classes the rule made -- which is
+  // where the slide before it left off, and the press that leaves that slide is what
+  // puts them here. Building them again would be the same three presses twice.
+  [scene(~rule: #true, ~union: #true),
+   scene(~rule: #true, ~union: #true, ~ask: #true),
+   & for List (row in 0..chain_layers):
+       scene(~rule: #true, ~union: #true, ~ask: #true, ~point: row,
+             ~picks: chain_picks(graph, ~upto: row)),
+   scene(~rule: #true, ~union: #true, ~ask: #true, ~picks: kept)]

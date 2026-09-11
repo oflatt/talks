@@ -23,14 +23,14 @@ instead, against the constraints a reader of the picture actually cares about:
 
 Two modes:
 
-    python3 graph_layout.py            # check the table in talk.rhm and report
+    python3 graph_layout.py            # check the table in chain.rhm and report
     python3 graph_layout.py --solve    # search, and print a table to paste in
 
-The table in talk.rhm is the one the deck draws: solve, paste, then nudge by eye
+The table in chain.rhm is the one the deck draws: solve, paste, then nudge by eye
 and run the check again -- a nudge that buys a nicer picture is fine, a nudge
 that puts an edge through a box is not, and the check is what tells them apart.
 
-Everything it needs is read out of talk.rhm: the graph itself (`chain_graph`),
+Everything it needs is read out of chain.rhm: the graph itself (`chain_graph`),
 how wide each box is (`chain_box`), and the placement (`chain_rows`, `chain_pos`).
 """
 
@@ -40,7 +40,7 @@ import re
 import sys
 from itertools import combinations, permutations, product
 
-TALK = "talk.rhm"
+TALK = "chain.rhm"
 LEFT, RIGHT = 1090.0, 1812.0      # the graph's own column, right of the code
 GAP = 70.0                        # least space between two boxes in a row: closer
                                   # than this and the arrowheads arriving at the two
@@ -644,7 +644,7 @@ def main():
         if k not in pos:
             raise SystemExit("graph_layout: chain_pos says nothing about %s" % k)
     x = {k: pos[k][0] for k in g.nodes}
-    bad = show("talk.rhm", g, x, lay, rows)
+    bad = show(TALK, g, x, lay, rows)
     wrong = [text for _, text in bad if serious(text)]
     crossings = [text for _, text in bad if "crosses" in text]
     print("   -- %d serious, %d crossings (%d of them blue over black)"

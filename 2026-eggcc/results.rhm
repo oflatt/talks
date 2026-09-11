@@ -1,0 +1,276 @@
+#lang rhombus/and_meta
+// The slides that say it works: the plots, and the numbers around them.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  pict as pc
+
+export:
+  slide_34
+  slide_36
+  slide_37
+  slide_38
+  slide_39
+
+// -------------------------------------------------------------------------------------
+// slide_34: Keynote's 2-stage build of Slide 23, as one animated pict.
+//
+// The generator gives each build stage its own slide; every object was a
+// superset of the stage before, so they collapse back into one.
+//
+// One `fade_in` per stage, so the deck takes the same number of clicks it did.
+fun slide_34():
+  // the picture before the first reveal
+  def base_canvas:
+    slide_canvas(
+      ~width: slide_width, ~height: slide_height,
+      ~background: hex("FFFFFF"),
+      at(275.784, 211.919, ~tag: "extraction-time-cdf.pdf",
+         image_pict(media("image21.png"), 1340.0, 804.0)),
+      at(95.0, 85.0, ~tag: "Fast Effect-safe Extraction in Practice",
+         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.8),
+                      run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
+                          ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
+      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+      at(653.508, 743.56, ~tag: "Our Approach",
+         linebox(~width: 260.2, ~height: 54.88,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("Our Approach", ~font: prose_font, ~size: 40.0)))),
+      at(1105.508, 625.56, ~tag: "Solver-Based Techniques",
+         linebox(~width: 462.4, ~height: 54.88,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("Solver-Based Techniques", ~font: prose_font, ~size: 40.0)))),
+      at(634.714, 603.919, ~tag: "Line",
+         shape_pict(~width: 87.399, ~height: 136.567, ~flip_h: #true, ~flip_v: #true,
+                    ~shape: "line",
+                    ~line: make_stroke(hex("000000"), ~width: 6.0,
+                                       ~tail: line_end(#'triangle, "med", "med")))),
+      at(1153.523, 969.288, ~tag: "Line (2)",
+         shape_pict(~width: 327.822, ~height: 68.816, ~flip_v: #true, ~shape: "line",
+                    ~line: make_stroke(hex("EE230C"), ~width: 6.0,
+                                       ~tail: line_end(#'triangle, "med", "med")))),
+      at(1033.796, 529.382, ~tag: "Line (3)",
+         shape_pict(~width: 203.618, ~height: 99.197, ~flip_h: #true, ~flip_v: #true,
+                    ~shape: "line",
+                    ~line: make_stroke(hex("000000"), ~width: 6.0,
+                                       ~tail: line_end(#'triangle, "med", "med")))),
+      at(1589.003, 296.697, ~tag: "Line (4)",
+         shape_pict(~width: 100.896, ~height: 28.431, ~flip_h: #true, ~flip_v: #true,
+                    ~shape: "line",
+                    ~line: make_stroke(hex("000000"), ~width: 6.0,
+                                       ~tail: line_end(#'triangle, "med", "med")))),
+      at(1600.242, 325.027, ~tag: "Solver Timeouts",
+         linebox(~width: 297.92, ~height: 54.88,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("Solver Timeouts", ~font: prose_font, ~size: 40.0)))),
+      at(929.123, 1000.48, ~tag: "Log scale",
+         linebox(~width: 216.12, ~height: 63.656,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("Log scale", ~font: prose_font, ~size: 48.0,
+                          ~color: hex("EE230C"))))),
+      at(1163.714, 504.919, ~tag: "Line (5)",
+         shape_pict(~width: 87.399, ~height: 136.567, ~flip_h: #true, ~flip_v: #true,
+                    ~shape: "line",
+                    ~line: make_stroke(hex("000000"), ~width: 6.0,
+                                       ~tail: line_end(#'triangle, "med", "med")))),
+      at(601.853, 969.579, ~tag: "Line (6)",
+         shape_pict(~width: 318.99, ~height: 68.525, ~flip_h: #true, ~flip_v: #true,
+                    ~shape: "line",
+                    ~line: make_stroke(hex("EE230C"), ~width: 6.0,
+                                       ~tail: line_end(#'triangle, "med", "med")))))
+
+  // Keynote's green box, as one of our bubbles, centred where the box was.
+  def stage_1:
+    def bubble:
+      make_bubble(~color: talk_green,
+                  as_pict(linebox(~width: 486.0, ~height: 73.0,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("Extraction is fast", ~font: prose_font, ~size: 60.0, ~bold: #true)))))
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               ~dx: 1494.06 - bubble.width / 2, ~dy: 787.93 - bubble.height / 2,
+               pc.blank(~width: slide_width, ~height: slide_height), bubble)
+
+  staged(base_canvas, [stage_1])
+
+// -------------------------------------------------------------------------------------
+// slide_36: Slide 24
+fun slide_36(): slide_canvas(
+  ~width: slide_width, ~height: slide_height,
+  ~background: hex("FFFFFF"),
+  // Fast Effect-safe Extraction in Practice (id 1016)
+  at(95.0, 85.0, ~tag: "Fast Effect-safe Extraction in Practice",
+     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.8),
+                  run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
+                      ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
+  // Slide Number (id 1017)
+  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+  // g0.pdf (id 1018)
+  at(5.0, 203.0, ~tag: "g0.pdf", image_pict(media("image22.png"), 986.874, 822.395)),
+  // LLVM-O0-O0 (id 1019)
+  at(956.952, 892.972, ~tag: "LLVM-O0-O0",
+     linebox(~width: 304.6, ~height: 66.6,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
+  // Polybench Benchmark Suite (id 1020)
+  at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
+     linebox(~width: 515.8, ~height: 54.88,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0))))
+)
+
+// -------------------------------------------------------------------------------------
+// slide_37: Slide 25
+fun slide_37(): slide_canvas(
+  ~width: slide_width, ~height: slide_height,
+  ~background: hex("FFFFFF"),
+  // Fast Effect-safe Extraction in Practice (id 1022)
+  at(95.0, 85.0, ~tag: "Fast Effect-safe Extraction in Practice",
+     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.8),
+                  run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
+                      ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
+  // Slide Number (id 1023)
+  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+  // g1.pdf (id 1024)
+  at(5.0, 203.0, ~tag: "g1.pdf", image_pict(media("image23.png"), 986.4, 822.0)),
+  // LLVM-O0-O0 (id 1025)
+  at(956.952, 892.972, ~tag: "LLVM-O0-O0",
+     linebox(~width: 304.6, ~height: 66.6,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
+  // eggcc (id 1026)
+  at(956.952, 745.812, ~tag: "eggcc",
+     linebox(~width: 146.95, ~height: 66.6,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("eggcc", ~font: prose_font, ~size: 50.0)))),
+  // Polybench Benchmark Suite (id 1027)
+  at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
+     linebox(~width: 515.8, ~height: 54.88,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0))))
+)
+
+// -------------------------------------------------------------------------------------
+// slide_38: Slide 26
+fun slide_38(): slide_canvas(
+  ~width: slide_width, ~height: slide_height,
+  ~background: hex("FFFFFF"),
+  // Fast Effect-safe Extraction in Practice (id 1029)
+  at(95.0, 85.0, ~tag: "Fast Effect-safe Extraction in Practice",
+     textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+             ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.8),
+                  run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
+                      ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
+  // Slide Number (id 1030)
+  at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+  // g2.pdf (id 1031)
+  at(5.0, 203.0, ~tag: "g2.pdf", image_pict(media("image24.png"), 986.4, 822.0)),
+  // LLVM-O0-O0 (id 1032)
+  at(956.952, 892.972, ~tag: "LLVM-O0-O0",
+     linebox(~width: 304.6, ~height: 66.6,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
+  // eggcc (id 1033)
+  at(956.952, 745.812, ~tag: "eggcc",
+     linebox(~width: 146.95, ~height: 66.6,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("eggcc", ~font: prose_font, ~size: 50.0)))),
+  // LLVM-O3-O0 (id 1034)
+  at(956.952, 499.126, ~tag: "LLVM-O3-O0",
+     linebox(~width: 304.6, ~height: 66.6,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("LLVM-O3-O0", ~font: prose_font, ~size: 50.0)))),
+  // Polybench Benchmark Suite (id 1035)
+  at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
+     linebox(~width: 515.8, ~height: 54.88,
+             ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+             para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                  run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0))))
+)
+
+// -------------------------------------------------------------------------------------
+// slide_39: Keynote's 2-stage build of Slide 27, as one animated pict.
+//
+// The generator gives each build stage its own slide; every object was a
+// superset of the stage before, so they collapse back into one.
+//
+// One `fade_in` per stage, so the deck takes the same number of clicks it did.
+fun slide_39():
+  // the picture before the first reveal
+  def base_canvas:
+    slide_canvas(
+      ~width: slide_width, ~height: slide_height,
+      ~background: hex("FFFFFF"),
+      at(95.0, 85.0, ~tag: "Fast Effect-safe Extraction in Practice",
+         textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
+                 ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.8),
+                      run("Fast Effect-safe Extraction in Practice", ~font: prose_font,
+                          ~size: 85.0, ~bold: #true, ~spacing: -2.01)))),
+      at(1885.0, 1045.0, ~tag: "Slide Number", shape_pict(~width: 29.016, ~height: 29.496)),
+      at(4.551, 202.379, ~tag: "g0.pdf", image_pict(media("image22.png"), 986.874, 822.395)),
+      at(4.788, 202.577, ~tag: "g1.pdf", image_pict(media("image23.png"), 986.4, 822.0)),
+      at(4.788, 202.577, ~tag: "g2.pdf", image_pict(media("image24.png"), 986.4, 822.0)),
+      at(4.788, 202.577, ~tag: "g3.pdf", image_pict(media("image25.png"), 986.4, 822.0)),
+      at(956.952, 892.972, ~tag: "LLVM-O0-O0",
+         linebox(~width: 304.6, ~height: 66.6,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("LLVM-O0-O0", ~font: prose_font, ~size: 50.0)))),
+      at(956.952, 745.812, ~tag: "eggcc",
+         linebox(~width: 146.95, ~height: 66.6,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("eggcc", ~font: prose_font, ~size: 50.0)))),
+      at(956.952, 499.126, ~tag: "LLVM-O3-O0",
+         linebox(~width: 304.6, ~height: 66.6,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("LLVM-O3-O0", ~font: prose_font, ~size: 50.0)))),
+      at(956.952, 231.703, ~tag: "Solver Approaches",
+         linebox(~width: 433.1, ~height: 66.6,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("Solver Approaches", ~font: prose_font, ~size: 50.0)))),
+      at(295.659, 993.037, ~tag: "Polybench Benchmark Suite",
+         linebox(~width: 515.8, ~height: 54.88,
+                 ~autofit: #'grow, ~insets: insets(4.0, 4.0, 4.0, 4.0),
+                 para(~line_spacing: pair(#'percent, 0.9), ~space_before: 45.01,
+                      run("Polybench Benchmark Suite", ~font: prose_font, ~size: 40.0)))))
+
+  // Keynote's green box, as one of our bubbles, centred where the box was.
+  def stage_1:
+    def bubble:
+      make_bubble(~color: talk_green,
+                  as_pict(linebox(~width: 376.0, ~height: 182.0,
+                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
+                                  para(~align: #'center,
+                                       run("Non-trivial", ~font: prose_font, ~size: 75.0, ~bold: #true)),
+                                  para(~align: #'center,
+                                       run("e-graphs!", ~font: prose_font, ~size: 75.0, ~bold: #true)))))
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               ~dx: 1518.01 - bubble.width / 2, ~dy: 757.86 - bubble.height / 2,
+               pc.blank(~width: slide_width, ~height: slide_height), bubble)
+
+  staged(base_canvas, [stage_1])

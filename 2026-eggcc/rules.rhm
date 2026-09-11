@@ -1,0 +1,257 @@
+#lang rhombus/and_meta
+// The rewrite rules, as picts rather than as text.
+//
+// Each rule knows the pieces it is made of and where its own drawing puts them, so
+// that a rule can be taken apart and its pieces flown out into the graph -- which
+// is what `apply.rhm` does with them.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  "egraph.rhm" open
+  pict as pc
+  draw
+
+export:
+  rule_assoc
+  rule_ident
+  rule_zero
+  rules_line_1
+  rules_line_1_at
+  rules_line_2
+  rules_line_2_at
+  rules_line_3_at
+  update_rule
+
+def rule_font = code_face with (size = 36.0)
+fun rule_code(s :: String) :: pc.Pict: pc.text(s, ~font: rule_font)
+fun rule_greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face with (size = 36.0))
+fun rule_sub(s :: String) :: pc.Pict: rule_code(s).scale(0.6)
+fun rule_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
+
+// ------------------------------------------------------------------- the rules
+//
+// The two rules the first section rewrites with, plus the one it holds back, each in
+// the colour of what it makes in the graph. They live here rather than beside the
+// slide that draws them because the workflow picture before that slide holds them
+// too, and the press that leaves it puts these very picts where the slide draws
+// them -- so the click between the two is a match cut rather than a cut.
+//
+// They are written at the size the term is, because they sit under it in the same
+// column rather than across the slide from it: two sizes in one column reads as one
+// of them mattering more, and neither does.
+def rule_size = 45.0
+
+// A rule is built out of pieces rather than set as one string, so that a copy of any
+// one piece can be lifted off it: what a rule matched is shown by lighting up its
+// variables and pointing each at the node it stands for, and what it adds arrives by
+// the piece that names it flying into the graph.
+//
+// Each piece that stands for something is tagged. A pattern variable gets a name of
+// its own rather than the node's, since two variables can match the same node --
+// `α − α` matches `1 − 1` -- and one key can only be drawn once. `binds` says what
+// each name is in the graph, and `adds` names the nodes the right-hand side brings.
+//
+// Drawn as text rather than in a text box: a box reports the size it was declared
+// with, and these have to measure their own ink -- they are laid out under the term
+// on one slide and inside a bubble on the one before, and both places are packed to
+// fit what is actually drawn.
+fun rw(s :: String, color) :: pc.Pict:
+  pc.text(s, ~font: draw.Font(~name: math_font, ~size: rule_size)).colorize(color)
+// The gaps are blanks of a stated width rather than spaces: a rule laid out one
+// piece at a time carries the font's side bearings once per piece, which came to
+// 25% more width than the same string set as one run.
+def rw_gap = 12.0
+fun rw_sp() :: pc.Pict: pc.blank(~width: rw_gap, ~height: 0.0)
+fun rw_rule(~lhs: lhs :~ List, ~rhs: rhs :~ List,
+            ~binds: binds :~ Map, ~adds: adds :~ List, ~color: color,
+            // What the right-hand side is built out of: for each operator in it, the
+            // pieces it takes, in order. The segments say what the words are; this
+            // says what the term is, which is what lets the side be drawn as nodes
+            // with arrows between them and moved into the graph as one thing.
+            ~builds: builds :~ List = []) :: Map:
+  def to = pc.beside(~vert: #'bottom, rw_sp(), rw("→", color), rw_sp())
+  def lhs_pict = segs_pict(lhs)
+  def rhs_pict = segs_pict(rhs)
+  { #'pict: pc.beside(~vert: #'bottom, lhs_pict, to, rhs_pict),
+    // each side, and how far into the line it starts
+    #'lhs: [lhs, 0.0],
+    #'rhs: [rhs, lhs_pict.width + to.width],
+    // and the arrow between them, which is the equality the rule concludes: when
+    // the rule fires, this piece becomes the dashed line that says so
+    #'arrow: [to, lhs_pict.width],
+    #'binds: binds, #'adds: adds, #'builds: builds, #'color: color }
+
+def rules_blue = draw.Color(4, 51, 255)
+def rules_orange = draw.Color(255, 147, 0)
+def rules_green = draw.Color(79, 143, 0)
+
+// (α + β) − γ → α + (β − γ): the associativity that lets `1 − 1` be a term of its
+// own. It matches the whole input term, and adds the two operators on its right.
+def rule_assoc:
+  fun b(s): rw(s, rules_blue)
+  rw_rule(~lhs: [[#false, [b("(")]], [#'alpha, [b("α")]], [#false, [rw_sp()]],
+                 [#'plus, [b("+")]], [#false, [rw_sp()]], [#'beta, [b("β")]],
+                 [#false, [b(")"), rw_sp()]], [#'minus, [b("−")]],
+                 [#false, [rw_sp()]], [#'gamma, [b("γ")]]],
+          ~rhs: [[#'alpha, [b("α")]], [#false, [rw_sp()]], [#'plus_r, [b("+")]],
+                 [#false, [rw_sp(), b("(")]], [#'beta, [b("β")]],
+                 [#false, [rw_sp()]], [#'minus_r, [b("−")]], [#false, [rw_sp()]],
+                 [#'gamma, [b("γ")]], [#false, [b(")")]]],
+          // only the variables: that `+` matched a `+` is not news
+          ~binds: { #'alpha: #'a, #'beta: #'one, #'gamma: #'one },
+          ~adds: [#'plus_r, #'minus_r],
+          ~builds: [[#'plus_r, [#'alpha, #'minus_r]],
+                    [#'minus_r, [#'beta, #'gamma]]],
+          ~color: rules_blue)
+
+// α − α → 0: what makes the `1 − 1` the rule above built worth having.
+def rule_zero:
+  fun o(s): rw(s, rules_orange)
+  rw_rule(~lhs: [[#'alpha, [o("α")]], [#false, [rw_sp()]], [#'minus_r, [o("−")]],
+                 [#false, [rw_sp()]], [#'alpha2, [o("α")]]],
+          ~rhs: [[#'zero, [o("0")]]],
+          ~binds: { #'alpha: #'one, #'alpha2: #'one },
+          ~adds: [#'zero], ~color: rules_orange)
+
+// α + 0 → α: the one held back, since it is the one that changes what extraction can
+// find. It adds no node at all -- only that the sum *is* what it adds to.
+def rule_ident:
+  fun g(s): rw(s, rules_green)
+  rw_rule(~lhs: [[#'alpha, [g("α")]], [#false, [rw_sp()]], [#'plus_r, [g("+")]],
+                 [#false, [rw_sp()]], [#'zero, [g("0")]]],
+          ~rhs: [[#'alpha, [g("α")]]],
+          // `+` is here for a reason the other two rules have not got: this rule
+          // adds no node, it makes the sum *equal* to what it adds to, so the node
+          // the left-hand side is rooted at is the other half of that equality and
+          // has to be pointed at for the union to be visible at all
+          ~binds: { #'alpha: #'a, #'plus_r: #'plus_r, #'zero: #'zero },
+          ~adds: [], ~color: rules_green)
+
+def rules_line_1 = rule_assoc[#'pict] :~ pc.Pict
+def rules_line_2 = rule_zero[#'pict] :~ pc.Pict
+// Where the three of them sit: under the term, left-aligned with it. They carry no
+// heading -- a list of rewrites under a program is a list of rewrites, and a word
+// saying so is a line of the slide spent on nothing.
+def rules_line_1_at = [129.0, 340.0]
+def rules_line_2_at = [129.0, 420.0]
+def rules_line_3_at:
+  [(rules_line_2_at :~ List)[0],
+   (rules_line_2_at :~ List)[1] + rules_line_2.height + 13.0]
+
+fun update_rule(~value: value :: Boolean = #true) :: Map:
+  // Dead store elimination, over the two lines of the program: the first write is
+  // overwritten, so the memory after both is the memory after the second alone, and
+  // what the first write returned is what that single write returns.
+  //
+  // Premises above the line, and what the rule concludes below it -- including the
+  // write it adds, which is the whole reason extraction has a choice to get wrong.
+  //
+  // Every piece of the rule that stands for a node in the graph is tagged with that
+  // node, so a copy of the rule can be taken apart and flown into the picture: the
+  // premises onto the nodes they matched, the new line onto where its nodes go, and
+  // each equality onto the class it makes. The tags are node keys, and the text of a
+  // tagged piece is the label of the node it names, so a piece that has flown to its
+  // node lands on that node's own label.
+  def premise1_segs:
+    [[#false, [rule_code("(")]],
+     [#'v1, [rule_code("v"), rule_sub("1")]],
+     [#false, [rule_code(", ")]],
+     [#'s1, [rule_greek("ω"), rule_sub("1")]],
+     [#false, [rule_code(") = ")]],
+     [#'u1, [rule_code("update")]],
+     [#false, [rule_code("(")]],
+     [#'a, [rule_code("a")]],
+     [#false, [rule_code(", ")]],
+     [#'x, [rule_code("x")]],
+     [#false, [rule_code(", ")]],
+     [#'s0, [rule_greek("ω")]],
+     [#false, [rule_code(")")]]]
+  def premise2_segs:
+    [[#false, [rule_code("(")]],
+     [#'v2, [rule_code("v"), rule_sub("2")]],
+     [#false, [rule_code(", ")]],
+     [#'s2, [rule_greek("ω"), rule_sub("2")]],
+     [#false, [rule_code(") = ")]],
+     [#'u2, [rule_code("update")]],
+     [#false, [rule_code("(")]],
+     [#'a, [rule_code("a")]],
+     [#false, [rule_code(", ")]],
+     [#'xp, [rule_code("x+1")]],
+     [#false, [rule_code(", ")]],
+     [#'s1, [rule_greek("ω"), rule_sub("1")]],
+     [#false, [rule_code(")")]]]
+  // The line the rule concludes, in the same pieces as the premises: the two nodes
+  // it makes and the write itself, and then the variables it uses again, which are
+  // where the pointers from the match come to rest.
+  def introduced_segs:
+    [[#false, [rule_code("(")]],
+     [#'v3, [rule_code("v"), rule_sub("3")]],
+     [#false, [rule_code(", ")]],
+     [#'s3, [rule_greek("ω"), rule_sub("3")]],
+     [#false, [rule_code(") = ")]],
+     [#'us, [rule_code("update")]],
+     [#false, [rule_code("(")]],
+     [#'a, [rule_code("a")]],
+     [#false, [rule_code(", ")]],
+     [#'xp, [rule_code("x+1")]],
+     [#false, [rule_code(", ")]],
+     [#'s0, [rule_greek("ω")]],
+     [#false, [rule_code(")")]]]
+  def premise1 = segs_pict(premise1_segs)
+  def premise2 = segs_pict(premise2_segs)
+  def introduced = segs_pict(introduced_segs)
+  fun same(): pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
+  // Each equality in the colour of the class it makes, which is what ties the two
+  // statements to the two regions in the graph.
+  def value_eq:
+    rule_line(rule_code("v"), rule_sub("1"), same(), rule_code("v"),
+              rule_sub("3")).colorize(value_class)
+  def state_eq:
+    rule_line(rule_greek("ω"), rule_sub("2"), same(), rule_greek("ω"),
+              rule_sub("3")).colorize(state_class)
+  def eq_sep = 72.0
+  def equalities = pc.beside(~sep: eq_sep, ~vert: #'bottom, value_eq, state_eq)
+  def below:
+    if value
+    | pc.stack(~sep: 10.0, ~horiz: #'center, introduced, equalities)
+    | introduced
+  def w:
+    math.max(premise1.width, math.max(premise2.width, below.width))
+  def bar = pc.rectangle(~width: w, ~height: 3.0, ~fill: "black", ~line: #false)
+  def row_sep = 14.0
+  def body:
+    pc.stack(~sep: row_sep, ~horiz: #'center, premise1, premise2, bar, below)
+  def box:
+    as_pict(shape_pict(~width: body.width + 40.0, ~height: body.height + 40.0,
+                       ~geom: preset_geom("roundRect", [pair("adj", "val 6000")]),
+                       ~fill: hex("E2E2E2"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
+  // Where each row is drawn inside the box: the body is centred in the box, which
+  // is 20 bigger on every side, and each row is centred in the body. A copy flown
+  // out of the rule starts at these coordinates, so it starts exactly where the
+  // audience last saw it.
+  fun row_at(row :: pc.Pict, y :: Real) :: List:
+    [20.0 + (body.width - row.width) / 2, y]
+  def y1 = 20.0
+  def y2 = y1 + premise1.height + row_sep
+  def y_bar = y2 + premise2.height + row_sep
+  def y_below = y_bar + bar.height + row_sep
+  def y_eq = y_below + introduced.height + 10.0
+  def eq_x = 20.0 + (body.width - equalities.width) / 2
+  { #'pict: pc.overlay(box, body),
+    // the rule without the box round it, for a picture that holds it inside a box
+    // of its own
+    #'body: body,
+    // the line the rule adds, and where it is drawn
+    #'segs: introduced_segs,
+    #'at: row_at(introduced, y_below),
+    // the two premises: what the rule matches, and where each is drawn
+    #'premises: [[premise1_segs, row_at(premise1, y1)],
+                 [premise2_segs, row_at(premise2, y2)]],
+    // and the equalities, by the class each one makes
+    #'equalities: [[#'old_class, value_eq,
+                    [eq_x, y_eq + equalities.height - value_eq.height]],
+                   [#'memory_class, state_eq,
+                    [eq_x + value_eq.width + eq_sep,
+                     y_eq + equalities.height - state_eq.height]]] }

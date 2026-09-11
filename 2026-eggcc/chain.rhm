@@ -1,0 +1,533 @@
+#lang rhombus/and_meta
+// The `update` example's e-graph -- the one four slides in a row are about.
+//
+// The graph is data: each node's class and the classes it takes. Everything else
+// follows from it -- what an extraction picks, what it costs, which memory it reads
+// twice, what the statewalk DP fills its table with, and which nodes are on the
+// slide after each press. The one thing written down by hand is where the nodes go,
+// and even that is solved offline by `graph_layout.py` against stated constraints
+// rather than nudged into place.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "magicmove.rhm" open
+  "theme.rhm" open
+  "egraph.rhm" open
+  "statewalk.rhm" as sw
+  pict as pc
+
+export:
+  chain_ask_over
+  chain_box
+  chain_bubbles
+  chain_class_of
+  chain_dp_best
+  chain_dp_fills
+  chain_dp_term
+  chain_edges
+  chain_es_index
+  chain_forks
+  chain_graph
+  chain_kept
+  chain_layer_of
+  chain_layers
+  chain_node_picts
+  chain_nodes
+  chain_picks
+  chain_plain
+  chain_point_at
+  chain_pointer
+  chain_pos
+  chain_regions
+  chain_reveals
+  chain_root
+  chain_safe
+  chain_slide
+  chain_spots
+  chain_spots_upto
+  chain_statewalks
+  chain_y
+  rule_classes_under
+
+// The extraction pointer walks down the right margin, clear of the graph, rather
+// than between the code and the graph: standing it in there cost the slide a lane
+// of white the width of two nodes for the sake of one arrow.
+def chain_point_x = 1760.0
+
+// How wide each node's box is. The layout depends on it, so it is data rather
+// than a number inside the drawing code: the boxes below are built from it, and
+// `graph_layout.py` reads it to pack the rows.
+def chain_box:
+  { #'a: 64.0, #'x: 64.0, #'one: 64.0, #'xp: 116.0,
+    #'s0: 64.0, #'s1: 64.0, #'s2: 64.0, #'s3: 64.0,
+    #'v1: 64.0, #'v2: 64.0, #'v3: 64.0,
+    #'u1: 180.242, #'u2: 180.242, #'us: 180.242, #'ret: 180.242 }
+
+// The nodes of the `update` chain, values black and states blue, as Keynote had
+// them. `picked` names the ones extraction has chosen, which are built with a
+// green background instead of a white one -- the same node, drawn as picked,
+// rather than a mark laid over it.
+fun chain_nodes(~picked: picked :: List = [],
+                ~forked: forked :: List = [],
+                ~matched: matched :: List = [],
+                // key -> [fill] or [fill, second fill], for the statewalk DP, which
+                // fills a class by the extractable sets it has stored a walk for
+                ~fills: fills :: Map = {}) :: Map:
+  fun label(s): run(s, ~font: node_font, ~size: 40.0)
+  fun sub(i): run(to_string(i), ~font: node_font, ~size: 40.0, ~baseline: -0.06)
+  fun node(key, color, lw, runs):
+    def w = (chain_box :~ Map)[key] :~ Real
+    def two :~ List = if fills.has_key(key) | fills[key] | []
+    graph_node(~width: w, ~height: if w > 100 | 64.0 | 63.486,
+               ~adj: if w > 100 | "33349" | "33878",
+               ~line: color, ~line_width: lw,
+               ~fill: (cond
+                       | two != []: two[0]
+                       | forked.contains(key): node_fork
+                       | matched.contains(key): node_match
+                       | picked.contains(key): node_green
+                       | ~else: node_white),
+               ~fill2: if two.length() > 1 | two[1] | #false,
+               & runs)
+  fun leaf(key, s): node(key, "000000", 3.0, [label(s)])
+  fun value(key, i): node(key, "000000", 3.0, [label("v"), sub(i)])
+  fun state(key, i):
+    node(key, stateful_hex, 4.0,
+         if i == 0 | [label("ω")] | [label("ω"), sub(i)])
+  fun op(key): node(key, stateful_hex, 4.0, [label("update")])
+  // `return` takes a state as well as a value, so it is one of the stateful ones
+  {#'ret: node(#'ret, stateful_hex, 4.0, [label("return")]),
+   #'a: leaf(#'a, "a"), #'x: leaf(#'x, "x"), #'one: leaf(#'one, "1"),
+   // the value the second write stores, and the reason the two writes cost
+   // different amounts to perform
+   #'xp: node(#'xp, "000000", 3.0, [label("x+1")]),
+   #'s0: state(#'s0, 0), #'s1: state(#'s1, 1),
+   #'s2: state(#'s2, 2), #'s3: state(#'s3, 3),
+   #'v1: value(#'v1, 1), #'v2: value(#'v2, 2), #'v3: value(#'v3, 3),
+   #'u1: op(#'u1), #'u2: op(#'u2), #'us: op(#'us)}
+
+// The graph as data, so that an extraction over it can be worked out rather than
+// written down: each node's class and the classes its arguments come from. The
+// rule's unions are here and nowhere else, so what follows from them -- what
+// extraction picks, what it costs, which memory it reads twice, and where every
+// node goes -- follows automatically.
+//
+// One rule, stated once: the first write is overwritten, so the memory after both
+// writes is the memory after the second alone, and what the first write returned is
+// what that single write returns. The rule *adds* a node, `us`, and that is what
+// makes extraction have a choice it can get wrong: `us` and `u1` both read the
+// memory the program started with.
+//
+//   [key, class, the classes its arguments come from]
+def chain_graph:
+  [[#'a, #'k_a, []], [#'x, #'k_x, []], [#'one, #'k_one, []], [#'s0, #'k_s0, []],
+   [#'xp, #'k_xp, [#'k_x, #'k_one]],                    // x + 1
+   [#'u1, #'k_u1, [#'k_a, #'k_x, #'k_s0]],              // the write the program has
+   [#'us, #'k_us, [#'k_a, #'k_xp, #'k_s0]],             // the write the rule adds
+   [#'v1, #'k_old, [#'k_u1]], [#'s1, #'k_s1, [#'k_u1]],
+   [#'v3, #'k_old, [#'k_us]], [#'s3, #'k_fin, [#'k_us]],
+   [#'u2, #'k_u2, [#'k_a, #'k_xp, #'k_s1]],             // the overwrite
+   [#'v2, #'k_v2, [#'k_u2]], [#'s2, #'k_fin, [#'k_u2]],
+   [#'ret, #'k_ret, [#'k_old, #'k_fin]]]
+
+// The nodes that carry memory, which are the ones that must not be shared: a value
+// can be read twice, a state cannot.
+def chain_states = [#'s0, #'s1, #'s2, #'s3]
+
+// what each node is, by key: its class, and the classes it takes
+def chain_class_of:
+  for values(m :~ Map = {}) ([key, cls, _] in chain_graph): m ++ { key: cls }
+fun chain_args_of(g :~ List) :: Map:
+  for values(m :~ Map = {}) ([key, _, args] in g): m ++ { key: args }
+def chain_members_of:
+  for values(m :~ Map = {}) ([key, cls, _] in chain_graph):
+    m ++ { cls: (if m.has_key(cls) | (m[cls] :~ List) ++ [key] | [key]) }
+
+// The cheapest node in each class. A node costs one plus the cost of the classes
+// it takes, and a class costs what its cheapest node does; the nodes are listed in
+// the order the data flows, so one pass down the list settles all of them.
+fun chain_best(g :~ List) :: Map:
+  for values(best :~ Map = {}) ([key, cls, args] in g):
+    def cost:
+      for values(c = 1) (a in args):
+        c + ((best[a] :~ List)[1] :~ Int)
+    if !best.has_key(cls) || cost < ((best[cls] :~ List)[1] :~ Int)
+    | best ++ { cls: [key, cost] }
+    | best
+
+// The classes the root reaches, following the cheapest node out of each.
+fun chain_reached(g :~ List, ~root: root) :: List:
+  def best = chain_best(g)
+  def args = chain_args_of(g)
+  recur walk(cls = root, seen :~ List = []):
+    if seen.contains(cls)
+    | seen
+    | block:
+        def key = ((best[cls] :~ List)[0])
+        for values(acc :~ List = seen ++ [cls]) (a in args[key]):
+          walk(a, acc)
+
+// The picks an extraction makes, as the walk reaches them: everything chosen on
+// layer `layer` or above. A layer whose classes were all decided higher up adds
+// nothing, which is what the redundant `update` looks like from here.
+fun chain_picks(g :~ List, ~upto: upto :: Int) :: List:
+  def best = chain_best(g)
+  for List (cls in best.keys()):
+    def key = ((best[cls] :~ List)[0])
+    keep_when chain_layer_of[key] <= upto
+    key
+
+// and the ones that survive, which is the program the root asked for
+fun chain_kept(g :~ List, ~root: root) :: List:
+  def best = chain_best(g)
+  for List (cls in chain_reached(g, ~root: root)): ((best[cls] :~ List)[0])
+
+// A state read by more than one of the nodes that survive: the extraction's own
+// answer to what each `update` reads, and the reason that answer is not a program.
+// Sharing a value is what an e-graph is for; sharing a state means two copies of
+// memory. Comes back as [reader, the state node it reads].
+fun chain_forks(g :~ List, ~root: root) :: List:
+  def best = chain_best(g)
+  def args = chain_args_of(g)
+  def kept = chain_kept(g, ~root: root)
+  def readers:
+    for values(m :~ Map = {}) (key in kept):
+      for values(m :~ Map = m) (a in args[key]):
+        m ++ { a: (if m.has_key(a) | (m[a] :~ List) ++ [key] | [key]) }
+  List.append(
+    & for List (cls in readers.keys()):
+        def rs :~ List = readers[cls]
+        def key = ((best[cls] :~ List)[0])
+        keep_when rs.length() > 1 && chain_states.contains(key)
+        for List (r in rs): [r, key])
+
+// -------------------------------------------------------------------------------------
+// The same question asked of a term rather than of a class: what does this choice
+// of one node per class come to, and does it read a memory twice?
+
+// Every way of choosing one node from each class. Two classes have anything to
+// decide and two members each, so there are four; trying them all is quicker than
+// being clever, which is the whole difficulty the rest of the talk is about.
+fun chain_choices() :: List:
+  for values(all :~ List = [{}]) (cls in chain_members_of.keys()):
+    List.append(
+      & for List (choice :~ Map in all):
+          for List (key in chain_members_of[cls] :~ List):
+            choice ++ { cls: key })
+
+// What the root reaches under a choice, and what that costs -- a node costs one
+// plus what its arguments cost, which is what `chain_best` minimises class by class.
+fun chain_reached_by(choice :~ Map, ~root: root) :: List:
+  def args = chain_args_of(chain_graph)
+  recur walk(cls = root, seen :~ List = []):
+    if seen.contains(cls)
+    | seen
+    | for values(acc :~ List = seen ++ [cls]) (a in args[choice[cls]] :~ List):
+        walk(a, acc)
+fun chain_term_of(choice :~ Map, ~root: root) :: List:
+  for List (cls in chain_reached_by(choice, ~root: root)): choice[cls]
+fun chain_cost_of(choice :~ Map, ~root: root) :: Int:
+  def args = chain_args_of(chain_graph)
+  recur cost(cls = root):
+    for values(c = 1) (a in args[choice[cls]] :~ List): c + cost(a)
+
+// A memory read by two of the nodes of a term. Sharing a value is what an e-graph
+// is for; sharing a state means two copies of memory, so a term with one of these
+// in it is not a program. Comes back as [reader, the state it reads].
+fun chain_forks_in(term :~ List) :: List:
+  def args = chain_args_of(chain_graph)
+  def taken:
+    for values(m :~ Map = {}) (key in term): m ++ { chain_class_of[key]: key }
+  def readers:
+    for values(m :~ Map = {}) (key in term):
+      for values(m :~ Map = m) (a in args[key] :~ List):
+        m ++ { a: (if m.has_key(a) | (m[a] :~ List) ++ [key] | [key]) }
+  List.append(
+    & for List (cls in readers.keys()):
+        def rs :~ List = readers[cls]
+        keep_when rs.length() > 1 && chain_states.contains(taken[cls])
+        for List (r in rs): [r, taken[cls]])
+
+// The cheapest term that reads no memory twice: what we would extract if we knew
+// to. It is not the program we started with -- that one is effect-safe too, and
+// costs more -- and it is not what the greedy walk comes back with, which is
+// cheaper than either and not a program at all.
+fun chain_safe(~root: root) :: List:
+  def answers:
+    for List (choice :~ Map in chain_choices()):
+      def term = chain_term_of(choice, ~root: root)
+      keep_when chain_forks_in(term) == []
+      [chain_cost_of(choice, ~root: root), term]
+  def best:
+    for values(best :~ List = answers[0]) (answer :~ List in answers):
+      if (answer[0] :~ Int) < (best[0] :~ Int) | answer | best
+  best[1] :~ List
+
+
+// -------------------------------------------------------------------------------------
+// The statewalk DP algorithm, run on the graph above.
+//
+// The talk's third section shows this executing, so it is computed here rather than
+// drawn by hand: the slide renders whatever these functions return, and an edit to
+// the graph moves the animation with it instead of leaving it saying something the
+// graph no longer does.
+//
+// A *statewalk* is the chain of effectful terms from the argument state to some
+// effectful class: each one takes the last as its state operand. Its *extractable
+// set* is the pure classes it puts within reach -- a pure term is only usable if
+// every effectful subterm it needs is on the walk. Two walks that reach the same
+// class and reach the same pure classes are interchangeable, so the table is
+// indexed by (class, extractable set) and keeps one walk per pair.
+
+// The statewalk DP, over this graph. The algorithm itself is in statewalk.rhm --
+// these are the deck's names for it, bound to the e-graph the slides draw.
+fun chain_eff_node(key) :: Boolean:
+  sw.eff_node(chain_graph, ~states: chain_states, key)
+fun chain_eff_class(c) :: Boolean:
+  sw.eff_class(chain_graph, ~states: chain_states, c)
+def chain_pure_classes :~ List:
+  sw.pure_classes(chain_graph, ~states: chain_states)
+fun chain_extract_map(walk :~ List) :: Map:
+  sw.extract_map(chain_graph, ~states: chain_states, walk)
+fun chain_es_of(walk :~ List) :: List:
+  sw.es_of(chain_graph, ~states: chain_states, walk)
+// `s0` is the argument state, which is where every walk starts
+fun chain_statewalks() :: List:
+  sw.statewalks(chain_graph, ~states: chain_states, ~arg: #'s0)
+
+// The term one row of the table stands for: the last term of its walk, with every
+// operand resolved -- a pure one to the representative ExtractMap found for its
+// class under this walk, an effectful one to the walk's own member of that class.
+// This is the whole of why what comes back is effect-safe: an operand is only ever
+// something the walk itself passed through.
+fun chain_dp_term(row :~ List) :: List:
+  sw.dp_term(chain_graph, ~states: chain_states, row)
+
+// The row the algorithm ends on: of the entries at the root class, the one whose
+// term is cheapest. A node of the term apiece, which is the cost this graph's other
+// arithmetic uses.
+fun chain_dp_best() :: List:
+  sw.dp_best(chain_graph, ~states: chain_states, ~root: chain_root)
+
+// The distinct extractable sets, in the order the table first writes one. A set is
+// then a number, and a number is a colour: white for the one the bare argument state
+// reaches, and the two fills for the two the writes open up.
+def chain_es_list :~ List:
+  for values(acc :~ List = []) (row :~ List in chain_statewalks()):
+    if acc.contains(row[1]) | acc | acc ++ [row[1]]
+fun chain_es_index(es :~ List) :: Int:
+  recur look(i = 0): if (chain_es_list[i] :~ List) == es | i | look(i + 1)
+// a function, not a list: the fills are defined with the rest of the node colours,
+// which is further down the file than this
+fun chain_es_fill(i :: Int) :: String:
+  [node_es_0, node_es_1, node_es_2][i]
+
+// Which sets each class ends up holding a walk for, in the order it gets them. A
+// class with two is one the table could not merge: two walks that reach it and do
+// not reach the same pure classes, which is what statewalk width 2 looks like.
+// Takes the rows rather than reading them all, so that a slide can ask what the
+// table looks like part way through filling in.
+fun chain_dp_sets(rows :~ List) :: Map:
+  for values(m :~ Map = {}) (row :~ List in rows):
+    def c = row[0]
+    def i = chain_es_index(row[1] :~ List)
+    def had :~ List = if m.has_key(c) | m[c] | []
+    if had.contains(i) | m | m ++ { c: had ++ [i] }
+
+// and the same thing per node, which is what draws it: every member of a class is
+// filled by what the class holds
+fun chain_dp_fills(rows :~ List) :: Map:
+  def sets :~ Map = chain_dp_sets(rows)
+  for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
+    if !sets.has_key(c)
+    | m
+    | m ++ { key: for List (i in sets[c] :~ List): chain_es_fill(i) }
+
+// -------------------------------------------------------------------------------------
+// Where the nodes go: the y of each row, and each node's left edge and row.
+//
+// Solved by `graph_layout.py` in this directory, which is told the graph above and
+// nothing else, and enforces, in this order: data flows down -- a node sits below
+// everything it is built from, and the members of an e-class share a row, since a
+// class is one thing; as few crossings as it can find; no edge behind a box it does
+// not end at; and no long shallow run, which reads as a horizontal line rather than
+// as data flowing down. The numbers below are its answer with a few nudged by eye.
+// `python3 graph_layout.py` checks the table as it stands and names anything it
+// breaks, which is what makes nudging safe; `--solve` searches again from scratch.
+def chain_rows: [210.0, 300.0, 460.0, 556.0, 652.0, 748.0, 844.0]
+def chain_pos:
+  { #'x: [1332.1, 0], #'one: [1466.1, 0],
+    #'a: [1150.6, 1], #'xp: [1287.6, 1], #'s0: [1476.6, 1],
+    #'u1: [1474.8, 2],
+    #'us: [1112.6, 3], #'s1: [1535.9, 3],
+    #'v3: [1096.8, 4], #'v1: [1311.1, 4], #'u2: [1460.1, 4],
+    #'s3: [1322.8, 5], #'s2: [1500.0, 5], #'v2: [1634.5, 5],
+    #'ret: [1475.9, 6] }
+
+// Where each callout's body sits. Placed by eye, not solved -- but kept here
+// beside the layout it has to live in, because a bubble is a box like any other
+// and moving a node can leave one lying across an edge. `graph_layout.py` does not
+// know about these, so they are the one thing to re-check by looking.
+def chain_bubbles:
+  { #'ask: [1150.0, 850.0],           // "extract", below the return
+    #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
+    #'redundant: [1645.0, 550.0] }    // "Redundant update", below the write it names
+
+fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
+def chain_layers = (chain_rows :~ List).length()
+// which row each node is on, which is also the order the extraction walk visits
+// them in: the walk goes down the picture because the data does
+def chain_layer_of:
+  for values(m :~ Map = {}) (key in (chain_pos :~ Map).keys()):
+    m ++ { key: ((chain_pos :~ Map)[key] :~ List)[1] }
+
+// What each press of `slide_egraph` brings, in the order the program is read, and
+// then what the rule adds. Only the *order* of arrival is written down here; where
+// each node lands is the table above, so a node cannot arrive in one place and be
+// drawn in another.
+def chain_reveals:
+  [[#'x, #'a, #'s0, #'u1, #'s1, #'v1],          // (v1, ω1) = update(a, x, ω)
+   [#'one, #'xp, #'u2, #'v2, #'s2],             // (v2, ω2) = update(a, x+1, ω1)
+   [#'ret],                                     // return (v1, ω2)
+   [#'us, #'v3, #'s3]]                          // and what the rule adds
+
+// An edge runs from a node to each class it is built from: an `update` points at
+// its arguments, and the value and state it returns point back at it. Data flows
+// down the picture; the arrowheads say what contains what.
+//
+// The edges are the argument lists of the graph, so there is no second table to
+// keep in step with the first. A class with more than one member is drawn pointing
+// at the member the program itself built -- the one that arrives first -- and an
+// edge is blue, meaning a memory passes along it, when either of its ends is one of
+// the nodes that carry memory.
+def chain_edge_list:
+  def first_of:
+    for values(m :~ Map = {}) (group in (chain_reveals :~ List).reverse()):
+      for values(m :~ Map = m) (key in group :~ List):
+        m ++ { chain_class_of[key]: key }
+  List.append(
+    & for List ([key, _, args] in chain_graph):
+        for List (cls in args :~ List):
+          def to = first_of[cls]
+          def kind:
+            if chain_states.contains(key) || chain_states.contains(to)
+            | #'s
+            | #'v
+          [kind, key, to])
+
+// The chain as a frame's worth of data. Every node in two drawings, plain and
+// picked, each built once: a pick is the same box with a green fill, so a frame
+// that picks a node names its green twin and the box turns green in place.
+def chain_keys: for List ([key, _, _] in chain_graph): key
+def chain_plain = chain_nodes()
+def chain_green = chain_nodes(~picked: chain_keys)
+def chain_red = chain_nodes(~forked: chain_keys)
+def chain_gold = chain_nodes(~matched: chain_keys)
+// Smaller than the one on the background slide: it stands in the margin right of
+// the state column, so it has to be narrow enough to sit clear of both the class
+// region beside it and the edge of the slide.
+def chain_pointer:
+  as_pict(walk_arrow(~facing: "leftArrow", ~width: 56.0, ~height: 24.0))
+// where it goes for a layer: level with the middle of that row's nodes
+fun chain_point_at(layer :: Int) :: List:
+  [chain_point_x, chain_y(layer) + 32.0 - (chain_pointer :~ pc.Pict).height / 2]
+
+// The nodes of a frame: where each one goes, and which of its three drawings to
+// use -- plain, picked, or picked by two things at once.
+// The same, filled by what the statewalk DP has stored rather than by what a walk
+// has picked: a class the table holds two walks for comes out as one box in two
+// colours.
+fun chain_dp_picts(spots :~ Map, fills :~ Map) :: Map:
+  def nodes :~ Map = chain_nodes(~fills: fills)
+  for values(m :~ Map = {}) (key in spots.keys()):
+    def [x, y] = spots[key] :~ List
+    m ++ { key: [nodes[key], x, y] }
+
+fun chain_node_picts(spots :~ Map, picks :~ List,
+                     ~red: red :~ List = [],
+                     ~gold: gold :~ List = []) :: Map:
+  for values(m :~ Map = {}) (key in spots.keys()):
+    def [x, y] = spots[key]
+    def pict:
+      cond
+      | red.contains(key): chain_red[key]
+      | gold.contains(key): chain_gold[key]
+      | picks.contains(key): chain_green[key]
+      | ~else: chain_plain[key]
+    m ++ { key: [pict, x, y] }
+
+// Which nodes are on the slide after the first `upto` presses, and where they sit.
+fun chain_shown(upto :: Int) :: List:
+  List.append(& for List (k in 0..upto): (chain_reveals :~ List)[k])
+fun chain_spots_upto(upto :: Int) :: Map:
+  for values(m :~ Map = {}) (key in chain_shown(upto)):
+    def [x, row] = (chain_pos :~ Map)[key]
+    m ++ { key: [x, chain_y(row)] }
+def chain_spots :~ Map = chain_spots_upto((chain_reveals :~ List).length())
+
+// The edges of those nodes: an edge is drawn once both of its ends have arrived,
+// so a node's arrival is written down in one place and the edges follow. Each is
+// tagged with what kind it is -- `#'v` for a value edge, thin and black, `#'s` for
+// a state edge, thick and in Keynote's blue. One flat list, because a scene's edges
+// are compared with the next scene's, and an edge either is or is not still there.
+fun chain_edges(upto :: Int) :: List:
+  def shown = chain_shown(upto)
+  for List (e :~ List in chain_edge_list):
+    keep_when shown.contains(e[1]) && shown.contains(e[2])
+    e
+
+// `at` is the frame's own nodes, which is what the ghosts on the layer are and so
+// what an edge can be found and aimed at.
+// The graph's own arrows. `#'m` is not one of them -- it is a rule pointing at what
+// one of its variables matched -- so it is drawn by the layer under the rule instead.
+fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) (e :~ List in es):
+    cond
+    | e[0] == #'v: chain_wire(q, at, [e.rest], ~line_width: 4)
+    // `#'f` is a state edge that should not be there: two of them arriving at one
+    // node is memory read twice
+    | e[0] == #'f: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: talk_red)
+    // not an edge at all: which nodes the extractable set covers, which the slide
+    // draws for itself, since it has to change shape as the press runs
+    | e[0] == #'blob: q
+    | e[0] == #'m: q
+    // a statewalk being laid down, in the colour of the extractable set it reaches
+    | e[0] == #'w0: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_0))
+    | e[0] == #'w1: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_1))
+    | e[0] == #'w2: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_2))
+    | ~else: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: keynote_blue)
+
+// and the pointers, thin, gold and dashed, so they read as something laid over the
+// picture for a moment rather than as something the e-graph contains
+fun chain_point_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) (e :~ List in es):
+    skip_when e[0] != #'m
+    chain_wire(q, at, [e.rest], ~line_width: 3, ~color: chip_line_color, ~dash: #true)
+
+// A chain slide: its frames, over a page that no press touches.
+fun chain_slide(page :: pc.Pict, frames :~ List, ~& kws) :: pc.Pict:
+  magic_slide(page, frames, ~wire: chain_wire_specs, ~edge_band: band_wires,
+              ~under_wire: chain_point_specs, ~under_band: band_point, ~& kws)
+
+// The class the extraction starts from: `return` is what groups the value and the
+// state the program hands back.
+def chain_root = #'k_ret
+
+// The two classes the rule makes, by the key each is drawn under. Both are
+// straight tubes, because the layout puts the members of a class side by side.
+def chain_regions:
+  fun mid(key): node_middle(chain_plain[key], & chain_spots[key])
+  { #'old_class: eclass_region(mid(#'v1), mid(#'v3), ~dash: value_class),
+    #'memory_class: eclass_region(mid(#'s3), mid(#'s2), ~dash: state_class) }
+def rule_classes_under:
+  for values(m :~ Map = {}) (key in (chain_regions :~ Map).keys()):
+    m ++ { key: ((chain_regions :~ Map)[key] :~ List) ++ [band_below] }
+
+// What the extraction is asked for, said where it is asked: a bubble on the
+// `return`, which is the class the walk starts from.
+def chain_ask_over:
+  { #'ask: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
+                      ~body: (chain_bubbles :~ Map)[#'ask], ~color: talk_blue,
+                      ~content: prose([["extract", #'bold]])),
+            0.0, 0.0, band_callout] }

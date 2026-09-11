@@ -1,0 +1,53 @@
+#lang rhombus/and_meta
+// The term the talk keeps coming back to, `(a + 1) - 1`, and where it sits.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "theme.rhm" open
+  pict as pc
+  draw
+
+export:
+  flow_title
+  input_line
+  term_font
+  term_glyphs
+  term_offs
+  term_run
+  term_strs
+  term_x
+  term_y
+
+// ---------------------------------------------------------------- the input term
+//
+// The term the first section works through, drawn as one pict per glyph and laid
+// out here rather than by a text box, so that a subterm can be marked, copied, and
+// walked out into the graph. Keynote's box shrank 60pt text to fit itself; 45pt
+// with a point and a half taken out between the glyphs is what that came to,
+// measured off the old rendering.
+//
+// It is in a file of its own rather than inside `slide_12` because the workflow
+// picture before that slide holds the same term, and the press that leaves that picture
+// puts this very pict where this slide draws it -- so the click between the two
+// slides is a match cut rather than a cut.
+// The workflow picture and the example it hands over to are one thought, and the
+// press between them moves the term and the rules without moving anything else --
+// so they carry one title, and the click changes only what it has to.
+def flow_title = "E-Graphs Explore a Big Space"
+
+def term_font = draw.Font(~name: prose_font, ~size: 45.0)
+def term_strs = ["(", "a", " ", "+", " ", "1", ")", " ", "-", " ", "1"]
+def term_glyphs = for List (s in term_strs): pc.text(s, ~font: term_font)
+def values(term_offs, term_w):
+  for values(acc :~ List = [], dx :~ Real = 0.0) (g :~ pc.Pict in term_glyphs, i in 0..):
+    values(acc ++ [dx - 1.5 * i], dx + g.width)
+fun term_run(i :: Int, j :: Int) :: pc.Pict:
+  for values(q :~ pc.Pict = pc.blank(~width: 0.0, ~height: 0.0)) (k in i..j):
+    pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: term_offs[k] - term_offs[i], ~dy: 0.0,
+               q, term_glyphs[k])
+// where the term goes. It carries no label: the picture before this slide has just
+// handed it over out of a box that says what it is, and the rules under it are the
+// only thing on the slide that has to be named.
+def term_x = 129.0
+def term_y = 252.0
+def input_line = term_run(0, term_strs.length())

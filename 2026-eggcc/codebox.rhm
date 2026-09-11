@@ -1,0 +1,210 @@
+#lang rhombus/and_meta
+// The program the `update` example is about, as a box of code: its lines, the
+// pieces of each line that stand for something in the graph, and the highlighter
+// band that says which line a press is talking about.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "theme.rhm" open
+  pict as pc
+  draw
+
+export:
+  band_of
+  code_inset
+  code_parts
+  code_pict
+  code_row
+  code_updates
+  code_x
+  code_y
+  highlight
+  rule_x
+  rule_y
+
+// ---------------------------------------------------------------------------
+// Where the `update` example sits: the program down the left, the graph built
+// from it down the right, side by side. `slide_update`, `slide_egraph` and
+// `slide_rue` all use these, so the code box lands in one place and stays put
+// across the cuts.
+//
+//    fun foo(a, x, b, y, ω):           a  x  b  y      ω
+//      (v1, ω1) = update(a, x, ω)            update
+//      (v2, ω2) = update(a, x, ω1)                v1     ω1
+//      (v3, ω3) = update(b, y, ω2)           update
+//      return (v2, ω3)                            v2     ω2
+//                                            update
+//    the rule, on `slide_rue`                     v3     ω3
+//
+// Data flows down, and every edge points the way the data goes. The inputs are in
+// a row along the top, the `update`s run down the middle, the value each one
+// returns sits beside it and the state chain runs down the right. The columns are
+// spaced the way they are on purpose: the long edges -- an `update` reaching back
+// up to a variable, a state reaching left to the `update` that reads it -- thread
+// gaps between boxes, and moving a column puts them through one.
+//
+// The code and the graph have to fit beside each other, and the graph needs its
+// variables left of the `update` column as well as above it, so the three of them
+// share the width: the box takes what is left over once the variable row and the
+// column block have what they need. At 40pt that is 938 of it, and the graph
+// starts 20 further on -- the walk's pointer used to stand between them, and it
+// has gone round to the right of the graph so that the two can sit together. At
+// 50 -- what Keynote had -- the box alone is 1224 wide, which is why the text
+// used to overflow its own border into the graph.
+def code_x = 95.0            // the deck's left margin, where the titles start
+def code_y = 240.0
+def code_row = 69.0          // a line of the box: 60pt of ink at 40pt, plus leading
+def code_inset = 20.0
+
+// The rule box on `slide_rue`, under the code it is about. It is scaled to the
+// width of the code box, whatever that measures, so the two of them share a right
+// edge and the left of the slide reads as one column with the pointer's lane
+// beside it, rather than as two boxes with a ragged gap to their right.
+def rule_x = 95.0
+def rule_y = 600.0           // under the code box, which is now 316 tall
+
+// The code is picts rather than a text box, so that its pieces can move: the
+// `(`, `, ω`, `)` and the state argument of the state form are new picts that
+// fade in, while `v`, its subscript, `= update(a, x` and the closing paren are
+// the *same* picts in both forms and slide to make room. `code_parts` builds
+// every piece once, for both layouts, which is what `magic_move` matches on.
+//
+// The signature moves with them. It is what says which names come from outside:
+// the plain form takes `a`, `x`, `b`, `y` and `c`, and the state form grows a
+// `, ω`, because making the state an argument like any other is the whole point
+// of the slide. The parameters are in the order the graph's input row uses them,
+// so the row above the graph reads the same as the line above the code.
+fun code_parts() :: Map:
+  // The signature. `fun foo(a, x` and `):` are the same picts in both forms, so
+  // they are what the move slides along; the `, ω` between them belongs to the
+  // state form alone and fades in.
+  def sig_head = code("fun foo(a, x")
+  def sig_close = code("):")
+  def header:
+    {#'plain: pc.beside(~vert: #'bottom, sig_head, sig_close),
+     #'states: pc.beside(~vert: #'bottom, sig_head, code(", "), greek("ω"), sig_close)}
+  // Two writes to one address: the first stores `x`, the second overwrites it with
+  // `x + 1`. The program still needs what `a` held before, and it needs the memory
+  // it ends with, so it returns both.
+  //
+  // Every piece of a line that stands for something in the graph is its own pict,
+  // so that `slide_egraph` can lift it out and turn it into that node. The pieces
+  // both forms of a line have in common are built once and used twice, which is
+  // what `slide_update`'s move slides along.
+  def updates:
+    for List (i in 1..3):
+      def v = code("v")
+      def v_sub = code_sub(to_string(i))
+      def omega_out = greek("ω")
+      def omega_out_sub = code_sub(to_string(i))
+      def op = code(" = update(")
+      def arg1 = code("a")
+      def arg_comma = code(", ")
+      // the first write stores the variable; the second stores one more than it,
+      // which is what makes the two writes cost different amounts to perform
+      def wrote:
+        if i == 1 | [code("x")] | [code("x"), code("+"), code("1")]
+      def omega_in = greek("ω")
+      def omega_in_sub = if i == 1 | [] | [code_sub(to_string(i - 1))]
+      def close = code(")")
+      def segs:
+        [[#false, [code("(")]],
+         [#'value, [v, v_sub]],
+         [#false, [code(", ")]],
+         [#'state, [omega_out, omega_out_sub]],
+         [#false, [code(")")]],
+         [#'op, [op]],
+         [#'arg1, [arg1]],
+         [#false, [arg_comma]],
+         [#'wrote, wrote],
+         [#false, [code(", ")]],
+         [#'state_in, [omega_in] ++ omega_in_sub],
+         [#false, [close]]]
+      {#'plain: pc.beside(~vert: #'bottom, v, v_sub, op, arg1, arg_comma,
+                          & wrote, close),
+       #'states: segs_pict(segs),
+       #'omega: omega_out,
+       #'segs: segs}
+  // What the program hands back, and so what extraction is asked for: what `a` held
+  // before the first write, and the memory the second one leaves.
+  def ret_head = code("return ")
+  def ret_v = code("v")
+  def ret_sub = code_sub("1")
+  def ret:
+    def segs:
+      [[#'op, [ret_head]],
+       [#false, [code("(")]],
+       [#'value, [ret_v, ret_sub]],
+       [#false, [code(", ")]],
+       [#'state, [greek("ω"), code_sub("2")]],
+       [#false, [code(")")]]]
+    {#'plain: pc.beside(~vert: #'bottom, ret_head, ret_v, ret_sub),
+     #'states: segs_pict(segs),
+     #'segs: segs}
+  def lines = updates ++ [ret]
+  // The frame is measured, and measured against the *state* form: a box sized to
+  // the plain form would have to grow as the code moves into the state form, and
+  // one sized by hand is how the code came to overflow its own border.
+  def body_w:
+    for values(m :~ Real = 0.0) (l :~ Map in lines):
+      math.max(m, (l[#'states] :~ pc.Pict).width)
+  def content_w = math.max((header[#'states] :~ pc.Pict).width, code_indent + body_w)
+  def frame = frame_box(content_w + 2 * code_inset,
+                        (1 + lines.length()) * code_row + 2 * code_inset)
+  {#'frame: frame, #'header: header, #'lines: lines}
+
+// The box with its five lines -- the signature, then one per `update` -- in one
+// form or the other.
+// `~only` names the rows to draw, for when the rest of them are being drawn by
+// something else -- the workflow picture hands the two `update` lines over as a
+// pict of their own, and the box they land in must not have a second copy of them
+// waiting underneath.
+fun code_body(parts :~ Map, ~states: states :: Boolean,
+              ~only: only :: maybe(List) = #false) :: pc.Pict:
+  fun pick(m :~ Map) :~ pc.Pict: if states | m[#'states] | m[#'plain]
+  def rows :~ List = [pick(parts[#'header]), & for List (l in parts[#'lines]): pick(l)]
+  def frame :~ pc.Pict = parts[#'frame]
+  def board = pc.blank(~width: frame.width, ~height: frame.height)
+  for values(p :~ pc.Pict = board) (q :~ pc.Pict in rows, k in 0..):
+    skip_when only && !(only :~ List).contains(k)
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               ~dx: code_inset + (if k == 0 | 0.0 | code_indent),
+               ~dy: code_inset + code_row * k + (code_row - q.height) / 2,
+               p, q)
+
+// The two `update` lines by themselves, at the spacing the box gives them. The
+// workflow picture holds a copy of this, shrunk; the press that leaves the picture
+// grows it back and puts it at `code_updates_at`, which is the very place these
+// rows have inside the box -- so the lines land on their own rows.
+fun code_updates(parts :~ Map, ~states: states :: Boolean) :: pc.Pict:
+  fun pick(m :~ Map) :~ pc.Pict: if states | m[#'states] | m[#'plain]
+  def rows :~ List = for List (l in (parts[#'lines] :~ List).take(2)): pick(l)
+  def w:
+    for values(m :~ Real = 0.0) (q :~ pc.Pict in rows): math.max(m, q.width)
+  def board = pc.blank(~width: w, ~height: 2 * code_row)
+  for values(p :~ pc.Pict = board) (q :~ pc.Pict in rows, k in 0..):
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               ~dy: code_row * k + (code_row - q.height) / 2, p, q)
+def code_updates_at:
+  [code_x + code_inset + code_indent, code_y + code_inset + code_row]
+
+// The lines over the frame. They are drawn apart so that the workflow picture can
+// hold a copy of the code without a second border round it, and so that the press
+// that leaves that picture can send the code on its own into this box.
+fun code_pict(parts :~ Map, ~states: states :: Boolean) :: pc.Pict:
+  pc.overlay(~horiz: #'left, ~vert: #'top,
+             parts[#'frame], code_body(parts, ~states: states))
+
+// The line of the code box naming the `update` just put into the e-graph, marked
+// as with a highlighter: a translucent band over it. `k` counts the `update`
+// lines from 0, so the signature above them is not one of them. The band comes
+// back as a pict and where to put it, not drawn onto anything, so that the same
+// band can be handed to press after press: a scene fades in what it has and the
+// press before it has not, and a band rebuilt for each press is a new thing every
+// time and would blink.
+def highlight = draw.Color(38, 132, 235, 0.25)
+fun band_of(parts :~ Map, k :: Int) :: List:
+  def frame :~ pc.Pict = parts[#'frame]
+  def band = pc.rectangle(~width: frame.width - 2 * code_inset, ~height: code_row - 12.0,
+                          ~fill: highlight, ~line: #false, ~rounded: -0.3)
+  [band, code_x + code_inset, code_y + code_inset + code_row * (k + 1) + 6.0]

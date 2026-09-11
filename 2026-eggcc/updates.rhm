@@ -1,0 +1,374 @@
+#lang rhombus/and_meta
+// The `update` example, as one story: what an update does, the chain of them going
+// into an e-graph, a rule over them, and the extraction that gets it wrong.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "magicmove.rhm" open
+  "theme.rhm" open
+  "codebox.rhm" open
+  "rules.rhm" open
+  "chain.rhm" open
+  "apply.rhm" open
+  pict as pc
+
+export:
+  slide_egraph
+  slide_fork
+  slide_rue
+  slide_update
+
+// -------------------------------------------------------------------------------------
+// The `update` example, as one story.
+//
+// Straight-line code first, as anyone would write it; what one `update` does; the
+// state values, magic-moved into the code; the e-graph built up one `update` per
+// press; a rule over `update`, and the rule applied as a union; and last the
+// extraction that takes the wrong term out of what the rule made. The code box
+// sits in one place on all four slides, so it stays put across the cuts.
+
+// -------------------------------------------------------------------------------------
+// slide_update: the three `update`s, what one does, and where the states come in.
+//
+// A press explains the operation. The next one magic-moves each line into its
+// `(v, ω) = update(...)` form: the pieces already on screen slide right to make
+// room, the parentheses and the ωs fade in around them, the first bubble goes
+// and one naming the state value arrives.
+fun slide_update():
+  def canvas = titled("Update")
+  def parts = code_parts()
+  def plain = put(canvas, code_pict(parts, ~states: #false), code_x, code_y)
+  def with_states = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  // The bubbles are a layer of their own over the code, pinned at measured
+  // points: `magic_move` rebuilds its two pictures piece by piece, and a balloon
+  // pinned by a finder does not survive that. Kept apart, the layer can fade out
+  // as the move runs and the next one fade in, which is what should happen anyway.
+  def blank_layer = pc.blank(~width: slide_width, ~height: slide_height)
+  // Both bubbles reach in from the right, at the height of the first line and off
+  // the box's own edge -- not off the end of the line's text, which is inside the
+  // box, and not from above, where the signature now is. The second replaces the
+  // first in place, so the eye stays on the line they are both about.
+  def (fx, _) = pc.Find.right(parts[#'frame]).in(plain)
+  def first_line_y = code_y + code_inset + code_row * 1.5
+  def at_first_line = pc.Find.abs(fx, first_line_y)
+  def explain:
+    callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
+            prose_stack([[["Write ", #'plain], ["x", #'bold], [" to address ", #'plain],
+                          ["a", #'bold], [",", #'plain]],
+                         [["return the previous value at ", #'plain], ["a", #'bold]]]))
+  def name_state:
+    callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
+            prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
+                         [["after the update", #'plain]]]))
+  def explained = put(plain, explain, 0.0, 0.0)
+  def extent = 1.2
+  // One bubble out, then the other in -- not both at once. They are two different
+  // sentences in the same place, and crossing them leaves the middle of the move
+  // showing the two of them printed over each other at half strength.
+  def moving:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               pc.magic_move(plain, with_states, ~other: #'fade, ~extent: extent)
+                 .time_pad(~after: -1),
+               pc.animate(~extent: extent, fun (t): explain.alpha(clamp01(1.0 - 2.0 * t))),
+               pc.animate(~extent: extent, fun (t): name_state.alpha(clamp01(2.0 * t - 1.0))))
+  pc.switch(plain, pc.cross_fade(plain, explained), moving)
+
+// -------------------------------------------------------------------------------------
+// slide_egraph: the chain of `update`s going into the e-graph, one per press, the
+// code line it comes from highlighted as it lands. Cross-fades between finished
+// pictures, since the highlight moves and a reveal could only add.
+fun slide_egraph():
+  def canvas = with_icon(titled("The Effectful E-Graph"))
+  def parts = code_parts()
+  def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+
+  // Each line of the program goes into the graph in two presses: the line is
+  // marked, with a copy of every piece of it that means something sitting exactly
+  // on top of that piece; then those copies fly right into the graph, each one
+  // turning into the node it stands for as it lands.
+  //
+  // The copies are keyed by the nodes they become, so a piece of text and the box
+  // it becomes are one thing travelling, which is the whole point: `a` in the
+  // program *is* the `a` in the graph. Nothing waits in the middle, and no piece is
+  // ever wider than the words it copies, so nothing crosses the edge of the slide.
+  //
+  // One band per line, built once, so the press that marks the next line has only
+  // the band to move.
+  def bands: for List (k in 0..3): band_of(parts, k) ++ [band_above]
+
+  // Which node each piece of line `k` becomes. Only the pieces that bring a *new*
+  // node are listed: by the second line its operands and its incoming state are in
+  // the graph already, and the copy of a piece with nowhere to go would be motion
+  // that means nothing.
+  def line_targets:
+    [{ #'value: #'v1, #'state: #'s1, #'op: #'u1,
+       #'arg1: #'a, #'wrote: #'x, #'state_in: #'s0 },
+     // the second line brings the value it writes, which is a term of its own
+     { #'value: #'v2, #'state: #'s2, #'op: #'u2, #'wrote: #'xp },
+     { #'op: #'ret }]
+
+  // where the box draws line `k`, from the same measurements `code_pict` uses
+  fun line_pict(k :: Int) :~ pc.Pict:
+    ((parts[#'lines] :~ List)[k] :~ Map)[#'states]
+  fun line_x() :: Real: code_x + code_inset + code_indent
+  fun line_y(k :: Int) :: Real:
+    code_y + code_inset + code_row * (k + 1) + (code_row - (line_pict(k)).height) / 2
+  // the copies of line `k`'s pieces, each over the piece it copies
+  // `band_flight`, so a copy on its way out of the code box is drawn over the band
+  // marking the line it came from rather than behind it.
+  fun line_copies(k :: Int) :: Map:
+    def targets :~ Map = line_targets[k]
+    def segs :~ List = ((parts[#'lines] :~ List)[k] :~ Map)[#'segs]
+    for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(segs)):
+      skip_when !targets.has_key(role)
+      m ++ { targets[role]: [piece, line_x() + dx, line_y(k), band_flight] }
+
+  // The first write stores a value that the second one throws away. That is worth
+  // saying as soon as the graph is up and before any rule is stated, because it is
+  // the reason there is a rule at all -- so the slide that builds the graph ends on
+  // it. It comes up from below, since the two boxes right under that write are its
+  // own results.
+  def redundant_over:
+    { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
+                              ~body: (chain_bubbles :~ Map)[#'redundant],
+                              ~color: talk_blue,
+                              ~content: pc.stack(~sep: 2.0, ~horiz: #'center,
+                                                 small_prose("Redundant"),
+                                                 small_prose("update"))),
+                    0.0, 0.0, band_callout] }
+  chain_slide(
+    page,
+    [Frame(),
+     & List.append(
+         & for List (k in 0..3):
+             def mark = { #'mark: bands[k] }
+             [Frame(~picts: chain_node_picts(chain_spots_upto(k), []) ++ mark
+                              ++ line_copies(k),
+                    ~edges: chain_edges(k)),
+              Frame(~picts: chain_node_picts(chain_spots_upto(k + 1), []) ++ mark,
+                    ~edges: chain_edges(k + 1))]),
+     Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ redundant_over,
+           ~edges: chain_edges(3))])
+
+// -------------------------------------------------------------------------------------
+// slide_rue: a rule over `update`, and the rule applied.
+//
+// The second `update(a, x)` writes what the first already wrote: it returns `x`
+// and leaves the state alone. A press states that beside the code, as the paper's
+// overview figure does -- the two `update`s over a long horizontal line, what they
+// make equal under it -- with the two code lines it is about marked; the next one
+// does the union in the e-graph.
+//
+fun slide_rue():
+  // The page under the graph, drawn once and never animated: the title, the icon
+  // and the code.
+  def canvas = with_icon(titled("Dead Store Elimination"))
+  def parts = code_parts()
+  def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  def rule_over = chain_rule_over(parts, ~value: #true)
+
+  // Applying the rule, a movement to a press -- see the block above `rule_box` for
+  // what each copy is keyed by, which is what makes each press a move.
+  def rule_here = chain_rule_over(parts, ~value: #true)
+  // a chip per variable, and none for the operators: see `chain_matched`
+  def chips_here:
+    chain_rule_chips(parts, ~value: #true, ~only: chain_matched)
+  def chips_lit:
+    chain_rule_chips(parts, ~value: #true, ~lit: #true, ~only: chain_matched)
+  // the variables the conclusion uses again, which are the pointers that stay
+  def reused:
+    def slots :~ Map = (rule_slots(update_rule(~value: #true)) :~ Map)[#'conclusion]
+    for List (role in slots.keys()):
+      keep_when (chain_pos :~ Map).has_key(role) && chain_matched.contains(role)
+      role
+  def chips_below:
+    chain_rule_chips(parts, ~value: #true, ~lit: #true,
+                     ~from: #'conclusion, ~only: reused)
+  // the variables the conclusion uses again, which are the pointers that have
+  // somewhere to go in the next press
+  def pointed = reused
+  def conclusion = chain_rule_pieces(parts, ~value: #true)
+  def conclusion_nodes = chain_rule_pieces(parts, ~value: #true, ~as_nodes: #true)
+  def equalities = chain_eq_pieces(parts, ~value: #true)
+
+  def program = chain_node_picts(chain_spots_upto(3), [])
+  def lit = chain_node_picts(chain_spots_upto(3), [], ~gold: chain_matched)
+  def with_rule = chain_node_picts(chain_spots, [])
+  // The copies ride along, invisible against the rule's own text, until the movement
+  // that is theirs; the rule is stated with all of them already made.
+  chain_slide(
+    page,
+    [// the graph the program builds
+     Frame(~picts: program, ~edges: chain_edges(3)),
+     // the rule, said beside the two lines of the program it is about
+     Frame(~picts: program ++ rule_here ++ chips_here, ~edges: chain_edges(3)),
+     // its variables light up and point at the nodes they matched
+     Frame(~picts: lit ++ rule_here ++ chips_lit,
+           ~edges: chain_edges(3) ++ chain_match_edges(chips_lit, ~only: pointed)),
+     // and the pointers slide down to the line it concludes, taking the place of the
+     // variables written there: the same bindings, now saying what the rule adds
+     Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion ++ equalities,
+           ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
+     // the words of that line become the nodes they name, standing where the words
+     // stood
+     Frame(~picts: lit ++ rule_here ++ conclusion_nodes ++ equalities,
+           ~edges: chain_edges(3)),
+     // and those nodes move out into the graph, bringing their arrows
+     Frame(~picts: with_rule ++ rule_here ++ equalities, ~edges: chain_edges(4)),
+     // last, the equalities fly out and become the regions round the classes they
+     // make
+     Frame(~picts: with_rule ++ rule_here ++ rule_classes_under,
+           ~edges: chain_edges(4))])
+
+// -------------------------------------------------------------------------------------
+// slide_fork: the same e-graph, a weaker rule, and the extraction that breaks.
+//
+// The rule now says only that the two states are equal, `ω1 ≡ ω2`, which is all a
+// rule about memory can say without also knowing something about the values. So
+// nothing says `v2` is `x`, the second `update` has to stay, and the walk -- free
+// to take either node out of the state class it reaches -- takes the cheaper one
+// for *both* `update`s that read it. What comes out has two `update`s reading one
+// state: memory has forked, and that is not a program.
+//
+// The walk is the same walk, and it is right at every step. Which is the point:
+// the fault is not in the search, it is in extracting a term from an e-graph that
+// holds effects as if they were values. Everything about the picture is the same
+// as the slide before it except the rule, so the two can be read against each
+// other.
+fun slide_fork():
+  def canvas = titled("Extraction Goes Wrong")
+  def parts = code_parts()
+  def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  def rule_over = chain_rule_over(parts, ~value: #true)
+
+  // Everything this slide shows is worked out from the one rule: what the walk
+  // picks, what survives, and which memory is read twice.
+  def graph = chain_graph
+  def kept = chain_kept(graph, ~root: chain_root)
+  def forks = chain_forks(graph, ~root: chain_root)
+  def fork_key = ((forks[0] :~ List)[1])                 // the memory read twice
+  def readers: for List (f :~ List in forks): f[0]       // and the writes reading it
+  def fork_red = [fork_key] ++ readers
+
+  // The term the walk comes back with, left where the graph has it. An edge stays
+  // only if the node it leaves is in the term, and it is redrawn to the node its
+  // class settled on -- which is how the `return` ends up pointing at the memory
+  // the rule's write left, rather than at the one the program's second write left.
+  def class_of:
+    for values(m :~ Map = {}) ([key, cls, _] in graph): m ++ { key: cls }
+  fun spots_of(keep :~ List) :: Map:
+    for values(m :~ Map = {}) (key in keep): m ++ { key: chain_spots[key] }
+  // The edges of one answer: an edge stays if the node it leaves is in the answer,
+  // and it is aimed at whichever member of its class the answer took -- which is how
+  // the `return` comes to point at the memory the rule's write left rather than the
+  // one the program's second write left. `~red` names the nodes whose state edges
+  // are the ones reading the same memory twice.
+  fun edges_among(keep :~ List, ~red: red :~ List = []) :: List:
+    def taken:
+      for values(m :~ Map = {}) ([key, cls, _] in graph):
+        if keep.contains(key) | m ++ { cls: key } | m
+    for List (e :~ List in chain_edges(4)):
+      keep_when keep.contains(e[1])
+      def cls = class_of[e[2]]
+      keep_when taken.has_key(cls)
+      def kind = if e[0] == #'s && red.contains(e[1]) | #'f | e[0]
+      [kind, e[1], taken[cls]]
+  // What the walk came back with, on its own: the nodes it picked, in place, with
+  // everything it did not pick gone. Nothing is red yet -- the term is worth a beat
+  // as an answer before it is an accusation.
+  def term:
+    Frame(~picts: chain_node_picts(spots_of(kept), kept) ++ rule_over,
+          ~edges: edges_among(kept))
+
+  // Then what is wrong with it. The memory the program started with and the two
+  // writes that both read it turn red, and the two state edges that read it turn red
+  // with them, which is the diamond: one memory, two writes hanging off it.
+  def term_edges = edges_among(kept, ~red: readers)
+  def reddened:
+    Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red) ++ rule_over,
+          ~edges: term_edges)
+
+  // and then the words for it. The two writes that read the
+  // same memory and the memory itself are already red, and that *is* the diamond --
+  // one memory with two writes hanging off it -- so there is nothing to relayout;
+  // the callout only has to name what the red is saying.
+  //
+  // The callout points at a write rather than at the memory: the memory sits
+  // directly above the two of them, so a spike from anywhere with room for the words
+  // would have a write in the way. Of the two, the one nearer the words.
+  def blamed_write:
+    def [bx, _] = (chain_bubbles :~ Map)[#'fork]
+    fun far(key): math.abs((chain_spots[key] :~ List)[0] - bx)
+    for values(best = readers[0]) (r in readers): if far(r) < far(best) | r | best
+  def fork_over:
+    { #'fork: [bubble_at(chain_plain[blamed_write], ~spot: chain_spots[blamed_write],
+                         ~body: (chain_bubbles :~ Map)[#'fork], ~color: talk_red,
+                         ~content: prose_stack([[["two copies", #'bold]],
+                                                [["of memory!", #'bold]]])),
+               0.0, 0.0, band_callout] }
+  def blamed:
+    Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red)
+                    ++ rule_over ++ fork_over,
+          ~edges: term_edges)
+
+  // Then the walk again, this time not allowed to read a memory twice. Which node
+  // it takes out of each class is worked out rather than written down -- see
+  // `chain_safe` -- and it comes back with one write where the program had two.
+  //
+  // The same pointer down the same rows, but a press a row rather than two: the
+  // audience has seen the walk, and what is new is where it goes instead.
+  def safe = chain_safe(~root: chain_root)
+  def safe_edges = edges_among(safe)
+  fun safe_ask_over(~at: at :~ List = chain_spots[#'ret]) :: Map:
+    { #'ask: [bubble_at(chain_plain[#'ret], ~spot: at,
+                        ~body: (chain_bubbles :~ Map)[#'ask], ~color: talk_green,
+                        ~content: prose_stack([[["extract", #'bold]],
+                                               [["effect-safely", #'bold]]])),
+              0.0, 0.0, band_callout] }
+  fun again(~picks: picks :: List = [], ~point: point = #false) :: Frame:
+    Frame(~picts: chain_node_picts(chain_spots, picks) ++ rule_over
+                    ++ rule_classes_under ++ safe_ask_over()
+                    ++ (if point == #false
+                        | {}
+                        | { #'point: [chain_pointer, & chain_point_at(point)] }),
+          ~edges: chain_edges(4))
+  def rewalk:
+    for List (row in 0..chain_layers):
+      again(~point: row,
+            ~picks: for List (key in safe): keep_when chain_layer_of[key] <= row; key)
+
+  // and what it comes back with, which is the program we wanted: one write, no
+  // memory read twice, and cheaper than the program we started from
+  def safe_term:
+    Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ safe_ask_over(),
+          ~edges: safe_edges)
+
+  // Then the answer settles into the shape of the term it is. The places the graph
+  // gave these nodes were solved for the whole graph, and with two thirds of it
+  // gone they are the wrong places: what the write returns is off to one side, so
+  // the `return`'s two arrows leave it at almost the same angle and lie over each
+  // other. So the write moves under the middle of its own arguments and its results
+  // line up beneath it, value on the left, and the `return` sits under the two of
+  // them. Nothing arrives or leaves -- every node is in both frames -- so the press
+  // is the answer tidying itself, not a new picture.
+  // The leaves stay where the graph had them; what moves is everything below. The
+  // write comes up a row -- the write it competed with is gone, so the row is free
+  // -- and centres under its three arguments; its results line up beneath it, value
+  // on the left as the `return` reads them; and the `return` sits under the two of
+  // them, so its arrows leave at opposite angles instead of together.
+  def answer_spots:
+    { #'x: chain_spots[#'x], #'one: chain_spots[#'one],
+      #'a: chain_spots[#'a], #'xp: chain_spots[#'xp], #'s0: chain_spots[#'s0],
+      #'us: [1256.0, chain_y(2)],
+      #'v3: [1256.0, chain_y(3)], #'s3: [1390.0, chain_y(3)],
+      #'ret: [1265.0, chain_y(4)] }
+  def answer:
+    Frame(~picts: chain_node_picts(answer_spots, safe) ++ rule_over
+                    ++ safe_ask_over(~at: answer_spots[#'ret]),
+          ~edges: safe_edges)
+
+  chain_slide(
+    page,
+    chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
+      ++ [term, reddened, blamed] ++ rewalk ++ [safe_term, answer])
