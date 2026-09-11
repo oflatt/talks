@@ -702,14 +702,38 @@ fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
 
 // The same discs and labels shrunk into the top margin. Only the section we are
 // on keeps its label; the rest are simply absent, so `magic_move` fades them.
+//
+// The discs keep the spine they were threaded on, laid down flat. Without it the
+// outline's grey line has nothing to become and `magic_move` simply fades it, which
+// reads as the talk losing a piece of furniture on the way up rather than putting
+// it away. The walked part of it is here too, so the header says how far along the
+// talk is in the same way the list did.
 fun header_layout(discs :: List.of(Pict), labels :: List.of(Pict),
                   ~at: at :: Int, ~canvas: canvas :: Pict,
+                  ~color: color = talk_blue,
                   ~disc_scale: ds :: Real = 0.30,
                   ~text_scale: ts :: Real = 0.44,
                   ~dx: dx :: Real = 64.0, ~cy: cy :: Real = 36.0) :: Pict:
   def n = discs.length()
   def step = outline_r * 2 * ds + 20.0
-  recur go(i = 0, acc :~ Pict = canvas):
+  def x0 = dx + outline_r * ds
+  def xN = x0 + (n - 1) * step
+  def track_h = 7.0
+  def track:
+    place_center(canvas,
+                 rectangle(~width: xN - x0, ~height: track_h,
+                           ~fill: draw.Color(120, 120, 120), ~line: #false,
+                           ~rounded: -0.5).alpha(0.22),
+                 (x0 + xN) / 2, cy)
+  def walked:
+    def xf = x0 + at * step
+    if xf - x0 > 0.5
+    | place_center(track,
+                   rectangle(~width: xf - x0, ~height: track_h, ~fill: as_color(color),
+                             ~line: #false, ~rounded: -0.5),
+                   (x0 + xf) / 2, cy)
+    | track
+  recur go(i = 0, acc :~ Pict = walked):
     if i >= n
     | place_left(acc, labels[at].scale(ts), dx + n * step + 14.0, cy).refocus(canvas)
     | go(i + 1, place_center(acc, discs[i].scale(ds),
@@ -736,7 +760,7 @@ fun outline_to_header(items :: List.of(String),
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
   def full = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: canvas, ~color: color,
                             ~label_width: lab_w)
-  def head = header_layout(discs, labels, ~at: at, ~canvas: canvas)
+  def head = header_layout(discs, labels, ~at: at, ~canvas: canvas, ~color: color)
   def opening:
     if intro
     | block:
@@ -773,7 +797,8 @@ fun outline_to_header(items :: List.of(String),
         def discs0 = for List (i in 0..n): outline_disc(i, n, (if i == prev | 1.0 | 0.0))
         def labels0 = for List (i in 0..n):
                         outline_label(written[i], written_lit[i], (if i == prev | 1.0 | 0.0))
-        def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas)
+        def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas,
+                                  ~color: color)
         def full0 = outline_layout(discs0, labels0, ~current: 1.0 * prev,
                                    ~canvas: canvas, ~color: color, ~label_width: lab_w)
         def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
@@ -814,7 +839,7 @@ fun section_header(items :: List.of(String),
   def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
   def labels = for List (i in 0..n):
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
-  header_layout(discs, labels, ~at: at, ~canvas: canvas)
+  header_layout(discs, labels, ~at: at, ~canvas: canvas, ~color: color)
 
 // A horizontal curly brace; `#'down` puts the tip at the bottom.
 fun brace(~width: width :: Real,
