@@ -310,8 +310,11 @@ fun slide_fork():
   def fork_over:
     { #'fork: [bubble_at(chain_plain[blamed_write], ~spot: chain_spots[blamed_write],
                          ~body: (chain_bubbles :~ Map)[#'fork], ~color: talk_red,
-                         ~content: prose_stack([[["two copies", #'bold]],
-                                                [["of memory!", #'bold]]])),
+                         ~content: robot_says(
+                                     #'frown,
+                                     prose_stack([[["two copies", #'bold]],
+                                                  [["of memory!", #'bold]]]),
+                                     ~sep: 12.0).scale(0.86)),
                0.0, 0.0, band_callout] }
   def blamed:
     Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red)

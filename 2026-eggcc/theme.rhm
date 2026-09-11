@@ -295,7 +295,8 @@ def robot_art:
     #'puzzled: ["robot-puzzled.png", 133.4, 150.0],
     #'thinking: ["robot-thinking.png", 150.0, 150.0],
     #'teeth: ["robot-teeth.png", 112.0, 112.0],
-    #'smile: ["robot-smile.png", 122.9, 112.0] }
+    #'smile: ["robot-smile.png", 122.9, 112.0],
+    #'frown: ["robot-frown.png", 122.9, 112.0] }
 fun robot(face) :: pc.Pict:
   def [file, w, h] = (robot_art :~ Map)[face] :~ List
   as_pict(image_pict(media(file), w, h))
