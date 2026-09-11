@@ -499,8 +499,10 @@ fun slide_12():
                            run("extract", ~font: prose_font, ~size: 48.0, ~bold: #true),
                            run(" a resulting term", ~font: prose_font, ~size: 48.0))))
     { #'task: [bubble_at(r_out[0], ~spot: [r_out[1], r_out[2]],
-                         ~body: [1400.0, 848.0], ~color: talk_blue,
-                         ~content: content),
+                         // further left than the words alone needed, to make room
+                         // for the face and still clear the bottom row of the graph
+                         ~body: [1330.0, 848.0], ~color: talk_blue,
+                         ~content: robot_says(#'thinking, content, ~sep: 8.0).scale(0.85)),
                0.0, 0.0, band_above] }
 
   // The pointer walks a row of classes per press, down its own lane. It is one

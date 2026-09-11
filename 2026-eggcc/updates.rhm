@@ -133,9 +133,15 @@ fun slide_egraph():
     { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
                               ~body: (chain_bubbles :~ Map)[#'redundant],
                               ~color: talk_blue,
-                              ~content: pc.stack(~sep: 2.0, ~horiz: #'center,
-                                                 small_prose("Redundant"),
-                                                 small_prose("update"))),
+                              // the face over the words, not beside them: what is
+                              // left of the slide at this point is a tall gap, not
+                              // a wide one
+                              ~content: robot_says(
+                                          #'idea,
+                                          pc.stack(~sep: 2.0, ~horiz: #'center,
+                                                   small_prose("Redundant"),
+                                                   small_prose("update")),
+                                          ~sep: 6.0, ~above: #true).scale(0.82)),
                     0.0, 0.0, band_callout] }
   chain_slide(
     page,
@@ -320,11 +326,17 @@ fun slide_fork():
   // audience has seen the walk, and what is new is where it goes instead.
   def safe = chain_safe(~root: chain_root)
   def safe_edges = edges_among(safe)
+  // Its own body rather than the one in `chain_bubbles`: the face makes it wider
+  // than the bubble that asked the question the first time, and where that one sat
+  // this one would lie across the `return` it points at.
   fun safe_ask_over(~at: at :~ List = chain_spots[#'ret]) :: Map:
     { #'ask: [bubble_at(chain_plain[#'ret], ~spot: at,
-                        ~body: (chain_bubbles :~ Map)[#'ask], ~color: talk_green,
-                        ~content: prose_stack([[["extract", #'bold]],
-                                               [["effect-safely", #'bold]]])),
+                        ~body: [1010.0, 902.0], ~color: talk_green,
+                        ~content: robot_says(
+                                    #'smile,
+                                    prose_stack([[["extract", #'bold]],
+                                                 [["effect-safely", #'bold]]]),
+                                    ~sep: 12.0).scale(0.82)),
               0.0, 0.0, band_callout] }
   fun again(~picks: picks :: List = [], ~point: point = #false) :: Frame:
     Frame(~picts: chain_node_picts(chain_spots, picks) ++ rule_over

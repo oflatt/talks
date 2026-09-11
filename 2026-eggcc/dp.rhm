@@ -299,7 +299,6 @@ fun slide_dp():
   // early enough to be what the stepping is read against -- and stays up for the
   // rest of the stepping.
   def key_idea:
-    def robot = image_pict(media("robot-idea.png"), 132.0, 160.5)
     def words:
       prose_stack([[["Key idea:", #'bold]],
                    [["extend the statewalk", #'plain]],
@@ -309,8 +308,7 @@ fun slide_dp():
     // scaled as a whole rather than set in a smaller face: the deck has one prose
     // size and this is that size, standing further off. What it has to fit in is the
     // margin left of the graph, which is 500 wide.
-    def content:
-      pc.beside(~sep: 18.0, ~vert: #'center, as_pict(robot), words).scale(0.72)
+    def content: robot_says(#'idea, words, ~sep: 18.0).scale(0.72)
     { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
                100.0, 596.0, band_callout] }
 

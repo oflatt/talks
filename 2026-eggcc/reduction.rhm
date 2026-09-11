@@ -412,9 +412,12 @@ fun slide_nphard():
   fun np_note(key, ~at: at :~ List, ~color: color, ~rows: rows :: List) :: Map:
     { key: [make_bubble(~color: color, prose_stack(rows)), at[0], at[1], band_callout] }
   def np_give_up:
-    np_note(#'giveup, ~at: [95.0, 600.0], ~color: talk_red,
-            ~rows: [[["Problem is NP-hard!", #'bold]],
-                    [["Give up??", #'bold]]])
+    { #'giveup: [make_bubble(~color: talk_red,
+                             robot_says(#'puzzled,
+                                        prose_stack([[["Problem is NP-hard!", #'bold]],
+                                                     [["Give up??", #'bold]]]),
+                                        ~sep: 14.0).scale(0.82)),
+                 95.0, 566.0, band_callout] }
   def np_no:
     np_note(#'no, ~at: [95.0, 790.0], ~color: talk_green,
             ~rows: [[["No! Real-world e-graphs", #'bold]],
