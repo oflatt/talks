@@ -416,7 +416,7 @@ fun slide_nphard():
                              robot_says(#'puzzled,
                                         prose_stack([[["Problem is NP-hard!", #'bold]],
                                                      [["Give up??", #'bold]]]),
-                                        ~sep: 14.0).scale(0.82)),
+                                        ~sep: 14.0, ~scale: 0.8)),
                  95.0, 566.0, band_callout] }
   def np_no:
     np_note(#'no, ~at: [95.0, 790.0], ~color: talk_green,

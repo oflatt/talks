@@ -302,11 +302,17 @@ fun robot(face) :: pc.Pict:
   as_pict(image_pict(media(file), w, h))
 // Beside the words by default. `~above` puts it over them instead, for a bubble
 // that has to go somewhere narrow.
+//
+// `~scale` shrinks the *face*, never the words. A bubble that will not fit is a
+// bubble with too big a robot in it or one in the wrong place; it is never a reason
+// to set the deck's prose smaller than the deck sets it.
 fun robot_says(face, content :: pc.Pict, ~sep: sep :: Real = 16.0,
-               ~above: above :: Boolean = #false) :: pc.Pict:
+               ~above: above :: Boolean = #false,
+               ~scale: k :: Real = 1.0) :: pc.Pict:
+  def r = robot(face).scale(k)
   if above
-  | pc.stack(~sep: sep, ~horiz: #'center, robot(face), content)
-  | pc.beside(~sep: sep, ~vert: #'center, robot(face), content)
+  | pc.stack(~sep: sep, ~horiz: #'center, r, content)
+  | pc.beside(~sep: sep, ~vert: #'center, r, content)
 
 // A slide with the deck's title at the deck's place, and nothing else yet.
 fun titled(title :: String) :: pc.Pict:

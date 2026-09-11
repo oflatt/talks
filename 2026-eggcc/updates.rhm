@@ -133,15 +133,13 @@ fun slide_egraph():
     { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
                               ~body: (chain_bubbles :~ Map)[#'redundant],
                               ~color: talk_blue,
-                              // the face over the words, not beside them: what is
-                              // left of the slide at this point is a tall gap, not
-                              // a wide one
                               ~content: robot_says(
                                           #'idea,
                                           pc.stack(~sep: 2.0, ~horiz: #'center,
                                                    small_prose("Redundant"),
                                                    small_prose("update")),
-                                          ~sep: 6.0, ~above: #true).scale(0.82)),
+                                          ~sep: 6.0, ~above: #true,
+                                          ~scale: 0.58)),
                     0.0, 0.0, band_callout] }
   chain_slide(
     page,
@@ -314,7 +312,7 @@ fun slide_fork():
                                      #'frown,
                                      prose_stack([[["two copies", #'bold]],
                                                   [["of memory!", #'bold]]]),
-                                     ~sep: 12.0).scale(0.86)),
+                                     ~sep: 12.0, ~scale: 0.82)),
                0.0, 0.0, band_callout] }
   def blamed:
     Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red)
@@ -339,7 +337,7 @@ fun slide_fork():
                                     #'smile,
                                     prose_stack([[["extract", #'bold]],
                                                  [["effect-safely", #'bold]]]),
-                                    ~sep: 12.0).scale(0.82)),
+                                    ~sep: 12.0, ~scale: 0.78)),
               0.0, 0.0, band_callout] }
   fun again(~picks: picks :: List = [], ~point: point = #false) :: Frame:
     Frame(~picts: chain_node_picts(chain_spots, picks) ++ rule_over

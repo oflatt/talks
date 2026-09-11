@@ -300,17 +300,18 @@ fun slide_dp():
   // rest of the stepping.
   def key_idea:
     def words:
+      // Short lines rather than small ones. What the box has to fit in is the margin
+      // left of the graph, and the deck's prose is the deck's prose.
       prose_stack([[["Key idea:", #'bold]],
-                   [["extend the statewalk", #'plain]],
-                   [["one term at a time,", #'plain]],
-                   [["keep one walk per", #'plain]],
+                   [["extend the", #'plain]],
+                   [["statewalk,", #'plain]],
+                   [["keep one per", #'plain]],
                    [["extractable set", #'bold]]])
-    // scaled as a whole rather than set in a smaller face: the deck has one prose
-    // size and this is that size, standing further off. What it has to fit in is the
-    // margin left of the graph, which is 500 wide.
-    def content: robot_says(#'idea, words, ~sep: 18.0).scale(0.72)
+    // The face over the words, not beside them: what it has to fit in is the margin
+    // left of the graph, which is 500 wide, and the words alone are 400 of that.
+    def content: robot_says(#'idea, words, ~sep: 12.0, ~above: #true, ~scale: 0.85)
     { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
-               100.0, 596.0, band_callout] }
+               100.0, 520.0, band_callout] }
 
   // --------------------------------------------------------------------- the presses
   // The pointer the other extractions use, on the class being considered. It stands

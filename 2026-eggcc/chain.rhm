@@ -375,9 +375,11 @@ def chain_pos:
 def chain_bubbles:
   { #'ask: [1150.0, 850.0],           // "extract", below the return
     #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
-    // "Redundant update", right of the write it names, and high enough that the
-    // face stacked over the words still clears `v2` below it
-    #'redundant: [1662.0, 474.0] }
+    // "Redundant update", below the write it names, where the spike comes up at it.
+    // The face goes over the words rather than beside them -- what is left of the
+    // slide here is a tall gap, not a wide one -- and the bubble is as low as it can
+    // be without reaching `v2`.
+    #'redundant: [1645.0, 530.0] }
 
 fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
 def chain_layers = (chain_rows :~ List).length()
