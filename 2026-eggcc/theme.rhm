@@ -263,11 +263,14 @@ fun small_prose(s :: String) :: pc.Pict: pc.text(s, ~font: small_face)
 // and how it is set, `#'plain`, `#'bold` or `#'sub`.
 def prose_face = draw.Font(~name: prose_font, ~size: 40.0)
 def prose_bold = prose_face with (weight = #'bold)
+// for the one word in a bubble that names a thing rather than says it
+def prose_bold_italic = prose_bold with (style = #'italic)
 fun prose(items :: List) :: pc.Pict:
   pc.beside(~vert: #'bottom,
             & for List ([s, style] in items):
                 match style
                 | #'bold: pc.text(s, ~font: prose_bold)
+                | #'bold_italic: pc.text(s, ~font: prose_bold_italic)
                 | #'sub: pc.text(s, ~font: prose_face).scale(0.6)
                 | ~else: pc.text(s, ~font: prose_face))
 

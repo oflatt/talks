@@ -213,12 +213,23 @@ def np_picked_keys:
 // whole picture is for: an effect-safe extraction is a satisfying assignment.
 fun slide_nphard():
   def page = with_icon(titled("Effect-Safe Extraction is NP-Hard"))
+  // A label, and a node with one in the middle of it.
+  //
+  // The box is drawn empty and the label laid over it as a pict, rather than handed
+  // to the runtime as the box's body: the formula is set in this same face at this
+  // same size, so a literal that flies out of the line and a label sitting in a box
+  // are the *same glyphs*, and a literal arriving is a recolour on the spot rather
+  // than one word being swapped for another.
+  def np_label_size = 40.0
+  fun np_label(text :: String) :: pc.Pict:
+    pc.text(text, ~font: draw.Font(~name: node_font, ~size: np_label_size))
   // every node in its two drawings, plain and picked, each built once
   fun np_pict(color :: String, w :: Real, text :: String, ~fill: fill :: String):
-    graph_node(~width: w, ~height: np_h, ~adj: "33878",
-               ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
-               ~fill: fill,
-               run(text, ~font: node_font, ~size: 40.0))
+    pc.overlay(as_pict(graph_node(~width: w, ~height: np_h, ~adj: "33878",
+                                  ~line: color,
+                                  ~line_width: if color == stateful_hex | 4.0 | 3.0,
+                                  ~fill: fill)),
+               np_label(text))
   fun np_drawings(~fill: fill :: String) :: Map:
     for values(m :~ Map = {}) ([key, text, color, w, _, _] in np_nodes):
       m ++ { key: np_pict(color, w, text, ~fill: fill) }
@@ -275,8 +286,7 @@ fun slide_nphard():
   // the trick the rules are applied with; see `chain_rule_pieces`.
   //
   //   [the clause it belongs to, what it becomes, the pict]
-  def np_math = draw.Font(~name: math_font, ~size: 52.0)
-  fun np_math_text(s :: String) :: pc.Pict: pc.text(s, ~font: np_math)
+  fun np_math_text(s :: String) :: pc.Pict: np_label(s)
   fun np_tint(s :: String, c :: Int) :: pc.Pict: np_math_text(s).colorize(np_dashes[c])
   def np_formula_segs:
     [[#false, #false, np_math_text("ϕ = ")]]
@@ -316,23 +326,40 @@ fun slide_nphard():
     for values(m :~ Map = {}) ([_, tag, p] in np_formula_segs, i in 0..):
       skip_when tag == #false || m.has_key(tag)
       m ++ { tag: [(p :~ pc.Pict).launder()] ++ np_seg_at(i, p) }
-  def np_lit_words:
-    for values(m :~ Map = {}) (key in (np_lit_home :~ Map).keys()):
-      def [p, x, y] = (np_lit_home :~ Map)[key]
-      m ++ { key: [p, x, y, band_flight + 1] }
-  // and the same literals as the boxes they become, standing where the words stand:
-  // the box grows around the word, and only then does it travel
-  def np_lit_boxes:
+  // Each of them padded out to the size of the box it is going to land in, and built
+  // once. A press draws the two picts of a key at one *top left corner*, so a word
+  // and the box arriving over it line up only if they are the same size; padded, the
+  // word sits in the middle of a box-shaped nothing and the box comes down exactly
+  // around it. Unpadded, the label ends up half a box to one side of the word it is
+  // replacing, which is the tell that something was swapped rather than settled.
+  def np_lit_pads:
     for values(m :~ Map = {}) (key in (np_lit_home :~ Map).keys()):
       def [p, x, y] = (np_lit_home :~ Map)[key]
       def word :~ pc.Pict = p
       def node :~ pc.Pict = as_pict(np_plain[key])
-      // over the clause copies as well as the line, so that a box covers the word
-      // it grew around whichever copy of that word is underneath it
-      m ++ { key: [np_plain[key],
-                   x - (node.width - word.width) / 2,
-                   y - (node.height - word.height) / 2,
-                   band_flight + 1] }
+      def pad = pc.overlay(pc.blank(~width: node.width, ~height: node.height), word)
+      m ++ { key: [pad,
+                   x - (pad.width - word.width) / 2,
+                   y - (pad.height - word.height) / 2] }
+  def np_lit_words:
+    for values(m :~ Map = {}) (key in (np_lit_pads :~ Map).keys()):
+      def [p, x, y] = (np_lit_pads :~ Map)[key]
+      m ++ { key: [p, x, y, band_flight + 1] }
+  def np_lit_flown:
+    for values(m :~ Map = {}) (key in (np_lit_pads :~ Map).keys()):
+      def [p, _, _] = (np_lit_pads :~ Map)[key]
+      def [x, y, _] = np_at[key]
+      m ++ { key: [p, x, y, band_flight + 1] }
+  // and the same words again, carried over to where their operators go.
+  //
+  // They travel *first* and turn into boxes when they get there, rather than turning
+  // into boxes where they stand and travelling after. A box grown over the line
+  // covers the very words it is about -- the formula reads as half deleted for a
+  // press, which is the one thing this slide cannot afford, since every later press
+  // points back at it. Moving first leaves the line whole: what flies is a copy, so
+  // the reader keeps the formula and watches a second set of the same words go and
+  // find their places. Nothing disappears anywhere; the only thing that changes in
+  // place is a word settling into the box that has arrived around it.
 
   // Each clause, copied whole and keyed by the e-class it becomes. The copy is
   // padded out to the class's own size so that the two share a top left corner:
@@ -367,12 +394,32 @@ fun slide_nphard():
   def np_answer:
     def head = pc.text("Satisfying assignment:",
                        ~font: draw.Font(~name: prose_font, ~size: 38.0, ~weight: #'bold))
+    // on one line rather than three: what is under it is the last word of the
+    // section, and the assignment has already been read off the picture by then
     def body:
-      pc.stack(~sep: 10.0, ~horiz: #'left, head,
-               & for List (v in 0..np_vars):
-                   np_math_text("x" +& np_sub[v] +& " = "
-                                  +& (if (np_witness :~ List)[v] | "⊤" | "⊥")))
+      pc.stack(~sep: 14.0, ~horiz: #'left, head,
+               np_math_text(
+                 for values(t = "") (v in 0..np_vars):
+                   t +& (if v == 0 | "" | "     ") +& "x" +& np_sub[v] +& " = "
+                     +& (if (np_witness :~ List)[v] | "⊤" | "⊥")))
     { #'answer: [body, 95.0, 420.0, band_callout] }
+
+  // The two things to say once the picture has been read: that the problem the
+  // slide just proved hard is the problem this talk is about, and that being hard
+  // in general is not the same as being hard in practice. They are notes rather
+  // than callouts -- neither of them is about any one node -- so they get the
+  // bubble without the spike, stacked in the column the formula started in.
+  fun np_note(key, ~at: at :~ List, ~color: color, ~rows: rows :: List) :: Map:
+    { key: [make_bubble(~color: color, prose_stack(rows)), at[0], at[1], band_callout] }
+  def np_give_up:
+    np_note(#'giveup, ~at: [95.0, 600.0], ~color: talk_red,
+            ~rows: [[["Problem is NP-hard!", #'bold]],
+                    [["Give up??", #'bold]]])
+  def np_no:
+    np_note(#'no, ~at: [95.0, 790.0], ~color: talk_green,
+            ~rows: [[["No! Real-world e-graphs", #'bold]],
+                    [["are easier, measured", #'bold]],
+                    [["with a ", #'bold], ["parameter", #'bold_italic]]])
 
   fun np_callout(key, target, ~body: body :~ List, ~color: color,
                  ~content: content :: pc.Pict) :: Map:
@@ -395,7 +442,7 @@ fun slide_nphard():
   // that is both a morph and a journey is one the audience has to read twice. A
   // clause arrives in one: its words become the e-class, and the terms in the class
   // come up inside it.
-  fun frame(~chain: chain :: Int = 0,       // 0 words, 1 boxes in place, 2 arrived
+  fun frame(~chain: chain :: Int = 0,       // 0 in the line, 1 in place, 2 in boxes
             ~clauses: clauses :: Int = 0,   // how many clause classes have flown
             ~root: root :: Boolean = #false,
             ~picked: picked :: Boolean = #false,
@@ -407,7 +454,7 @@ fun slide_nphard():
                     ++ np_formula
                     ++ (cond
                         | chain == 0: np_lit_words
-                        | chain == 1: np_lit_boxes
+                        | chain == 1: np_lit_flown
                         | ~else: {})
                     ++ (if chain == 2 | np_state_classes | {})
                     ++ np_clause_classes(clauses) ++ np_clause_words(clauses)
@@ -417,10 +464,11 @@ fun slide_nphard():
     page,
     [// the formula
      frame(),
-     // each literal becomes the effectful operator that assigns it, where it stands
+     // a copy of each literal leaves the line and goes to where its operator belongs
      frame(~chain: 1),
-     // and those travel to the chain: one thread of state through all of them, and
-     // the state after either assignment of a variable is the same state
+     // and there it becomes that operator: a box arrives around the word, one thread
+     // of state runs through all of them, and the state after either assignment of a
+     // variable is the same state
      frame(~chain: 2, ~over: np_says_assign),
      // then a clause at a time -- the words become the class, and the one term per
      // literal comes up inside it, each reading the operator that makes it true
@@ -430,7 +478,13 @@ fun slide_nphard():
      // and the root, which takes one term out of every clause class
      frame(~chain: 2, ~clauses: 3, ~root: #true),
      // what the picture is for: the extraction is the satisfying assignment
-     frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true, ~over: np_answer)],
+     frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true, ~over: np_answer),
+     // and so the problem this talk is about is NP-hard, which is a fact about the
+     // worst case and not about any e-graph a compiler has ever built
+     frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true,
+           ~over: np_answer ++ np_give_up),
+     frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true,
+           ~over: np_answer ++ np_give_up ++ np_no)],
     ~wire: np_wire_specs, ~edge_band: band_wires)
 
 // The reduction's own edges. A state edge is thick and blue, like every other edge
