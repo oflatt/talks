@@ -26,6 +26,9 @@ export:
   chain_dp_fills
   chain_dp_term
   chain_edges
+  chain_eff_class
+  chain_extract_map
+  chain_args_of
   chain_es_index
   chain_forks
   chain_graph
@@ -490,12 +493,15 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     | e[0] == #'f: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: talk_red)
     // not an edge at all: which nodes the extractable set covers, which the slide
     // draws for itself, since it has to change shape as the press runs
+    // not edges at all: the mass an extractable set covers, which the slide draws
+    // for itself because it has to change shape as the press runs
     | e[0] == #'blob: q
+    | e[0] == #'blink: q
+    | e[0] == #'bhue: q
     | e[0] == #'m: q
-    // a statewalk being laid down, in the colour of the extractable set it reaches
-    | e[0] == #'w0: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_0))
-    | e[0] == #'w1: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_1))
-    | e[0] == #'w2: chain_wire(q, at, [e.rest], ~line_width: 10, ~color: hex_color(node_es_2))
+    // a statewalk being laid down, in the colour of the branch it took
+    | e[0] == #'walk:
+        chain_wire(q, at, [[e[1], e[2]]], ~line_width: 11, ~color: hex_color(e[3]))
     | ~else: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: keynote_blue)
 
 // and the pointers, thin, gold and dashed, so they read as something laid over the
