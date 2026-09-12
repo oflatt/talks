@@ -148,6 +148,10 @@ fun slide_12():
       arrow(~on: q, x, y, ~style: #'line, ~line_style: #'short_dash,
             ~color: col, ~line_width: 4)
     for values(q :~ pc.Pict = layer) (e :~ List in es):
+      // not an edge: how far the class the third rule makes has grown, which the
+      // press draws for itself. Skipped before the lookups below, which would read
+      // a number as a key.
+      skip_when e[0] == #'grow
       // `at` is this frame's own nodes, which is what the layer has ghosts of
       def from = at[e[1]]
       def to = at[e[2]]
@@ -293,9 +297,11 @@ fun slide_12():
     match key
     | #'rule1: straight(#'minus, #'plus_r)
     | #'rule2: straight(#'minus_r, #'zero)
-    | ~else:
-        def corner = [middle(#'plus_r)[0], middle(#'minus)[1]]
-        eq_line(middle(#'minus), corner, corner, middle(#'a), ~dash: color)
+    // Between the sum the rule matched and the `a` it concluded is the same as it,
+    // which is what the rule says. Not between `−` and `a`: that those two are one
+    // class as well is the *first* rule's doing, carried across by the class the sum
+    // was already in.
+    | ~else: straight(#'plus_r, #'a)
   // where a line between two nodes leaves the first of them
   fun border_toward(from, to) :: List:
     def [fx, fy] = middle(from)
@@ -359,6 +365,9 @@ fun slide_12():
       def small = (piece :~ pc.Pict).scale(factor)
       def dy = line.height - (piece :~ pc.Pict).height
       def node :~ pc.Pict = as_pict(plain[name])
+      // the size of the word it grows out of, not of the node it becomes: a node
+      // dropped into the rule at full size is bigger than the line it is written in
+      def shrunk = node.scale(small.height / node.height)
       def spot:
         if home
         | spot_of(name)
@@ -367,9 +376,9 @@ fun slide_12():
         // the line it concludes becomes nodes. A row of boxes assembled somewhere
         // else says the rule produced them; a box grown around the operator says
         // which piece of the rule each one is.
-        | [x + factor * (dx0 + dx) - (node.width - small.width) / 2,
-           y + factor * dy - (node.height - small.height) / 2]
-      m ++ { name: [plain[name], & spot, band_flight] }
+        | [x + factor * (dx0 + dx) - (shrunk.width - small.width) / 2,
+           y + factor * dy - (shrunk.height - small.height) / 2]
+      m ++ { name: [(if home | plain[name] | shrunk), & spot, band_flight] }
 
   // The arrows of that term. An operand the rule adds is one of its own boxes; an
   // operand that is a variable is the node that variable matched, where it already
@@ -431,51 +440,77 @@ fun slide_12():
   // running from one to the next, both stroked with a round cap and a round join --
   // so the blob has no corner anywhere, and the turn under `+_r` is a curve rather
   // than the square elbow a projecting cap left there.
-  def merged_region:
-    def neck = nd + 2 * eclass_pad
-    def lobe = nd * 1.34
-    def through = [middle(#'minus), middle(#'plus_r), middle(#'a)]
-    def corner = [middle(#'plus_r)[0], middle(#'minus)[1]]
+  // The class the third rule makes, drawn by the press rather than by either frame:
+  // what has to happen when it fires is that the class the sum was already in
+  // *grows* to take in the `a`, and a second shape that arrives can only dissolve
+  // over the first. `u` is how far it has grown -- 0 is the class as it was, which
+  // is the band along the bottom row, and 1 is that band carried up `a`'s column.
+  //
+  // The corner the band turns at is the sum's own middle, so at `u = 0` the curve is
+  // the straight run the old region was and nothing has to be special-cased.
+  def merged_neck = nd + 2 * eclass_pad
+  def merged_lobe = nd * 1.34
+  fun merged_layer(u :: Real) :: pc.Pict:
+    def a0 = middle(#'minus)
+    def corner = middle(#'plus_r)
+    def [ax, ay] = middle(#'a)
+    def far = [(corner[0] :~ Real) + ((ax :~ Real) - (corner[0] :~ Real)) * u,
+               (corner[1] :~ Real) + ((ay :~ Real) - (corner[1] :~ Real)) * u]
     def flat:
       pc.dc(fun (target :: draw.DC, dx, dy):
               target.save()
               // no brush for the neck: `path` fills as well as strokes, and an open
-              // polyline filled is the triangle between its ends
+              // curve filled is the region between its ends
               target.brush := draw.Brush.none
-              target.pen := draw.Pen(~color: eclass_solid, ~width: neck,
+              target.pen := draw.Pen(~color: eclass_solid, ~width: merged_neck,
                                      ~cap: #'round, ~join: #'round)
-              // a curve and not two straight runs: the outside of a stroked elbow
-              // is rounded by the join, but the inside of one is always square, and
-              // a class with a right angle cut into it is what this was before
+              // a curve and not two straight runs: the outside of a stroked elbow is
+              // rounded by the join, but the inside of one is always square, and a
+              // class with a right angle cut into it is what this looked wrong as
               def path = draw.Path()
-              def a0 = through[0] :~ List
-              def a2 = through[2] :~ List
               path.move_to([dx + (a0[0] :~ Real), dy + (a0[1] :~ Real)])
               path.curve_to([dx + (corner[0] :~ Real), dy + (corner[1] :~ Real)],
                             [dx + (corner[0] :~ Real), dy + (corner[1] :~ Real)],
-                            [dx + (a2[0] :~ Real), dy + (a2[1] :~ Real)])
+                            [dx + (far[0] :~ Real), dy + (far[1] :~ Real)])
               target.path(path)
               target.brush := draw.Brush(~color: eclass_solid)
               target.pen := draw.Pen(~color: draw.Color(0, 0, 0, 0.0), ~width: 0)
-              for (p :~ List in through :~ List):
-                def blob = draw.Path()
-                blob.rounded_rectangle([dx + (p[0] :~ Real) - lobe / 2,
-                                        dy + (p[1] :~ Real) - lobe / 2, lobe, lobe],
-                                       lobe * 0.44)
-                target.path(blob)
+              fun lobe(p :~ List, k :: Real):
+                def w = merged_lobe * k
+                when w >= 1.0
+                | def blob = draw.Path()
+                  blob.rounded_rectangle([dx + (p[0] :~ Real) - w / 2,
+                                          dy + (p[1] :~ Real) - w / 2, w, w],
+                                         w * 0.44)
+                  target.path(blob)
+              lobe(a0, 1.0)
+              lobe(corner, 1.0)
+              lobe([ax, ay], u)
               target.restore(),
             ~width: slide_width, ~height: slide_height)
-    // and the line that says what the blob means, along the same curve, which runs
-    // down the middle of it
-    [eclass_tube(flat.alpha(eclass_alpha, ~composite: #true),
-                 middle(#'minus), corner, corner, middle(#'a),
-                 ~thickness: 0.0, ~dash: rule_green),
-     0.0, 0.0, band_below]
+    flat.alpha(eclass_alpha, ~composite: #true)
+  // how far grown each frame says it is, and the layer between two of them
+  fun merged_marks(u :: Real) :: List: [[#'grow, u]]
+  fun grow_of(f :: Frame) :: Real:
+    for values(u :~ Real = 0.0) (e :~ List in f.edges):
+      if e[0] == #'grow | (e[1] :~ Real) | u
+  fun any_grow(f :: Frame) :: Boolean:
+    for values(any = #false) (e :~ List in f.edges): any || e[0] == #'grow
+  fun merged_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
+    cond
+    | !any_grow(a) && !any_grow(b): layer
+    | ~else:
+        def ua = grow_of(a)
+        def ub = grow_of(b)
+        put(layer, merged_layer(ua + (ub - ua) * t), 0.0, 0.0)
+
   def classes_under:
     { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row,
       #'r_a: r_a, #'r_out: r_out }
+  // The three the merge leaves alone. The one it makes is the grown layer above,
+  // which the press draws rather than the frame.
   def merged_under:
-    { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row, #'merged: merged_region }
+    { #'r_one: r_one, #'r_plus: r_plus, #'r_row: r_row }
 
   // The bubble extraction speaks through: it names the job while the walk runs, and
   // it points at the *class* the answer is to come out of, not at a node in it.
@@ -558,7 +593,11 @@ fun slide_12():
     // The rules are on the slide from the start, because the press that leaves the
     // workflow picture before this one has just put them there: opening without
     // them would take them away and give them back.
-    [Frame(~picts: rules_over),
+    [// No press for the picture this slide opens on: the one before it ends on
+     // exactly that picture -- the term and the rules, where this slide draws them --
+     // so a frame for it here is an advance that shows nothing. The first press does
+     // the first thing instead.
+     //
      // `(a + 1)`: marked in the term, then a copy of it out into the open, then the
      // glyphs turning into the nodes they name, with the arrows arriving
      Frame(~picts: rules_over ++ sub_mark ++ sub_picts(term_x, term_y)),
@@ -574,7 +613,11 @@ fun slide_12():
      Frame(~picts: rules_over ++ whole_mark ++ flow_over ++ term_nodes
                      ++ whole_picts(copy_x, copy_y),
            ~edges: es_plus),
-     Frame(~picts: rules_over ++ flow_over ++ spots_of(keys_term, []),
+     // The `→` is already on the slide, where the rule stands in the list. It is a
+     // pict of its own because it becomes the dashed line later; put on the press
+     // that brings the rule over, it would fade in while the rule moved.
+     Frame(~picts: rules_over ++ flow_over ++ spots_of(keys_term, [])
+                     ++ rule_arrow(#'rule1, ~staged: #false),
            ~edges: es_term),
      // ------------------------------------------------------ and then the rewrites
      // Applying a rule is four movements, and each gets a press:
@@ -614,11 +657,19 @@ fun slide_12():
                      ++ rules_with(#'rule1) ++ flow_over
                      ++ rule_chips(#'rule1, ~side: #'rhs)
                      ++ rule_term(#'rule1) ++ rule_arrow(#'rule1),
-           ~edges: es_term ++ rule_term_edges(#'rule1)
-                     ++ rule_points(#'rule1, ~side: #'rhs)),
+           ~edges: es_term ++ rule_points(#'rule1, ~side: #'rhs)),
+     // and the term moves into the graph. The gold pointers go out on this press and
+     // the blue arrows come in on it: one press, one set of arrows.
+     //
+     // The chips go home with the rule rather than fading where they stood -- unlit,
+     // at the places in the line they were cut from, which is where the rule's own
+     // words are, so what is left of them is the rule.
      Frame(~picts: spots_of(keys_rewrite, [], ~gold: rule_matched(#'rule1))
                      ++ rules_over ++ flow_over
-                     ++ rule_term(#'rule1, ~home: #true) ++ eq_of(#'rule1),
+                     ++ rule_chips(#'rule1, ~side: #'rhs, ~staged: #false,
+                                   ~lit: #false)
+                     ++ rule_term(#'rule1, ~home: #true) ++ eq_of(#'rule1)
+                     ++ rule_arrow(#'rule2, ~staged: #false),
            ~edges: es_term ++ rule_term_edges(#'rule1)),
      // The second rule the same way. Its right-hand side is a constant, so the term
      // it turns into is one node and there is no variable in it to send home.
@@ -635,6 +686,7 @@ fun slide_12():
            ~edges: es_term ++ es_rewrite ++ rule_points(#'rule2)),
      Frame(~picts: spots_of(keys_all, [], ~gold: rule_matched(#'rule2))
                      ++ rules_over ++ flow_over
+                     ++ rule_chips(#'rule2, ~staged: #false, ~lit: #false)
                      ++ rule_term(#'rule2, ~home: #true)
                      ++ eq_of(#'rule1) ++ eq_of(#'rule2),
            ~edges: es_graph)]
@@ -692,6 +744,7 @@ fun slide_12():
                     ++ third_picts()
                     ++ (if task | task_over | {}),
           ~edges: es_graph
+                    ++ (if merged | merged_marks(1.0) | [])
                     ++ (if matching == #false
                         | []
                         | rule_points(#'rule3, ~side: matching))
@@ -799,4 +852,6 @@ fun slide_12():
                      arrow(~on: q, at[e[1]], at[e[2]], ~line_width: 3,
                            ~color: chip_line_color, ~gap: 4, ~line_style: #'short_dash,
                            ~from_at: pc.Find.bottom(as_pict(at[e[1]]), ~dy: 4)),
-    ~under_band: band_point)
+    ~under_band: band_point,
+    // the class the third rule makes, drawn as far grown as the press has got
+    ~stage: merged_stage, ~stage_band: band_below)

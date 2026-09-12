@@ -215,9 +215,10 @@ fun slide_rue():
      Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion ++ equalities,
            ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
      // the words of that line become the nodes they name, standing where the words
-     // stood
-     Frame(~picts: lit ++ rule_here ++ conclusion_nodes ++ equalities,
-           ~edges: chain_edges(3)),
+     // stood. The pointers stay up: they go out on the press that brings the blue
+     // arrows in, not one before it, so there is never a press with neither.
+     Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion_nodes ++ equalities,
+           ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
      // and those nodes move out into the graph, bringing their arrows
      Frame(~picts: with_rule ++ rule_here ++ equalities, ~edges: chain_edges(4)),
      // last, the equalities fly out and become the regions round the classes they

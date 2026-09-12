@@ -122,11 +122,10 @@ def rule_ident:
   rw_rule(~lhs: [[#'alpha, [g("α")]], [#false, [rw_sp()]], [#'plus_r, [g("+")]],
                  [#false, [rw_sp()]], [#'zero, [g("0")]]],
           ~rhs: [[#'alpha, [g("α")]]],
-          // `+` is here for a reason the other two rules have not got: this rule
-          // adds no node, it makes the sum *equal* to what it adds to, so the node
-          // the left-hand side is rooted at is the other half of that equality and
-          // has to be pointed at for the union to be visible at all
-          ~binds: { #'alpha: #'a, #'plus_r: #'plus_r, #'zero: #'zero },
+          // Only the variable. Gold is what says "this stood for something and here
+          // is what it stood for", and `+` and `0` stand for themselves -- an
+          // operator and a literal match what they are written as, which is not news.
+          ~binds: { #'alpha: #'a },
           ~adds: [], ~color: rules_green)
 
 def rules_line_1 = rule_assoc[#'pict] :~ pc.Pict
