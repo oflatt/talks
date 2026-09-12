@@ -32,6 +32,7 @@ import:
   "bigspace.rhm" open
   "updates.rhm" open
   "reduction.rhm" open
+  "evalsetup.rhm" open
   "results.rhm" open
   "workflow.rhm" open
   "dp.rhm" open
@@ -55,6 +56,7 @@ export:
   slide_41
   slide_nphard
   slide_dp
+  slide_eval_setup
   slide_cdf
   slide_perf
   slide_questions
@@ -81,6 +83,8 @@ glide_slides all_slides:
    // measurement rather than a step of the algorithm, and it was reading as the end
    // of the section before this one.
    divider(3, ~shots: section_shots),
+   // what the evaluation runs on, walked through on one program, before the numbers
+   in_section(3, slide_eval_setup),
    in_section(3, slide_cdf), in_section(3, slide_perf),
    // and out the way we came in
    slide_questions]

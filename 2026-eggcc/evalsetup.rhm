@@ -1,0 +1,239 @@
+#lang rhombus/and_meta
+// What the evaluation actually runs on, walked through on one program.
+//
+// The program is the paper's Fenwick example (Section 8.3): the naive way to find
+// the lowest set bit of `a`, which is a loop that halves `a` while it stays even.
+// eggcc is given the Bril on the left, builds the e-graph in the middle, and the
+// rules put the loop's result in the same e-class as `a & -a` -- Hacker's Delight's
+// one-liner -- so extraction can take the closed form and the loop goes away.
+//
+// The Bril is `eggcc/tests/passing/small/lowbit_naive_br.bril` verbatim, and the
+// program on the right is what eggcc really emits for it: see
+// `tests/snapshots/files__lowbit_naive_br-optimize.snap`, which is `neg`, `bitand`
+// and a `print`, with the hot loop gone.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "magicmove.rhm" open
+  "theme.rhm" open
+  "egraph.rhm" open
+  pict as pc
+  draw
+
+export:
+  slide_eval_setup
+
+// ------------------------------------------------------------------ the panels
+def panel_face = draw.Font(~name: prose_font, ~size: 38.0, ~weight: #'bold)
+def ev_code_face = draw.Font(~name: code_font, ~size: 22.0)
+def ev_label_face = draw.Font(~name: code_font, ~size: 22.0, ~style: #'italic)
+fun panel_title(s :: String) :: pc.Pict: pc.text(s, ~font: panel_face)
+fun ev_code(s :: String) :: pc.Pict: pc.text(s, ~font: ev_code_face)
+fun ev_label(s :: String) :: pc.Pict: pc.text(s, ~font: ev_label_face)
+
+// A basic block: its label, then its instructions, in a box.
+def block_pad = 16.0
+fun bril_block(label :: String, lines :: List) :: pc.Pict:
+  def body:
+    pc.stack(~sep: 4.0, ~horiz: #'left,
+             ev_label(label), & for List (s in lines): ev_code("  " +& s))
+  put(frame_box(body.width + 2 * block_pad, body.height + 2 * block_pad, ~rounded: 6000),
+      body, block_pad, block_pad)
+
+// The control-flow graph of the program as Bril has it: the loop test, the body
+// that halves `a` and doubles `lb`, and the exit. The blocks are stacked in the
+// order they are written and the two edges that are not a fall-through are routed
+// round the outside -- the back edge down the left, the exit down the right -- so
+// neither of them crosses a block.
+def cfg_top = 306.0
+def cfg_left = 150.0
+def cfg_gap = 44.0
+def cfg_lane = 40.0
+def cfg_blocks:
+  [["@main(a)", ["lb: int = const 1;", "two: int = const 2;"]],
+   [".loop", ["t0: int = div a two;", "t1: int = mul t0 two;",
+              "cond: bool = eq t1 a;", "br cond .cont .end;"]],
+   [".cont", ["a: int = div a two;", "lb: int = mul lb two;", "jmp .loop;"]],
+   [".end", ["print lb;"]]]
+
+fun cfg_pict() :: pc.Pict:
+  def picts:
+    for List ([label, lines] in cfg_blocks): bril_block(label, lines)
+  // each block under the one before it, by its own height
+  def boxes:
+    def values(out, _):
+      for values(acc :~ List = [], y :~ Real = cfg_top) (p :~ pc.Pict in picts):
+        values(acc ++ [[cfg_left, y, p.width, p.height]], y + p.height + cfg_gap)
+    out
+  def placed:
+    for values(q :~ pc.Pict = blank_slide) (p :~ pc.Pict in picts, b :~ List in boxes):
+      put(q, p, b[0], b[1])
+  def widest:
+    for values(m :~ Real = 0.0) (b :~ List in boxes): math.max(m, b[2] :~ Real)
+  def wires:
+    pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+            fun pt(x :: Real, y :: Real): draw.Point(dx + x, dy + y)
+            fun head(x :: Real, y :: Real, ~facing: facing):
+              // a filled triangle at the end of an edge, pointing where it goes
+              def [ax, ay, bx, by]:
+                match facing
+                | #'down: [-9.0, -16.0, 9.0, -16.0]
+                | #'right: [-16.0, -9.0, -16.0, 9.0]
+                | ~else: [16.0, -9.0, 16.0, 9.0]
+              dc.brush := draw.Brush(~color: draw.Color(40, 40, 40))
+              dc.polygon([pt(x, y), pt(x + ax, y + ay), pt(x + bx, y + by)])
+              dc.brush := draw.Brush(~color: "white", ~style: #'transparent)
+            dc.pen := draw.Pen(~color: draw.Color(40, 40, 40), ~width: 3.0,
+                               ~cap: #'round, ~join: #'round)
+            // the fall-throughs
+            for (i in [0, 1]):
+              def a :~ List = boxes[i]
+              def b :~ List = boxes[i + 1]
+              def x = (a[0] :~ Real) + (a[2] :~ Real) / 2
+              dc.line(pt(x, (a[1] :~ Real) + (a[3] :~ Real)), pt(x, b[1] :~ Real))
+              head(x, b[1] :~ Real, ~facing: #'down)
+            // the branch out of the loop, down the right
+            def lp :~ List = boxes[1]
+            def en :~ List = boxes[3]
+            def right = cfg_left + widest + cfg_lane
+            def ly = (lp[1] :~ Real) + (lp[3] :~ Real) - 26.0
+            def ey = (en[1] :~ Real) + (en[3] :~ Real) / 2
+            dc.lines([pt((lp[0] :~ Real) + (lp[2] :~ Real), ly), pt(right, ly),
+                      pt(right, ey), pt((en[0] :~ Real) + (en[2] :~ Real), ey)])
+            head((en[0] :~ Real) + (en[2] :~ Real), ey, ~facing: #'left)
+            // and the back edge, down the left and up again
+            def ct :~ List = boxes[2]
+            def left = cfg_left - cfg_lane
+            def cy = (ct[1] :~ Real) + (ct[3] :~ Real) - 26.0
+            def ty = (lp[1] :~ Real) + 30.0
+            dc.lines([pt(ct[0] :~ Real, cy), pt(left, cy), pt(left, ty),
+                      pt(lp[0] :~ Real, ty)])
+            head(lp[0] :~ Real, ty, ~facing: #'right),
+          ~width: slide_width, ~height: slide_height)
+  // which way is which, said beside the edge rather than over a block
+  def marks:
+    def lp :~ List = boxes[1]
+    def x = (lp[0] :~ Real) + (lp[2] :~ Real) / 2
+    put(put(placed, ev_label("true"), x + 14.0,
+            (lp[1] :~ Real) + (lp[3] :~ Real) + 6.0),
+        ev_label("false"), (lp[0] :~ Real) + (lp[2] :~ Real) + 8.0,
+        (lp[1] :~ Real) + (lp[3] :~ Real) - 58.0)
+  pc.overlay(~horiz: #'left, ~vert: #'top, marks, wires)
+
+// What eggcc emits for it, which is the closed form and no loop at all.
+def opt_pict:
+  def body:
+    pc.stack(~sep: 4.0, ~horiz: #'left,
+             ev_label("@main(a)"),
+             ev_code("  t: int = neg a;"),
+             ev_code("  lb: int = bitand a t;"),
+             ev_code("  print lb;"))
+  put(frame_box(body.width + 2 * block_pad, body.height + 2 * block_pad, ~rounded: 6000),
+      body, block_pad, block_pad)
+
+// ------------------------------------------------------------------ the e-graph
+// Only as much of it as the slide is about: what the program computes, what the
+// rules add, and the one equality that makes the loop unnecessary. The loop's body
+// is inside the `do-while` rather than drawn -- it is the *output* of the loop that
+// the rules have something to say about.
+//
+//   [key, what is written in it, its colour, its width, centre x, row]
+def ev_rows = [330.0, 470.0, 620.0, 780.0]
+def ev_h = 64.0
+def ev_nodes:
+  [[[#'a], "a", "000000", 64.0, 800.0, 0],
+   [[#'one], "1", "000000", 64.0, 1040.0, 0],
+   [[#'neg], "-a", "000000", 90.0, 1270.0, 1],
+   [[#'loop], "do-while", stateful_hex, 210.0, 830.0, 2],
+   [[#'and], "&", "000000", 70.0, 1160.0, 2],
+   [[#'print], "print", stateful_hex, 130.0, 940.0, 3]]
+
+// what each node is built from
+def ev_edges:
+  [[#'v, [#'loop], [#'a]], [#'v, [#'loop], [#'one]],
+   [#'v, [#'neg], [#'a]],
+   [#'v, [#'and], [#'a]], [#'v, [#'and], [#'neg]],
+   [#'s, [#'print], [#'loop]]]
+// once the rule has fired, the `print` may take either member of the class, and
+// extraction takes the one without a loop in it
+def ev_picked_edge = [#'s, [#'print], [#'and]]
+def ev_picked_from = [#'s, [#'print], [#'loop]]
+def ev_program_edges:
+  for List (e :~ List in ev_edges): keep_when e != ev_picked_from; e
+// and what the term it takes is made of, which is everything but the loop
+def ev_extracted = [[#'a], [#'neg], [#'and], [#'print]]
+
+def ev_at:
+  for values(m :~ Map = {}) ([key, _, _, w, x, row] in ev_nodes):
+    m ++ { key: [(x :~ Real) - (w :~ Real) / 2, (ev_rows :~ List)[row] :~ Real, w] }
+fun ev_middle(key) :: List:
+  def [x, y, w] = ev_at[key]
+  [(x :~ Real) + (w :~ Real) / 2, (y :~ Real) + ev_h / 2]
+
+// ------------------------------------------------------------------- the slide
+fun slide_eval_setup():
+  def page = titled("What eggcc Does to a Program", ~tag: "Eval setup title",
+                    ~nudge: [0.0, 0.0])
+  fun node(color :: String, w :: Real, text :: String, ~fill: fill :: String):
+    graph_node(~width: w, ~height: ev_h, ~adj: "33878",
+               ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
+               ~fill: fill, run(text, ~font: node_font, ~size: 40.0))
+  fun drawings(~fill: fill :: String) :: Map:
+    for values(m :~ Map = {}) ([key, text, color, w, _, _] in ev_nodes):
+      m ++ { key: node(color, w, text, ~fill: fill) }
+  def plain = drawings(~fill: node_white)
+  def green = drawings(~fill: node_green)
+  fun spots(keys :~ List, ~picked: picked :~ List = []) :: Map:
+    for values(m :~ Map = {}) ([key, _, _, _, _, _] in ev_nodes):
+      skip_when !keys.contains(key)
+      def [x, y, _] = ev_at[key]
+      m ++ { key: [(if picked.contains(key) | green | plain)[key], x, y] }
+  fun wires(keys :~ List, ~picked: picked :: Boolean) :: List:
+    def es = if picked | ev_program_edges ++ [ev_picked_edge] | ev_edges
+    for List (e :~ List in es):
+      keep_when keys.contains(e[1]) && keys.contains(e[2])
+      e
+
+  def program_keys = [[#'a], [#'one], [#'loop], [#'print]]
+  def all_keys = program_keys ++ [[#'neg], [#'and]]
+  // the equality the rules add: the loop's result and Hacker's Delight's one-liner
+  // are the same value, which is the whole reason the loop can go
+  def equality:
+    { [#'cls]: eclass_region(ev_middle([#'loop]), ev_middle([#'and]),
+                             ~dash: value_class) ++ [band_below] }
+
+  fun caption(s :: String, x :: Real) :: List: [panel_title(s), x, 236.0, band_callout]
+  def cfg = { [#'cfg]: [cfg_pict(), 0.0, 0.0] }
+  def opt:
+    { [#'opt]: [opt_pict, 1390.0, 452.0],
+      [#'opt_cap]: caption("optimized program", 1390.0) }
+  fun frame(~graph: graph :: Boolean = #false,
+            ~rule: rule :: Boolean = #false,
+            ~picked: picked :: Boolean = #false) :: Frame:
+    def keys = if rule | all_keys | (if graph | program_keys | [])
+    Frame(~picts: cfg
+                    ++ { [#'cfg_cap]: caption("a Bril CFG", 140.0) }
+                    ++ spots(keys, ~picked: if picked | ev_extracted | [])
+                    ++ (if graph | { [#'eg_cap]: caption("its e-graph", 760.0) } | {})
+                    ++ (if rule | equality | {})
+                    ++ (if picked | opt | {}),
+          ~edges: wires(keys, ~picked: picked))
+  magic_slide(
+    page,
+    [// the program as Bril has it: a loop that halves `a` while it stays even
+     frame(),
+     // the same program as an e-graph -- the loop's result is what `print` takes
+     frame(~graph: #true),
+     // the rules fire: `a & -a` is the same value, so it joins that e-class
+     frame(~graph: #true, ~rule: #true),
+     // and extraction takes the member without a loop in it
+     frame(~graph: #true, ~rule: #true, ~picked: #true)],
+    ~wire: ev_wire_specs, ~edge_band: band_wires)
+
+// values black and thin, the state edge blue and thick, as everywhere else
+fun ev_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) (e :~ List in es):
+    if e[0] == #'s
+    | chain_wire(q, at, [e.rest], ~line_width: 6, ~color: keynote_blue)
+    | chain_wire(q, at, [e.rest], ~line_width: 4)
