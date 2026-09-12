@@ -313,6 +313,21 @@ fun slide_dp():
     { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
                100.0, 520.0, band_callout] }
 
+  // The last word, in the box the key idea stood in. `STATEWALK DP` is O(k n²) for
+  // statewalk width k and an e-graph of size n (paper, Section 6) -- the same shape
+  // as the O(n²) greedy algorithm for pure e-graphs, with the parameter out front --
+  // and the measured mean width across the benchmarks is 33.15, which is why the
+  // bound is worth having and not just worth stating.
+  def in_practice:
+    def words:
+      prose_stack([[["statewalk width", #'bold_italic]],
+                   [["is low in practice!", #'bold]],
+                   [["Complexity is ", #'bold], ["O(kn²)", #'bold_italic]]])
+    { #'practice: [make_bubble(~color: talk_green, ~padding: 24.0,
+                               robot_says(#'smile, words, ~sep: 12.0, ~above: #true,
+                                          ~scale: 0.85)),
+                   100.0, 470.0, band_callout] }
+
   // --------------------------------------------------------------------- the presses
   // The pointer the other extractions use, on the class being considered. It stands
   // to the left of it, which is clear on this graph for every class a walk ends in
@@ -438,5 +453,8 @@ fun slide_dp():
                      ++ green_at(away, answer),
            ~edges: chain_edges(4) ++ walk_edges(r_best)),
      // and then just that term, laid out as the tree it is
-     Frame(~picts: green_at(term_spots, answer), ~edges: term_edges(answer))],
+     Frame(~picts: green_at(term_spots, answer), ~edges: term_edges(answer)),
+     // and what it cost to find it, which is the section's whole claim
+     Frame(~picts: green_at(term_spots, answer) ++ in_practice,
+           ~edges: term_edges(answer))],
     ~stage: blob_stage, ~stage_band: band_below)

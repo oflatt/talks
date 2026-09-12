@@ -9,7 +9,7 @@
 import:
   lib("glide-pptx/runtime.rhm") open
   "theme.rhm" open
-  "workflow.rhm" open
+  "opening.rhm" open
   "updates.rhm" open
   "dp.rhm" open
   "results.rhm" open
@@ -39,12 +39,15 @@ fun shot(mk, ~at: at :: Int, ~from: from :~ List, ~size: size :~ List) :: pc.Pic
 // shown -- there is no divider after the talk ends -- but it is here so that the
 // list and the sections stay the same length.
 def section_shots :~ List:
-  [// the compiler workflow the first section builds up to
-   shot(slide_40, ~at: -2, ~from: [60.0, 206.0], ~size: [1850.0, 800.0]),
+  [// who uses e-graphs, which is what the first section is for
+   shot(slide_2, ~at: -1, ~from: [30.0, 175.0], ~size: [1878.0, 865.0]),
    // the extraction that reads a memory twice, and what it is called. Starts right
    // of the code box, which is the half of that slide the reminder is not about.
    shot(slide_fork, ~at: 12, ~from: [1110.0, 190.0], ~size: [810.0, 810.0]),
-   // the two statewalks that reach one class, and the two sets they reach
-   shot(slide_dp, ~at: 10, ~from: [600.0, 250.0], ~size: [1060.0, 810.0]),
+   // the two statewalks that reach one class, and the two sets they reach. The
+   // graph on that slide is scaled down and moved right, so the rectangle is its
+   // own, not the one `chain_pos` is written in -- cut to the graph's actual edges,
+   // since a shot that clips a row of nodes reads as a picture with pieces missing.
+   shot(slide_dp, ~at: 10, ~from: [592.0, 190.0], ~size: [770.0, 856.0]),
    // and the numbers
    shot(slide_36, ~at: -1, ~from: [180.0, 170.0], ~size: [1560.0, 820.0])]
