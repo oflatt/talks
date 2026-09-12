@@ -39,6 +39,7 @@ export:
   math_face
   math_font
   media
+  crop_pict
   robot
   robot_says
   node_font
@@ -161,12 +162,17 @@ fun in_prose_face(mk):
     parameterize { text.current_font: text.current_font() with (name = prose_font) }:
       mk()
 
-fun divider(k :: Int):
+// `~shots` is one picture per section, for the outline to show beside the sections
+// the talk has been through. They are built in `shots.rhm`, which the running order
+// hands over -- this file is below the slides they are cut from and cannot reach
+// them itself.
+fun divider(k :: Int, ~shots: shots :: maybe(List) = #false):
   in_prose_face(
     fun ():
       // only the first divider writes the list out; after that the list is familiar
       // and what matters is which disc is lit
-      outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0))
+      outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0,
+                        ~shots: shots))
 
 fun in_section(k :: Int, mk):
   in_prose_face(
@@ -313,6 +319,21 @@ fun robot_says(face, content :: pc.Pict, ~sep: sep :: Real = 16.0,
   if above
   | pc.stack(~sep: sep, ~horiz: #'center, r, content)
   | pc.beside(~sep: sep, ~vert: #'center, r, content)
+
+// A window onto a pict: the pict drawn through a hole of its own, which is what
+// lets the outline show the corner of a section that says what it was rather than
+// the whole slide shrunk to a stamp nobody can read.
+fun crop_pict(p :: pc.Pict, ~at: at :~ List, ~size: size :~ List) :: pc.Pict:
+  def [x, y] = at
+  def [w, h] = size
+  pc.dc(fun (target :: draw.DC, dx, dy):
+          target.save()
+          def win = draw.Region()
+          win.rectangle([dx, dy, w, h])
+          target.clipping_region := win
+          p.draw(target, ~dx: dx - (x :~ Real), ~dy: dy - (y :~ Real))
+          target.restore(),
+        ~width: w, ~height: h)
 
 // A slide with the deck's title at the deck's place, and nothing else yet.
 fun titled(title :: String) :: pc.Pict:

@@ -662,17 +662,29 @@ fun place_left(base :: Pict, p :: Pict, x :: Real, cy :: Real) :: Pict:
 // the lit one changes. The discs hide a 20pt drift; the thin, faint spine does
 // not, and drifting across pixel boundaries made it flicker. Callers that
 // animate pass the width of the widest label at its lit size, once.
+// `shots` is one keepsake per row, or `#false` for a row that has none yet: a
+// picture of what that section was, for the sections the talk has been through. The
+// column they sit in is part of the layout's width, and the layout is centred on the
+// slide -- so the list slides left to make room the first time one turns up, and
+// stays where it is after that.
 fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
                    ~current: current :: Real, ~canvas: canvas :: Pict,
                    ~color: color = talk_blue,
                    ~label_width: label_width :: maybe(Real) = #false,
+                   ~shots: shots :: maybe(List) = #false,
                    ~disc_prog: disc_prog :: maybe(List) = #false) :: Pict:
   def line_color = as_color(color)
   def n = discs.length()
   def lab_w = label_width
                 || (for values(m :~ Real = 0.0) (p :~ Pict in labels): math.max(m, p.width))
   def disc_cx = outline_left + outline_r
-  def w = disc_cx + outline_r + outline_gap + lab_w
+  def shot_x = disc_cx + outline_r + outline_gap + lab_w + outline_gap
+  def shot_w:
+    if !shots
+    | 0.0
+    | for values(m :~ Real = 0.0) (q in shots :~ List):
+        if q | math.max(m, (q :~ Pict).width) | m
+  def w = shot_x + shot_w
   def h = n * outline_row
   def base = blank(~width: w, ~height: h)
   fun row_cy(i :: Real) :: Real: i * outline_row + outline_row / 2
@@ -698,7 +710,17 @@ fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
     | overlay(canvas, acc).refocus(canvas)
     | def dp :~ Real = (if disc_prog | (disc_prog[i] :~ Real) | 1.0)
       def acc1 = place_center(acc, discs[i].scale(smooth(dp)), disc_cx, row_cy(1.0 * i))
-      go(i + 1, place_left(acc1, labels[i], disc_cx + outline_r + outline_gap, row_cy(1.0 * i)))
+      def acc2 = place_left(acc1, labels[i], disc_cx + outline_r + outline_gap,
+                            row_cy(1.0 * i))
+      def acc3:
+        def q = if shots | (shots :~ List)[i] | #false
+        // centred in the column rather than flush with its left edge: they are cut
+        // to different shapes and a ragged left edge reads as a mistake
+        if q
+        | place_left(acc2, q, shot_x + (shot_w - (q :~ Pict).width) / 2,
+                     row_cy(1.0 * i))
+        | acc2
+      go(i + 1, acc3)
 
 // The same discs and labels shrunk into the top margin. Only the section we are
 // on keeps its label; the rest are simply absent, so `magic_move` fades them.
@@ -744,8 +766,16 @@ fun outline_to_header(items :: List.of(String),
                       ~canvas: canvas :: Pict,
                       ~color: color = talk_blue,
                       ~intro: intro :: Boolean = #false,
+                      ~shots: all_shots :: maybe(List) = #false,
                       ~extent: extent :: Real = 1.2) :: Pict:
   def n = items.length()
+  // only the sections already behind us have one to show
+  def shots:
+    cond
+    | !all_shots: #false
+    | ~else:
+        for List (i in 0..n):
+          if i < at | (all_shots :~ List)[i] | #false
   def line_color = as_color(color)
   def writers = for List (s in items): outline_writer(s, ~color: draw.Color(0, 0, 0))
   def plain = for List (s in items): outline_plain(s)
@@ -759,7 +789,7 @@ fun outline_to_header(items :: List.of(String),
   def labels = for List (i in 0..n):
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
   def full = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: canvas, ~color: color,
-                            ~label_width: lab_w)
+                            ~label_width: lab_w, ~shots: shots)
   def head = header_layout(discs, labels, ~at: at, ~canvas: canvas, ~color: color)
   def opening:
     if intro
@@ -785,7 +815,7 @@ fun outline_to_header(items :: List.of(String),
                                  outline_disc(i, n, (if i == at | clamp01((p - 0.84) / 0.16) | 0.0))
                       outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
                                      ~canvas: canvas, ~color: color, ~label_width: lab_w,
-                                     ~disc_prog: prog))
+                                     ~shots: shots, ~disc_prog: prog))
     | block:
         // The header of the slide just left, exactly as `section_header` drew it,
         // magic-moving back down into the list: the discs fly from their row into
@@ -800,7 +830,8 @@ fun outline_to_header(items :: List.of(String),
         def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas,
                                   ~color: color)
         def full0 = outline_layout(discs0, labels0, ~current: 1.0 * prev,
-                                   ~canvas: canvas, ~color: color, ~label_width: lab_w)
+                                   ~canvas: canvas, ~color: color, ~label_width: lab_w,
+                                   ~shots: shots)
         def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
         // the marker walking down from the section just finished to this one
         def walk:
@@ -815,7 +846,7 @@ fun outline_to_header(items :: List.of(String),
                         def ls = for List (i in 0..n):
                                    outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
                         outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
-                                       ~label_width: lab_w))
+                                       ~label_width: lab_w, ~shots: shots))
         // spliced: the walk starts the moment the descent lands, in the same beat,
         // so arriving at the slide still costs no press before the move up
         switch(descent, walk, ~join: #'splice)

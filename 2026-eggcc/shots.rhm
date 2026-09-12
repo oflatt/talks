@@ -1,0 +1,50 @@
+#lang rhombus/and_meta
+// A keepsake from each section of the talk, for the outline to show once that
+// section is behind us.
+//
+// Not the whole slide shrunk to a stamp: a window onto the part of it that says what
+// the section was. They are cut out of the slides themselves rather than drawn again
+// here, so a section that changes brings its own reminder with it.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "theme.rhm" open
+  "workflow.rhm" open
+  "updates.rhm" open
+  "dp.rhm" open
+  "results.rhm" open
+  pict as pc
+  draw
+
+export:
+  section_shots
+
+// how tall each one is drawn in the list; the width follows from what is cut out
+def shot_h = 160.0
+def shot_line = draw.Color(170, 170, 170)
+
+// `mk` is the slide, `at` which of its presses, and the rectangle is in slide
+// coordinates -- the same numbers the slide itself is written in.
+fun shot(mk, ~at: at :: Int, ~from: from :~ List, ~size: size :~ List) :: pc.Pict:
+  def whole :~ pc.Pict = as_pict(mk())
+  def one = whole.snapshot(if at < 0 | whole.duration + at | at, 1.0)
+  def cut = crop_pict(one, ~at: from, ~size: size)
+  def k = shot_h / (size[1] :~ Real)
+  def small :~ pc.Pict = cut.scale(k)
+  pc.overlay(small,
+             pc.rectangle(~width: small.width, ~height: small.height,
+                          ~fill: #false, ~line: shot_line, ~rounded: -0.06))
+
+// One per section, in the order the outline lists them. The last has nowhere to be
+// shown -- there is no divider after the talk ends -- but it is here so that the
+// list and the sections stay the same length.
+def section_shots :~ List:
+  [// the compiler workflow the first section builds up to
+   shot(slide_40, ~at: -2, ~from: [60.0, 206.0], ~size: [1850.0, 800.0]),
+   // the extraction that reads a memory twice, and what it is called. Starts right
+   // of the code box, which is the half of that slide the reminder is not about.
+   shot(slide_fork, ~at: 12, ~from: [1110.0, 190.0], ~size: [810.0, 810.0]),
+   // the two statewalks that reach one class, and the two sets they reach
+   shot(slide_dp, ~at: 10, ~from: [600.0, 250.0], ~size: [1060.0, 810.0]),
+   // and the numbers
+   shot(slide_36, ~at: -1, ~from: [180.0, 170.0], ~size: [1560.0, 820.0])]
