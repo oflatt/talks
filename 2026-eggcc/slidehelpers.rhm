@@ -667,6 +667,21 @@ fun place_left(base :: Pict, p :: Pict, x :: Real, cy :: Real) :: Pict:
 // column they sit in is part of the layout's width, and the layout is centred on the
 // slide -- so the list slides left to make room the first time one turns up, and
 // stays where it is after that.
+// The line the discs are threaded on, as one pict for the whole talk. Both layouts
+// draw *this*, at their own two scales: `magic_move` matches picts by identity and
+// interpolates the horizontal and vertical scales separately, so the upright spine of
+// the list lies down into the header's track and stands back up again. Two bars built
+// to size would be two picts, and one would fade out while the other faded in
+// somewhere else, which is not the line going anywhere.
+def outline_bar = 9.0
+def outline_spine_bar:
+  rectangle(~width: outline_bar, ~height: outline_bar,
+            ~fill: draw.Color(120, 120, 120), ~line: #false,
+            ~rounded: -0.5).alpha(0.22)
+def outline_walk_bar:
+  rectangle(~width: outline_bar, ~height: outline_bar, ~fill: talk_blue,
+            ~line: #false, ~rounded: -0.5)
+
 fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
                    ~current: current :: Real, ~canvas: canvas :: Pict,
                    ~color: color = talk_blue,
@@ -691,18 +706,13 @@ fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
   def y0 = row_cy(0.0)
   def yN = row_cy(1.0 * (n - 1))
   def spine:
-    place_center(base,
-                 rectangle(~width: 9.0, ~height: yN - y0,
-                           ~fill: draw.Color(120, 120, 120), ~line: #false,
-                           ~rounded: -0.5).alpha(0.22),
+    place_center(base, outline_spine_bar.scale(1.0, (yN - y0) / outline_bar),
                  disc_cx, (y0 + yN) / 2)
   def cc = math.max(0.0, math.min(1.0 * (n - 1), current))
   def yfill = row_cy(cc)
   def walked:
     if yfill - y0 > 0.5
-    | place_center(spine,
-                   rectangle(~width: 9.0, ~height: yfill - y0, ~fill: line_color,
-                             ~line: #false, ~rounded: -0.5),
+    | place_center(spine, outline_walk_bar.scale(1.0, (yfill - y0) / outline_bar),
                    disc_cx, (y0 + yfill) / 2)
     | spine
   recur go(i = 0, acc :~ Pict = walked):
@@ -743,16 +753,15 @@ fun header_layout(discs :: List.of(Pict), labels :: List.of(Pict),
   def track_h = 7.0
   def track:
     place_center(canvas,
-                 rectangle(~width: xN - x0, ~height: track_h,
-                           ~fill: draw.Color(120, 120, 120), ~line: #false,
-                           ~rounded: -0.5).alpha(0.22),
+                 outline_spine_bar.scale((xN - x0) / outline_bar,
+                                         track_h / outline_bar),
                  (x0 + xN) / 2, cy)
   def walked:
     def xf = x0 + at * step
     if xf - x0 > 0.5
     | place_center(track,
-                   rectangle(~width: xf - x0, ~height: track_h, ~fill: as_color(color),
-                             ~line: #false, ~rounded: -0.5),
+                   outline_walk_bar.scale((xf - x0) / outline_bar,
+                                          track_h / outline_bar),
                    (x0 + xf) / 2, cy)
     | track
   recur go(i = 0, acc :~ Pict = walked):
@@ -816,47 +825,19 @@ fun outline_to_header(items :: List.of(String),
                       outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
                                      ~canvas: canvas, ~color: color, ~label_width: lab_w,
                                      ~shots: shots, ~disc_prog: prog))
-    | block:
-        // The header of the slide just left, exactly as `section_header` drew it,
-        // magic-moving back down into the list: the discs fly from their row into
-        // the column, the label of the section just finished grows back to its
-        // place, and the other labels and the spine fade in around them. It is
-        // built from its own settled discs and labels, so that the two layouts
-        // share the picts the move matches on.
-        def prev = math.max(0, at - 1)
-        def discs0 = for List (i in 0..n): outline_disc(i, n, (if i == prev | 1.0 | 0.0))
-        def labels0 = for List (i in 0..n):
-                        outline_label(written[i], written_lit[i], (if i == prev | 1.0 | 0.0))
-        def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas,
-                                  ~color: color)
-        def full0 = outline_layout(discs0, labels0, ~current: 1.0 * prev,
-                                   ~canvas: canvas, ~color: color, ~label_width: lab_w,
-                                   ~shots: shots)
-        def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
-        // the marker walking down from the section just finished to this one
-        def walk:
-          animate(~extent: 1.4,
-                  fun (p):
-                    if p >= 1.0
-                    | full
-                    | block:
-                        def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
-                        def ds = for List (i in 0..n):
-                                   outline_disc(i, n, clamp01(1.0 - absr(cur - i)))
-                        def ls = for List (i in 0..n):
-                                   outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
-                        outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
-                                       ~label_width: lab_w, ~shots: shots))
-        // spliced: the walk starts the moment the descent lands, in the same beat,
-        // so arriving at the slide still costs no press before the move up
-        switch(descent, walk, ~join: #'splice)
+    // Nothing: the list is simply there when the slide arrives. It used to fly down
+    // out of the header of the section just finished, and the marker used to walk
+    // from that section to this one -- but an animation is an epoch, and an epoch is
+    // a press, so that cost an advance to watch the list arrive before the advance
+    // that takes it away again. The pan onto the slide brings it in instead.
+    | full
   // `magic_move`'s epoch 0 *is* the move and its epoch 1 is the settled result --
   // measured, not assumed -- so it is the tail that has to go, not the head.
   // `~other: #'fade` -- the picts the two layouts do *not* have in common are the
   // three labels the header drops, and `magic_move`'s default `#'switch` cuts them
   // out abruptly. Fading them lets them go with the discs they belong to.
-  switch(opening,
-         magic_move(full, head, ~extent: extent, ~other: #'fade).time_pad(~after: -1))
+  def up = magic_move(full, head, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
+  if intro | switch(opening, up) | up
 
 fun section_header(items :: List.of(String),
                    ~at: at :: Int,
