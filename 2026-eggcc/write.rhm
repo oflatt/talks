@@ -355,7 +355,7 @@ fun trace_ink(p0 :: Pict, os :: Int, edginess :: Real):
   // Contour points are pixel-adjacent, so most of them say nothing a straight
   // line between their neighbours does not. Thinning them is invisible and the
   // path is what a frame spends its time building.
-  def thin_by = math.max(1, os)
+  def thin_by = math.max(1, math.exact(math.round(3.0 * os)))
   fun thin(c :~ List) :: List:
     (if thin_by == 1
      | c
@@ -407,12 +407,9 @@ def DY8 = [0, 1, 1, 1, 0, -1, -1, -1]
 // marker reaches it. The edge is slanted, the way a chisel tip leaves it.
 fun ink_frame(tr :~ List, t :: Real, lw :: Real,
               src :: Pict, os :: Real) :: Pict:
-  def bm = tr[0]
   def w :~ Int = tr[1]
   def h :~ Int = tr[2]
   def groups :~ List = tr[3]
-  def ox :~ Int = tr[4]
-  def oy :~ Int = tr[5]
   // Ink the pen has nothing to trace -- a photograph, a plot, a blob of a shape --
   // is all marker: the picture arrives under a nib sweeping across it at an even
   // pace, which is what drawing something with no line in it looks like.
@@ -421,72 +418,69 @@ fun ink_frame(tr :~ List, t :: Real, lw :: Real,
   def lag = math.min(4.0 / (G + 1.0), 0.2)
   def tt = (G - 1) * lag + 1.0
   def dur = 1.0 / tt
-  def obm = draw.Bitmap([w, h])
-  def target = obm.make_dc()
-  fun stroke(conts :~ List, budget :: Int):
-    recur go(cs :~ List = conts, left = budget):
-      when cs.length() > 0 && left > 0
-      | block:
-          def c :~ List = cs[0][0]
-          def col :~ List = cs[0][1]
-          def take = math.min(left, c.length())
-          when take >= 2
-          | block:
-              target.brush := draw.Brush.none
-              target.pen := draw.Pen(~color: draw.Color(col[0], col[1], col[2]), ~width: lw)
-              def pth = draw.Path()
-              pth.move_to([1.0 * (c[0][0] - ox), 1.0 * (c[0][1] - oy)])
-              for (i in 1..take):
-                pth.line_to([1.0 * (c[i][0] - ox), 1.0 * (c[i][1] - oy)])
-              target.path(pth)
-          go(cs.sublist(1, cs.length()), left - take)
-  // the pen: every group traces over its own slice of the epoch, and several are
-  // in flight at once, so the nib is wherever the rightmost of them has got to
   fun nib_of():
     for values(x = 0.0) (gi in 0..GN):
       def g :~ List = groups[gi]
       def local = (t - gi * lag / tt) / dur
       cond
       | local <= 0.0: x
-      | local >= 1.0: math.max(x, 1.0 * g[2] - ox)
-      | ~else: math.max(x, lerp(1.0 * g[1] - ox, 1.0 * g[2] - ox, local))
+      | local >= 1.0: math.max(x, 1.0 * g[2])
+      | ~else: math.max(x, lerp(1.0 * g[1], 1.0 * g[2], local))
   def nib: (if GN == 0 | lerp(0.0, 1.0 * w, t) | nib_of())
-  for (gi in 0..GN):
-    def g :~ List = groups[gi]
-    def local = (t - gi * lag / tt) / dur
-    cond
-    | local >= 1.0: stroke(g[0], g[3])
-    | local > 0.0: stroke(g[0], math.exact(math.floor(local * g[3])))
-    | ~else: #void
-  // The marker, a stroke behind the nib and cut on the slant. It draws `src`
-  // itself, clipped -- not the raster the contours were found in. The raster is
-  // at whatever resolution the trace wanted and the slide is then scaled to the
-  // screen, so blitting it made the fill a shade softer than the real thing right
-  // up until the last frame, where the animation hands back `src` and it snapped
-  // crisp. Clipping the pict means every frame of the fill is already the pict.
-  def behind = math.min(0.55 * h, 30.0 * (lw / 2.0))
-  def slant = 0.22 * h
-  def fx = nib - behind
-  def strokes = bitmap(obm).scale(1.0 / os)
-  def pw = src.width
+  // the marker, a stroke behind the nib and cut on the slant, in the pict's own
+  // coordinates rather than the trace's
+  def behind = math.min(0.55 * h, 30.0 * (lw * os / 2.0))
+  def mx = (nib - behind) / os
+  def ms = 0.22 * h / os
   def ph = src.height
-  def mx = (fx + ox) / os
-  def ms = slant / os
-  def marker:
-    dc(fun (target :: draw.DC, dx, dy):
-         target.save()
-         def r = draw.Region()
-         r.polygon([[-1.0, -1.0], [mx + ms, -1.0], [mx - ms, ph + 1.0], [-1.0, ph + 1.0]],
-                   ~dx: dx, ~dy: dy)
-         target.clipping_region := r
-         src.draw(target, ~dx: dx, ~dy: dy)
-         target.restore(),
-       ~width: pw, ~height: ph)
-  (if fx > -slant
-   | overlay(~horiz: #'left, ~vert: #'top, marker.ghost(),
-             strokes.translate(1.0 * ox / os, 1.0 * oy / os), marker)
-   | overlay(~horiz: #'left, ~vert: #'top, marker.ghost(),
-             strokes.translate(1.0 * ox / os, 1.0 * oy / os)))
+  // Everything is drawn straight onto the surface the slide is being drawn onto:
+  // no bitmap in between. The pen's paths are the traced contours scaled back out
+  // of the raster they were found in, and the marker clips `src` and draws `src` --
+  // so the fill is the pict itself at the resolution it is being shown at, and
+  // only the *shape* of the pen's line comes from the pixels. Going through a
+  // bitmap cost a slide-sized allocation and a blit every frame, which is what
+  // made writing a whole slide too slow to play.
+  dc(fun (target :: draw.DC, dx, dy):
+       target.save()
+       target.brush := draw.Brush.none
+       fun stroke(conts :~ List, budget :: Int):
+         recur go(cs :~ List = conts, left = budget):
+           when cs.length() > 0 && left > 0
+           | block:
+               def c :~ List = cs[0][0]
+               def col :~ List = cs[0][1]
+               def take = math.min(left, c.length())
+               when take >= 2
+               | block:
+                   target.pen := draw.Pen(~color: draw.Color(col[0], col[1], col[2]),
+                                          ~width: lw)
+                   def pth = draw.Path()
+                   pth.move_to([dx + c[0][0] / os, dy + c[0][1] / os])
+                   for (i in 1..take):
+                     pth.line_to([dx + c[i][0] / os, dy + c[i][1] / os])
+                   target.path(pth)
+               go(cs.sublist(1, cs.length()), left - take)
+       // A line the marker has already gone past is under the fill, so drawing it
+       // is drawing something nothing can see. On a slide whose ink is mostly
+       // lines -- a plot, a diagram -- that is most of the pen's work.
+       def covered = nib - behind - 0.22 * h
+       for (gi in 0..GN):
+         def g :~ List = groups[gi]
+         skip_when (g[2] :~ Real) < covered
+         def local = (t - gi * lag / tt) / dur
+         cond
+         | local >= 1.0: stroke(g[0], g[3])
+         | local > 0.0: stroke(g[0], math.exact(math.floor(local * g[3])))
+         | ~else: #void
+       when mx > -ms
+       | block:
+           def r = draw.Region()
+           r.polygon([[-1.0, -1.0], [mx + ms, -1.0], [mx - ms, ph + 1.0], [-1.0, ph + 1.0]],
+                     ~dx: dx, ~dy: dy)
+           target.clipping_region := r
+           src.draw(target, ~dx: dx, ~dy: dy)
+       target.restore(),
+     ~width: src.width, ~height: src.height)
 
 // A pict written out: same bounds, one epoch, `p` itself at the end of it.
 fun write(p :: Pict,
@@ -496,6 +490,11 @@ fun write(p :: Pict,
           ~edginess: edginess :: Real = 0.10,
           ~bend: bend = fun (x): x) :: Pict:
   def cell = Array(#false)
+  def rest = Array(#false)
+  fun settled_of() :: Pict:
+    when !rest[0]
+    | rest[0] := p.snapshot(math.max(0, p.duration - 1), 1.0)
+    rest[0]
   fun traced():
     when !cell[0]
     | cell[0] := trace_ink(p, os, edginess)
@@ -517,8 +516,7 @@ fun write(p :: Pict,
                 def tr :~ List = traced()
                 (if tr[6]
                  | place(nothing, 0.0, 0.0)
-                 | place(ink_frame(tr, n, lw * os, p.snapshot(math.max(0, p.duration - 1), 1.0), os),
-                         0.0, 0.0)))
+                 | place(ink_frame(tr, n, lw, settled_of(), os), 0.0, 0.0)))
 
 // The settled picture of a pict: what it looks like once whatever it does is done.
 fun settled(p :: Pict) :: Pict:
