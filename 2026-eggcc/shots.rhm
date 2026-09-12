@@ -49,5 +49,5 @@ def section_shots :~ List:
    // own, not the one `chain_pos` is written in -- cut to the graph's actual edges,
    // since a shot that clips a row of nodes reads as a picture with pieces missing.
    shot(slide_dp, ~at: 10, ~from: [592.0, 190.0], ~size: [770.0, 856.0]),
-   // and the numbers
-   shot(slide_36, ~at: -1, ~from: [180.0, 170.0], ~size: [1560.0, 820.0])]
+   // and the numbers: the performance chart with every series on it
+   shot(slide_perf, ~at: -2, ~from: [170.0, 230.0], ~size: [1620.0, 720.0])]

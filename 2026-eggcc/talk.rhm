@@ -55,11 +55,8 @@ export:
   slide_41
   slide_nphard
   slide_dp
-  slide_34
-  slide_36
-  slide_37
-  slide_38
-  slide_39
+  slide_cdf
+  slide_perf
   slide_questions
 
 // The macro keeps this as an ordinary list for the show and snapshot script,
@@ -84,9 +81,7 @@ glide_slides all_slides:
    // measurement rather than a step of the algorithm, and it was reading as the end
    // of the section before this one.
    divider(3, ~shots: section_shots),
-   in_section(3, slide_34),
-   in_section(3, slide_36), in_section(3, slide_37),
-   in_section(3, slide_38), in_section(3, slide_39),
+   in_section(3, slide_cdf), in_section(3, slide_perf),
    // and out the way we came in
    slide_questions]
 

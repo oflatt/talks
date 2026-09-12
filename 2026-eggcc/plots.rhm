@@ -1,0 +1,257 @@
+#lang rhombus/and_meta
+// The evaluation's two charts, drawn rather than imported.
+//
+// They used to be PNGs of matplotlib output, one per build stage -- four copies of
+// the performance chart with series withheld, and a flat CDF. Drawing them here
+// costs the axes and the ticks and buys the thing a picture of a chart cannot do:
+// the data arrives. A stem grows out of the baseline, a curve draws itself from
+// left to right, and the row of crosses sweeps in, so what the audience watches is
+// the measurement being taken rather than a slide changing.
+//
+// The numbers come from `plotdata.rhm`, which reads eggcc's own `profile.json`.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "theme.rhm" open
+  "plotdata.rhm" open
+  pict as pc
+  draw
+
+export:
+  perf_chart
+  perf_stages
+  cdf_chart
+  cdf_stages
+
+// ------------------------------------------------------------------- the ink
+def plot_line = draw.Color(40, 40, 40)
+def plot_grid = draw.Color(205, 205, 205)
+def ours_color = draw.Color(0, 176, 80)          // eggcc
+def llvm_color = draw.Color(20, 20, 20)          // LLVM-O0-O0
+def gone_color = draw.Color(235, 45, 45)         // the solver gave up
+def link_color = draw.Color(150, 150, 150)
+def axis_face = draw.Font(~name: prose_font, ~size: 34.0)
+def name_face = draw.Font(~name: prose_font, ~size: 38.0, ~weight: #'bold)
+fun axis_text(s :: String) :: pc.Pict: pc.text(s, ~font: axis_face)
+fun name_text(s :: String, c) :: pc.Pict: pc.text(s, ~font: name_face).colorize(c)
+
+// How far along a thing that arrives `i` of `n` is, at moment `t` of the press:
+// everything is on its way at once, but each starts a little after the one before,
+// which is what makes a row of them read as a sweep rather than a flash.
+fun ease(t :: Real) :: Real: t * t * (3.0 - 2.0 * t)
+fun stagger(t :: Real, i :: Int, n :: Int, spread :: Real) :: Real:
+  def start = spread * (if n <= 1 | 0.0 | i / (n - 1.0))
+  ease(math.max(0.0, math.min(1.0, (t - start) / (1.0 - spread))))
+fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
+
+fun pen(c, w :: Real, ~dash: dash = #'solid) :: draw.Pen:
+  draw.Pen(~color: c, ~width: w, ~style: dash, ~cap: #'round, ~join: #'round)
+
+// ------------------------------------------------------- the performance chart
+def perf_w = 1060.0
+def perf_h = 600.0
+def perf_lo = 0.25        // the axis the paper's figure uses
+def perf_hi = 10.0
+def perf_x = 300.0
+def perf_y = 272.0
+
+fun perf_yv(v :: Real) :: Real:
+  perf_h * (1.0 - (math.min(v, perf_hi) - perf_lo) / (perf_hi - perf_lo))
+
+fun perf_body(~ours: ours :: Real, ~llvm: llvm :: Real,
+              ~solver: solver :: Real) :: pc.Pict:
+  def rows :~ List = perf_rows
+  def n = rows.length()
+  fun xv(i :: Int) :: Real: (i + 0.5) * perf_w / n
+  def base_y = perf_yv(1.0)
+  pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+          fun pt(x :: Real, y :: Real): draw.Point(dx + x, dy + y)
+          // the grid the eye reads values off, and the line everything is measured
+          // against -- LLVM at full optimization, which is where 1.0 is
+          dc.pen := pen(plot_grid, 1.5)
+          for (v in [2.0, 4.0, 6.0, 8.0, 10.0]):
+            dc.line(pt(0.0, perf_yv(v)), pt(perf_w, perf_yv(v)))
+          dc.pen := pen(link_color, 2.5, ~dash: #'long_dash)
+          dc.line(pt(0.0, base_y), pt(perf_w, base_y))
+          for (row :~ List in rows, i in 0..):
+            def x = xv(i)
+            def k_ours = stagger(ours, i, n, 0.55)
+            skip_when k_ours <= 0.0
+            // ours: a stem out of the baseline, growing to what we measured
+            def y_ours = lerp(base_y, perf_yv(row[1] :~ Real), k_ours)
+            dc.pen := pen(ours_color, 4.0)
+            dc.line(pt(x, base_y), pt(x, y_ours))
+            // unoptimized LLVM, tethered to ours so the gap is the thing read
+            def k_llvm = stagger(llvm, i, n, 0.55)
+            when k_llvm > 0.0
+            | def y_llvm = lerp(y_ours, perf_yv(row[2] :~ Real), k_llvm)
+              dc.pen := pen(link_color, 2.0, ~dash: #'show_dash)
+              dc.line(pt(x, y_ours), pt(x, y_llvm))
+              dc.pen := pen(llvm_color, 1.0)
+              dc.brush := draw.Brush(~color: llvm_color)
+              dc.rectangle(draw.Rect(pt(x - 7.0, y_llvm - 7.0), draw.Size(14.0, 14.0)))
+            dc.pen := pen(ours_color, 1.0)
+            dc.brush := draw.Brush(~color: ours_color)
+            dc.ellipse(draw.Rect(pt(x - 8.0, y_ours - 8.0), draw.Size(16.0, 16.0)))
+          // and the extraction that never came back, at the top of the scale
+          for (row :~ List in rows, i in 0..):
+            skip_when !row[3]
+            def k = stagger(solver, i, n, 0.7)
+            skip_when k <= 0.0
+            def x = xv(i)
+            def r = 9.0 * k
+            dc.pen := pen(gone_color, 5.0)
+            dc.line(pt(x - r, 8.0 - r), pt(x + r, 8.0 + r))
+            dc.line(pt(x - r, 8.0 + r), pt(x + r, 8.0 - r)),
+        ~width: perf_w, ~height: perf_h)
+
+// A series' name, out to the right of the plot at the height that series lives at,
+// and fading up with the series itself: the legend arrives as the data does, so
+// there is never a key on the slide for something that is not drawn yet.
+fun perf_name(q :~ pc.Pict, s :: String, c, v :: Real, k :: Real) :: pc.Pict:
+  if k <= 0.0
+  | q
+  | block:
+      def lab :~ pc.Pict = name_text(s, c).alpha(math.min(1.0, k * 1.6))
+      put(q, lab, perf_x + perf_w + 34.0, perf_y + perf_yv(v) - lab.height / 2)
+
+// The chart, on a slide-sized layer. The three knobs are how far each series has
+// arrived; a press moves one of them from 0 to 1.
+fun perf_chart(~ours: ours :: Real = 1.0, ~llvm: llvm :: Real = 1.0,
+               ~solver: solver :: Real = 1.0) :: pc.Pict:
+  def frame:
+    pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+            dc.pen := pen(plot_line, 3.0)
+            dc.line(draw.Point(dx, dy), draw.Point(dx, dy + perf_h))
+            dc.line(draw.Point(dx, dy + perf_h), draw.Point(dx + perf_w, dy + perf_h)),
+          ~width: perf_w, ~height: perf_h)
+  def with_ticks:
+    def start = put(blank_slide, frame, perf_x, perf_y)
+    for values(q :~ pc.Pict = start) (v in [2.0, 4.0, 6.0, 8.0, 10.0]):
+      def lab :~ pc.Pict = axis_text(to_string(math.exact(v)))
+      put(q, lab, perf_x - 16.0 - lab.width, perf_y + perf_yv(v) - lab.height / 2)
+  def y_label:
+    (axis_text("Time Relative To LLVM-O3-O0") :~ pc.Pict).rotate(math.pi / 2)
+  def x_label :~ pc.Pict = axis_text("Polybench Benchmark Suite, sorted by eggcc")
+  def base:
+    put(put(put(with_ticks,
+                perf_body(~ours: ours, ~llvm: llvm, ~solver: solver), perf_x, perf_y),
+            y_label, perf_x - 122.0, perf_y + perf_h / 2 - (y_label :~ pc.Pict).height / 2),
+        x_label, perf_x + (perf_w - x_label.width) / 2, perf_y + perf_h + 22.0)
+  // the baseline is named whatever else is on the chart: it is the thing the whole
+  // axis is relative to, so it is not one of the series that arrive
+  def named:
+    def lab :~ pc.Pict = axis_text("LLVM-O3-O0").colorize(link_color)
+    put(base, lab, perf_x + perf_w + 34.0, perf_y + perf_yv(1.0) - lab.height / 2)
+  perf_name(perf_name(perf_name(named, "eggcc", ours_color, 2.6, ours),
+                      "LLVM-O0-O0", llvm_color, 6.4, llvm),
+            "solvers, timed out", gone_color, 9.9, solver)
+
+// The presses: the chart empty, then one series at a time.
+def perf_stages :~ List:
+  [perf_chart(~ours: 0.0, ~llvm: 0.0, ~solver: 0.0),
+   perf_chart(~ours: 1.0, ~llvm: 0.0, ~solver: 0.0),
+   perf_chart(~ours: 1.0, ~llvm: 1.0, ~solver: 0.0),
+   perf_chart(~ours: 1.0, ~llvm: 1.0, ~solver: 1.0)]
+
+// ------------------------------------------------------------------- the CDF
+// What fraction of the e-graph regions each extractor had finished by a given time.
+// The x axis is logarithmic over five decades, because that is the size of the gap
+// being shown: the DP finishes most regions in a tenth of a millisecond and the
+// solvers are still going three hundred seconds later.
+def cdf_w = 1180.0
+def cdf_h = 560.0
+def cdf_x = 300.0
+def cdf_y = 262.0
+def cdf_lo = -5.0         // log10 seconds at the left edge
+def cdf_hi = 2.6          // and at the right, which is past the timeout
+def cdf_colors = [draw.Color(31, 119, 180), draw.Color(0, 140, 60), draw.Color(150, 130, 20)]
+
+fun cdf_xv(secs :: Real) :: Real:
+  def l = math.log(math.max(secs, 1.0e-9)) / math.log(10.0)
+  cdf_w * (math.max(cdf_lo, math.min(cdf_hi, l)) - cdf_lo) / (cdf_hi - cdf_lo)
+fun cdf_yv(frac :: Real) :: Real: cdf_h * (1.0 - frac)
+
+// One series, drawn as far as `k`: the pen runs along the curve from the left, so
+// what the audience sees is the extractor working through the regions.
+fun cdf_curve(dc :: draw.DC, dx :: Real, dy :: Real, s :~ List, c, k :: Real):
+  def times :~ List = s[1]
+  def total = s[3] :~ Int
+  def n = times.length()
+  def upto = math.max(1, math.exact(math.floor(n * ease(k))))
+  def pts:
+    for List (i in 0..upto):
+      draw.Point(dx + cdf_xv(times[i] :~ Real), dy + cdf_yv((i + 1.0) / total))
+  when pts.length() > 1
+  | dc.pen := pen(c, 5.0)
+    dc.lines(pts)
+  // and the ones it never finished: the curve stops short of the top, and the wall
+  // it stopped at is where the clock ran out
+  def gave_up = (s[2] :~ Int)
+  when gave_up > 0 && k >= 0.999
+  | def done = (n * 1.0) / total
+    dc.pen := pen(c, 3.0, ~dash: #'show_dash)
+    dc.line(draw.Point(dx + cdf_xv((times[n - 1] :~ Real)), dy + cdf_yv(done)),
+            draw.Point(dx + cdf_xv(cdf_timeout_secs), dy + cdf_yv(done)))
+    dc.pen := pen(gone_color, 7.0)
+    dc.line(draw.Point(dx + cdf_xv(cdf_timeout_secs), dy + cdf_yv(done)),
+            draw.Point(dx + cdf_xv(cdf_timeout_secs), dy + cdf_yv(1.0)))
+
+fun cdf_body(ks :~ List) :: pc.Pict:
+  pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+          dc.pen := pen(plot_grid, 1.5)
+          for (p in [0.25, 0.5, 0.75, 1.0]):
+            dc.line(draw.Point(dx, dy + cdf_yv(p)), draw.Point(dx + cdf_w, dy + cdf_yv(p)))
+          for (d in -4..3):
+            def x = dx + cdf_xv(math.expt(10.0, d))
+            dc.line(draw.Point(x, dy), draw.Point(x, dy + cdf_h))
+          // the wall every solver ran into
+          dc.pen := pen(gone_color, 2.0, ~dash: #'long_dash)
+          def w = dx + cdf_xv(cdf_timeout_secs)
+          dc.line(draw.Point(w, dy), draw.Point(w, dy + cdf_h))
+          for (s :~ List in cdf_series :~ List, i in 0..):
+            def k = (ks :~ List)[i] :~ Real
+            skip_when k <= 0.0
+            cdf_curve(dc, dx, dy, s, (cdf_colors :~ List)[i], k),
+        ~width: cdf_w, ~height: cdf_h)
+
+fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0]) :: pc.Pict:
+  def frame:
+    pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+            dc.pen := pen(plot_line, 3.0)
+            dc.line(draw.Point(dx, dy), draw.Point(dx, dy + cdf_h))
+            dc.line(draw.Point(dx, dy + cdf_h), draw.Point(dx + cdf_w, dy + cdf_h)),
+          ~width: cdf_w, ~height: cdf_h)
+  def start = put(blank_slide, frame, cdf_x, cdf_y)
+  def with_y:
+    for values(q :~ pc.Pict = start) (p in [0.0, 0.25, 0.5, 0.75, 1.0]):
+      def lab :~ pc.Pict = axis_text(to_string(math.exact(math.round(p * 100.0))) +& "%")
+      put(q, lab, cdf_x - 16.0 - lab.width, cdf_y + cdf_yv(p) - lab.height / 2)
+  def with_x:
+    def names = ["100µs", "1ms", "10ms", "100ms", "1s", "10s", "100s"]
+    for values(q :~ pc.Pict = with_y) (d in -4..3, name in names):
+      def lab :~ pc.Pict = axis_text(name)
+      put(q, lab, cdf_x + cdf_xv(math.expt(10.0, d)) - lab.width / 2,
+          cdf_y + cdf_h + 14.0)
+  def y_label:
+    (axis_text("Regions Extracted") :~ pc.Pict).rotate(math.pi / 2)
+  // each curve named in the clear air beside it rather than in a key in the corner,
+  // so the eye never has to travel to find out which line it is looking at
+  def named:
+    def anchors = [[0.00072, 0.945], [14.0, 0.84], [0.5, 0.40]]
+    for values(q :~ pc.Pict = with_x) (s :~ List in cdf_series :~ List, i in 0..):
+      def k = (ks :~ List)[i] :~ Real
+      skip_when k <= 0.0
+      def [secs, frac] = (anchors :~ List)[i] :~ List
+      def lab :~ pc.Pict = name_text(s[0], (cdf_colors :~ List)[i]).alpha(math.min(1.0, k * 1.6))
+      put(q, lab, cdf_x + cdf_xv(secs), cdf_y + cdf_yv(frac) - lab.height / 2)
+  def with_body = put(named, cdf_body(ks), cdf_x, cdf_y)
+  def x_label :~ pc.Pict = axis_text("Extraction time per e-graph region")
+  put(put(with_body, y_label, cdf_x - 196.0,
+          cdf_y + cdf_h / 2 - (y_label :~ pc.Pict).height / 2),
+      x_label, cdf_x + (cdf_w - x_label.width) / 2, cdf_y + cdf_h + 66.0)
+
+def cdf_stages :~ List:
+  [cdf_chart(~draw: [0.0, 0.0, 0.0]),
+   cdf_chart(~draw: [1.0, 0.0, 0.0]),
+   cdf_chart(~draw: [1.0, 1.0, 1.0])]

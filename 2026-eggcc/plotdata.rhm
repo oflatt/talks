@@ -1,0 +1,120 @@
+#lang rhombus/and_meta
+// The evaluation's numbers, read out of eggcc's own `profile.json`.
+//
+// `profile.json` is copied verbatim from the eggcc repo (the run in
+// `nightly-runs/gurobi/data/`, which is the only one that carries both the cycle
+// counts and all three extraction-time series). Nothing here reshapes it: the
+// charts are drawn from the same fields the paper's matplotlib scripts read, so
+// a re-run of the benchmarks is a file copy rather than a redrawing.
+//
+//   infra/graphs.py:make_normalized_chart       the per-benchmark performance chart
+//   infra/extract_time_graph.py:make_extraction_time_cdf   the extraction-time CDF
+//
+// The normalization is the paper's: mean cycles of a treatment over mean cycles of
+// LLVM-O3-O0, so 1.0 is LLVM at full optimization and *lower is better*. The
+// Keynote slide this replaces had relabelled that axis "Relative Speedup" over
+// LLVM-O0-O0, which reads the chart upside down -- true of the LLVM series, since
+// O0's ratio really is O3's speedup over it, and false of eggcc's.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  lib("json/main.rkt") as json
+  lib("racket/base.rkt") as rkt
+
+export:
+  perf_rows
+  perf_solver_timeouts
+  cdf_series
+  cdf_timeout_secs
+
+// The file sits beside this one; `media_lookup` resolves against the directory the
+// module is loaded from, which is what makes that true however the deck is run.
+def profile :~ PairList:
+  rkt.#{call-with-input-file}(media_lookup(".")("profile.json"), json.#{read-json})
+
+// `read-json` hands back mutable strings, and Rhombus compares those by identity.
+fun str(v) :: String: (v :~ String).snapshot()
+fun mean(xs :~ PairList) :: Real:
+  (for values(t :~ Real = 0.0) (x :~ Real in xs): t + x) / xs.length()
+
+// The treatment that is Statewalk DP. Runs from before it became the default carry
+// it under its own name, and their `eggcc-O0-O0` rows are a different configuration
+// -- reading those instead silently plots the wrong extraction.
+def dp_treatment:
+  def names: for List (r :~ Map in profile): str(r[#'runMethod])
+  if names.contains("eggcc-tiger-O0-O0") | "eggcc-tiger-O0-O0" | "eggcc-O0-O0"
+def ilp_treatment:
+  def names: for List (r :~ Map in profile): str(r[#'runMethod])
+  if names.contains("eggcc-tiger-ILP-O0-O0")
+  | "eggcc-tiger-ILP-O0-O0"
+  | "eggcc-tiger-ILP-CBC-O0-O0"
+
+fun cycles_of(benchmark :: String, method :: String):
+  for values(found = #false) (r :~ Map in profile):
+    skip_when found != #false
+    skip_when str(r[#'benchmark]) != benchmark || str(r[#'runMethod]) != method
+    // a treatment that failed to build carries no cycles at all
+    def cy = if r.has_key(#'cycles) | r[#'cycles] | #false
+    if !(cy is_a PairList) || (cy :~ PairList).length() == 0 | #false | mean(cy)
+
+// ------------------------------------------------------------ the performance chart
+// One row per polybench benchmark: how long each of the two compilers' output runs
+// for, against LLVM-O3-O0's, sorted by ours -- which is the order the chart reads in
+// and the order `make_normalized_chart` sorts by.
+//
+//   [benchmark, eggcc / LLVM-O3-O0, LLVM-O0-O0 / LLVM-O3-O0, did the solver give up]
+def perf_rows :~ List:
+  def names:
+    for List (r :~ Map in profile):
+      keep_when str(r[#'suite]) == "polybench"
+      keep_when str(r[#'runMethod]) == dp_treatment
+      str(r[#'benchmark])
+  def rows:
+    for List (b in names):
+      def base = cycles_of(b, "llvm-O3-O0")
+      def ours = cycles_of(b, dp_treatment)
+      def o0 = cycles_of(b, "llvm-O0-O0")
+      keep_when base != #false && ours != #false && o0 != #false
+      [b, (ours :~ Real) / (base :~ Real), (o0 :~ Real) / (base :~ Real),
+       cycles_of(b, ilp_treatment) == #false]
+  rows.sort(fun (a :~ List, b :~ List): (a[1] :~ Real) < (b[1] :~ Real))
+
+// How many of those benchmarks the solver-based extraction never finished on, which
+// is what the row of crosses along the top of the chart is counting.
+def perf_solver_timeouts :~ Int:
+  for values(n = 0) (row :~ List in perf_rows): if row[3] | n + 1 | n
+
+// ------------------------------------------------------------------- the CDF
+// Every region the comparison run extracted, once per extraction method: how long
+// that method took on it, or that it hit the wall. A *region* rather than a
+// benchmark, because that is the unit an extractor is called on.
+def cdf_timeout_secs = 300.0
+def comparison_samples :~ List:
+  List.append(
+    & for List (r :~ Map in profile):
+        keep_when str(r[#'runMethod]) == "eggcc-tiger-ILP-COMPARISON"
+        def ts = if r.has_key(#'extractRegionTimings) | r[#'extractRegionTimings] | #false
+        keep_when ts is_a PairList
+        for List (s :~ Map in (ts :~ PairList)): s)
+
+fun duration(s :~ Map, field):
+  def v = s[field]
+  if v is_a Map
+  | ((v :~ Map)[#'secs] :~ Real) + ((v :~ Map)[#'nanos] :~ Real) / 1000000000.0
+  | #false
+
+// [label, the times it finished in (sorted), how many it did not, how many regions]
+fun series(label :: String, time_field, timeout_field) :: List:
+  def total = comparison_samples.length()
+  def times:
+    for List (s :~ Map in comparison_samples):
+      skip_when timeout_field != #false && s[timeout_field] == #true
+      def t = duration(s, time_field)
+      keep_when t != #false
+      t
+  [label, times.sort(fun (a :~ Real, b :~ Real): a < b), total - times.length(), total]
+
+def cdf_series :~ List:
+  [series("Statewalk DP", #'extract_time_liveon_satelliteon, #false),
+   series("Gurobi", #'ilp_extract_time, #'ilp_timed_out),
+   series("CBC", #'cbc_ilp_extract_time, #'cbc_ilp_timed_out)]
