@@ -35,7 +35,7 @@ fun write_outline(str :: String,
 fun write_out(str :: String,
               ~font: font0 :: draw.Font = current_font(),
               ~color: color = "black",
-              ~oversample: os :: Int = 1,
+              ~oversample: os :: Real = 1,
               ~line_width: lw :: Real = 3.0,
               ~extent: ext_arg = #false,   // #false => auto-scale by length
               ~bend: bend = fun (x): x,
@@ -405,7 +405,8 @@ def DY8 = [0, 1, 1, 1, 0, -1, -1, -1]
 // event: the fill is the picture itself, clipped to what the marker has covered,
 // drawn over the traced line so that the line disappears under it exactly as the
 // marker reaches it. The edge is slanted, the way a chisel tip leaves it.
-fun ink_frame(tr :~ List, t :: Real, lw :: Real) :: Pict:
+fun ink_frame(tr :~ List, t :: Real, lw :: Real,
+              src :: Pict, os :: Real) :: Pict:
   def bm = tr[0]
   def w :~ Int = tr[1]
   def h :~ Int = tr[2]
@@ -457,24 +458,40 @@ fun ink_frame(tr :~ List, t :: Real, lw :: Real) :: Pict:
     | local >= 1.0: stroke(g[0], g[3])
     | local > 0.0: stroke(g[0], math.exact(math.floor(local * g[3])))
     | ~else: #void
-  // the marker, a stroke behind the nib and cut on the slant
+  // The marker, a stroke behind the nib and cut on the slant. It draws `src`
+  // itself, clipped -- not the raster the contours were found in. The raster is
+  // at whatever resolution the trace wanted and the slide is then scaled to the
+  // screen, so blitting it made the fill a shade softer than the real thing right
+  // up until the last frame, where the animation hands back `src` and it snapped
+  // crisp. Clipping the pict means every frame of the fill is already the pict.
   def behind = math.min(0.55 * h, 30.0 * (lw / 2.0))
   def slant = 0.22 * h
   def fx = nib - behind
-  when fx > -slant
-  | block:
-      target.save()
-      def r = draw.Region()
-      r.polygon([[-1.0, -1.0], [fx + slant, -1.0], [fx - slant, 1.0 * h + 1.0], [-1.0, 1.0 * h + 1.0]])
-      target.clipping_region := r
-      target.bitmap(bm, ~dx: -1.0 * ox, ~dy: -1.0 * oy)
-      target.restore()
-  bitmap(obm)
+  def strokes = bitmap(obm).scale(1.0 / os)
+  def pw = src.width
+  def ph = src.height
+  def mx = (fx + ox) / os
+  def ms = slant / os
+  def marker:
+    dc(fun (target :: draw.DC, dx, dy):
+         target.save()
+         def r = draw.Region()
+         r.polygon([[-1.0, -1.0], [mx + ms, -1.0], [mx - ms, ph + 1.0], [-1.0, ph + 1.0]],
+                   ~dx: dx, ~dy: dy)
+         target.clipping_region := r
+         src.draw(target, ~dx: dx, ~dy: dy)
+         target.restore(),
+       ~width: pw, ~height: ph)
+  (if fx > -slant
+   | overlay(~horiz: #'left, ~vert: #'top, marker.ghost(),
+             strokes.translate(1.0 * ox / os, 1.0 * oy / os), marker)
+   | overlay(~horiz: #'left, ~vert: #'top, marker.ghost(),
+             strokes.translate(1.0 * ox / os, 1.0 * oy / os)))
 
 // A pict written out: same bounds, one epoch, `p` itself at the end of it.
 fun write(p :: Pict,
           ~extent: ext :: maybe(Real) = #false,
-          ~oversample: os :: Int = 1,
+          ~oversample: os :: Real = 1,
           ~line_width: lw :: Real = 2.0,
           ~edginess: edginess :: Real = 0.10,
           ~bend: bend = fun (x): x) :: Pict:
@@ -500,8 +517,8 @@ fun write(p :: Pict,
                 def tr :~ List = traced()
                 (if tr[6]
                  | place(nothing, 0.0, 0.0)
-                 | place(ink_frame(tr, n, lw * os).scale(1.0 / os),
-                         (tr[4] :~ Int) / (1.0 * os), (tr[5] :~ Int) / (1.0 * os))))
+                 | place(ink_frame(tr, n, lw * os, p.snapshot(math.max(0, p.duration - 1), 1.0), os),
+                         0.0, 0.0)))
 
 // The settled picture of a pict: what it looks like once whatever it does is done.
 fun settled(p :: Pict) :: Pict:
