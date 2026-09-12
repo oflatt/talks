@@ -825,19 +825,53 @@ fun outline_to_header(items :: List.of(String),
                       outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
                                      ~canvas: canvas, ~color: color, ~label_width: lab_w,
                                      ~shots: shots, ~disc_prog: prog))
-    // Nothing: the list is simply there when the slide arrives. It used to fly down
-    // out of the header of the section just finished, and the marker used to walk
-    // from that section to this one -- but an animation is an epoch, and an epoch is
-    // a press, so that cost an advance to watch the list arrive before the advance
-    // that takes it away again. The pan onto the slide brings it in instead.
-    | full
+    | block:
+        // The header of the slide just left, exactly as `section_header` drew it,
+        // magic-moving back down into the list: the discs fly from their row into
+        // the column, the label of the section just finished grows back to its
+        // place, and the other labels and the spine fade in around them. It is
+        // built from its own settled discs and labels, so that the two layouts
+        // share the picts the move matches on.
+        def prev = math.max(0, at - 1)
+        def discs0 = for List (i in 0..n): outline_disc(i, n, (if i == prev | 1.0 | 0.0))
+        def labels0 = for List (i in 0..n):
+                        outline_label(written[i], written_lit[i], (if i == prev | 1.0 | 0.0))
+        def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas,
+                                  ~color: color)
+        def full0 = outline_layout(discs0, labels0, ~current: 1.0 * prev,
+                                   ~canvas: canvas, ~color: color, ~label_width: lab_w,
+                                   ~shots: shots)
+        def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
+        // the marker walking down from the section just finished to this one
+        def walk:
+          animate(~extent: 1.4,
+                  fun (p):
+                    if p >= 1.0
+                    | full
+                    | block:
+                        def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
+                        def ds = for List (i in 0..n):
+                                   outline_disc(i, n, clamp01(1.0 - absr(cur - i)))
+                        def ls = for List (i in 0..n):
+                                   outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
+                        outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
+                                       ~label_width: lab_w, ~shots: shots))
+        // `~join: #'splice` merges the descent's epoch with the walk's, so the marker
+        // sets off the moment the list lands and the two are one animation rather
+        // than two -- an epoch is a press, and this is one beat, not two.
+        switch(descent, walk, ~join: #'splice)
   // `magic_move`'s epoch 0 *is* the move and its epoch 1 is the settled result --
   // measured, not assumed -- so it is the tail that has to go, not the head.
   // `~other: #'fade` -- the picts the two layouts do *not* have in common are the
   // three labels the header drops, and `magic_move`'s default `#'switch` cuts them
   // out abruptly. Fading them lets them go with the discs they belong to.
   def up = magic_move(full, head, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
-  if intro | switch(opening, up) | up
+  // One press for the whole divider. `~join: #'splice` merges the opening's last
+  // epoch with the move up's first, into one epoch whose extent is the sum -- so
+  // the list flies down out of the header the section just finished with, the
+  // marker walks on to this one, and the move back up follows, all on the one
+  // advance. An epoch is a press; this is three animations and one beat.
+  switch(opening, up, ~join: #'splice)
 
 fun section_header(items :: List.of(String),
                    ~at: at :: Int,
