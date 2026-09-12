@@ -336,11 +336,14 @@ fun crop_pict(p :: pc.Pict, ~at: at :~ List, ~size: size :~ List) :: pc.Pict:
         ~width: w, ~height: h)
 
 // A slide with the deck's title at the deck's place, and nothing else yet.
-fun titled(title :: String) :: pc.Pict:
+// The title is placed inside this helper, so each call supplies the explicit
+// identity and correction that Glide writes at the outer source site.
+fun titled(title :: String, ~tag: tag :: String,
+           ~nudge: nudge :: maybe(List) = #false) :: pc.Pict:
   as_pict(slide_canvas(
             ~width: slide_width, ~height: slide_height,
             ~background: hex("FFFFFF"),
-            at(95.0, 85.0, ~tag: title,
+            at(95.0, 85.0, ~tag: tag, ~name: title, ~nudge: nudge,
                textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
                        ~insets: insets(4.0, 4.0, 4.0, 4.0),
                        para(~line_spacing: pair(#'percent, 0.8),
@@ -354,29 +357,36 @@ fun with_icon(canvas :: pc.Pict) :: pc.Pict:
                ~geom: preset_geom("roundRect", [pair("adj", "val 30640")]),
                ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 3.0))
   def [b1, b2, b3, b4, b5, b6, b7] = for List (i in 0..7): box()
-  fun bar(x, y, w):
-    at(x, y, ~tag: "Rectangle", shape_pict(~width: w, ~height: 5.15, ~fill: hex("929292")))
+  // Each bar answers to a name of its own. The tag comes from the call, where
+  // Glide can trace an editor correction back to this source location.
+  fun bar(x, y, w, ~tag: tag :: String, ~nudge: nudge = #false):
+    at(x, y, ~tag: tag, ~nudge: nudge,
+       shape_pict(~width: w, ~height: 5.15, ~fill: hex("929292")))
   def icon:
     group_pict(~width: 327.683, ~height: 182.827,
-               at(0.0, 62.869, ~tag: "Group (2)",
+               at(0.0, 62.869, ~name: "Group (2)",
                   group_pict(~width: 106.985, ~height: 66.994,
-                             at(0.0, 0.0, ~tag: "Rectangle",
+                             at(0.0, 0.0, ~name: "Rectangle",
                                 shape_pict(~width: 106.985, ~height: 66.994, ~fill: hex("FFFFFF"),
                                            ~line: make_stroke(hex("000000"), ~width: 1.0))),
-                             bar(4.646, 4.397, 60.549), bar(11.612, 11.976, 64.295),
-                             bar(11.612, 19.555, 79.846), bar(19.007, 27.133, 34.404),
-                             bar(11.612, 34.712, 49.795), bar(19.007, 42.29, 56.852),
-                             bar(11.612, 49.869, 47.325), bar(11.612, 57.447, 90.727))),
-               at(193.792, 0.0, ~tag: "Group (3)",
+                             bar(4.646, 4.397, 60.549, ~tag: "Bar 1"),
+                             bar(11.612, 11.976, 64.295, ~tag: "Bar 2"),
+                             bar(11.612, 19.555, 79.846, ~tag: "Bar 3"),
+                             bar(19.007, 27.133, 34.404, ~tag: "Bar 4"),
+                             bar(11.612, 34.712, 49.795, ~tag: "Bar 5"),
+                             bar(19.007, 42.29, 56.852, ~tag: "Bar 6"),
+                             bar(11.612, 49.869, 47.325, ~tag: "Bar 7"),
+                             bar(11.612, 57.447, 90.727, ~tag: "Bar 8"))),
+               at(193.792, 0.0, ~name: "Group (3)",
                   group_pict(~width: 133.891, ~height: 182.827,
-                             at(110.363, 159.299, ~tag: "Rounded Rectangle", b1),
-                             at(82.772, 107.433, ~tag: "Rounded Rectangle (2)", b2),
-                             at(55.182, 159.299, ~tag: "Rounded Rectangle (3)", b3),
-                             at(55.182, 53.717, ~tag: "Rounded Rectangle (4)", b4),
-                             at(32.239, 107.433, ~tag: "Rounded Rectangle (5)", b5),
-                             at(0.0, 159.299, ~tag: "Rounded Rectangle (6)", b6),
-                             at(55.182, 0.0, ~tag: "Rounded Rectangle (7)", b7))),
-               at(150.474, 85.484, ~tag: "Arrow",
+                             at(110.363, 159.299, ~name: "Rounded Rectangle", b1),
+                             at(82.772, 107.433, ~name: "Rounded Rectangle (2)", b2),
+                             at(55.182, 159.299, ~name: "Rounded Rectangle (3)", b3),
+                             at(55.182, 53.717, ~name: "Rounded Rectangle (4)", b4),
+                             at(32.239, 107.433, ~name: "Rounded Rectangle (5)", b5),
+                             at(0.0, 159.299, ~name: "Rounded Rectangle (6)", b6),
+                             at(55.182, 0.0, ~name: "Rounded Rectangle (7)", b7))),
+               at(150.474, 85.484, ~name: "Arrow",
                   shape_pict(~width: 37.732, ~height: 21.764,
                              ~geom: preset_geom("rightArrow",
                                                 [pair("adj1", "val 34890"), pair("adj2", "val 56320")]),

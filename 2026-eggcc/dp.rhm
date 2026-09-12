@@ -41,7 +41,8 @@ def walk_seed_line = "6E6E82"
 // writes meet has two, and the two are not the same, which is why the table cannot
 // keep just one of them -- and that is the whole slide.
 fun slide_dp():
-  def canvas = titled("The Statewalk DP Algorithm")
+  def canvas = titled("The Statewalk DP Algorithm", ~tag: "Statewalk DP title",
+                      ~nudge: [0.0, 0.0])
   def parts = code_parts()
   def rows :~ List = chain_statewalks()
 
