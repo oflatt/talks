@@ -449,7 +449,11 @@ fun slide_12():
   // The corner the band turns at is the sum's own middle, so at `u = 0` the curve is
   // the straight run the old region was and nothing has to be special-cased.
   def merged_neck = nd + 2 * eclass_pad
-  def merged_lobe = nd * 1.34
+  // the lobes are the neck's own width: a lobe wider than the tube it sits on reads
+  // as a bulge at each end rather than as one shape
+  def merged_lobe = merged_neck
+  // `u` is how far it has grown, and also how much of it there is: at 0 there is
+  // none, which is what the press that leaves the graph behind ends on.
   fun merged_layer(u :: Real) :: pc.Pict:
     def a0 = middle(#'minus)
     def corner = middle(#'plus_r)
@@ -488,7 +492,7 @@ fun slide_12():
               lobe([ax, ay], u)
               target.restore(),
             ~width: slide_width, ~height: slide_height)
-    flat.alpha(eclass_alpha, ~composite: #true)
+    flat.alpha(eclass_alpha * u, ~composite: #true)
   // how far grown each frame says it is, and the layer between two of them
   fun merged_marks(u :: Real) :: List: [[#'grow, u]]
   fun grow_of(f :: Frame) :: Real:
@@ -658,8 +662,17 @@ fun slide_12():
                      ++ rule_chips(#'rule1, ~side: #'rhs)
                      ++ rule_term(#'rule1) ++ rule_arrow(#'rule1),
            ~edges: es_term ++ rule_points(#'rule1, ~side: #'rhs)),
-     // and the term moves into the graph. The gold pointers go out on this press and
-     // the blue arrows come in on it: one press, one set of arrows.
+     // and the term moves into the graph, with the rule staying where it is. The
+     // gold pointers go out on this press and the blue arrows come in on it: one
+     // press, one set of arrows.
+     Frame(~picts: spots_of(keys_rewrite, [], ~gold: rule_matched(#'rule1))
+                     ++ rules_with(#'rule1) ++ flow_over
+                     ++ rule_chips(#'rule1, ~side: #'rhs)
+                     ++ rule_term(#'rule1, ~home: #true) ++ rule_arrow(#'rule1),
+           ~edges: es_term ++ rule_term_edges(#'rule1)),
+     // and then what the rule concluded: it goes back to the list and its `→` travels
+     // into the graph as the dashed line. A press of its own, because adding a term
+     // and saying two things are one value are two things.
      //
      // The chips go home with the rule rather than fading where they stood -- unlit,
      // at the places in the line they were cut from, which is where the rule's own
@@ -684,6 +697,12 @@ fun slide_12():
                      ++ rules_with(#'rule2) ++ flow_over ++ rule_chips(#'rule2)
                      ++ rule_term(#'rule2) ++ eq_of(#'rule1) ++ rule_arrow(#'rule2),
            ~edges: es_term ++ es_rewrite ++ rule_points(#'rule2)),
+     // the same two: the node goes in, and then the rule concludes
+     Frame(~picts: spots_of(keys_all, [], ~gold: rule_matched(#'rule2))
+                     ++ rules_with(#'rule2) ++ flow_over ++ rule_chips(#'rule2)
+                     ++ rule_term(#'rule2, ~home: #true)
+                     ++ eq_of(#'rule1) ++ rule_arrow(#'rule2),
+           ~edges: es_graph),
      Frame(~picts: spots_of(keys_all, [], ~gold: rule_matched(#'rule2))
                      ++ rules_over ++ flow_over
                      ++ rule_chips(#'rule2, ~staged: #false, ~lit: #false)
@@ -735,11 +754,12 @@ fun slide_12():
                         | { #'point: [pointer, & point_at(point)] })
                     ++ (if merged | merged_under | classes_under)
                     // Every equality on the slide is the dashed line one rule's `→`
-                    // turned into. Once the two classes merge, the first rule's line
-                    // is the one the merged region is drawn along, and the third
-                    // rule's `→` becomes that line -- so the first rule's own goes.
-                    ++ eq_of(#'rule2)
-                    ++ (if merged | eq_of(#'rule3) | eq_of(#'rule1))
+                    // turned into, and none of them stops being true. The third rule
+                    // adds one to the class; it does not replace the one the first
+                    // rule put there, which is still what says `−` and the sum are
+                    // the same value.
+                    ++ eq_of(#'rule1) ++ eq_of(#'rule2)
+                    ++ (if merged | eq_of(#'rule3) | {})
                     ++ rules_over ++ flow_over
                     ++ third_picts()
                     ++ (if task | task_over | {}),
