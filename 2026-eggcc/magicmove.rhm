@@ -189,10 +189,19 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
   def both_es: for List (e in a.edges): keep_when b.edges.contains(e); e
   def gone_es: for List (e in a.edges): skip_when b.edges.contains(e); e
   def new_es: for List (e in b.edges): skip_when a.edges.contains(e); e
+  // An edge this press is bringing on is *drawn*, not faded: `current_draw` says
+  // how much of it there is yet, and whatever the wire draws lines with reads it.
+  // The alpha still ramps, quickly, because a wire may draw more than lines and
+  // what does not honour the parameter has to arrive somehow.
   fun layers_of(draw_them :: Function.of_arity(3)) :: List:
-    for List ([specs, al] in [[both_es, 1.0], [gone_es, 1.0 - t], [new_es, t]]):
+    for List ([specs, al, drawn] in [[both_es, 1.0, 1.0],
+                                     [gone_es, 1.0 - t, 1.0],
+                                     [new_es, (if write.write_by_default()
+                                               | math.min(1.0, 3.0 * t)
+                                               | t), t]]):
       keep_when specs != [] && al > 0.0
-      draw_them(ghosts, specs, at).alpha(al)
+      parameterize { write.current_draw: (if write.write_by_default() | drawn | 1.0) }:
+        draw_them(ghosts, specs, at).alpha(al)
   def edge_layers = layers_of(wire)
   def under_layers = if under_wire | layers_of(under_wire) | []
   def stage_layer = if stage | stage(blank, a, b, t) | #false

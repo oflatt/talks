@@ -4,6 +4,7 @@ import:
   draw
 
 export:
+  current_draw
   write_by_default
   set_write_default
   write_out
@@ -230,6 +231,13 @@ fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
 // the thing that has to be asked for; off, and every helper falls back to the fade
 // it had before, which is what the title slide wants and what makes it possible to
 // see what the writing is costing.
+// How much of a line to draw. An arrow is not rasterised and traced -- its
+// geometry is known, so the honest thing is to draw the first `n` of it, with the
+// head at the nib. `magic_between` binds this for the layer of edges a press is
+// bringing on, and whatever draws a line reads it; anything that does not still
+// fades in, so honouring it is an improvement rather than a requirement.
+Parameter.def current_draw :: Real: 1.0
+
 def _write_default = Array(#true)
 fun write_by_default(): _write_default[0]
 fun set_write_default(on :: Boolean): _write_default[0] := on
@@ -470,7 +478,12 @@ fun write(p :: Pict,
     when !cell[0]
     | cell[0] := trace_ink(p, os, edginess)
     cell[0]
-  def extent = ext || math.max(0.7, math.min(2.4, p.width / 340.0))
+  // A fade is `animate`'s own 0.5; writing is a longer gesture than that but it
+  // must not be one the room waits through. The pen's speed then varies with how
+  // much there is to write, which is the honest cost of not knowing the ink until
+  // the trace runs -- and the trace is deliberately not run until something asks
+  // to be drawn. A caller that cares passes `~extent`.
+  def extent = ext || 1.0
   fun place(q :: Pict, dx :: Real, dy :: Real) :: Pict:
     overlay(~horiz: #'left, ~vert: #'top, ~dx: dx, ~dy: dy, p.ghost(), q.launder())
       .refocus(p)

@@ -571,17 +571,30 @@ fun arrow(~on: on :: Pict,
       // unit normal to the segment, for `~shift`
       def px = -uy * shift
       def py = ux * shift
+      // How much of the line to draw. Both ends are a fixed offset from a node's
+      // centre, so the far end can be said relative to the *near* node instead,
+      // and a fraction of the way along is then just a shorter offset. The head
+      // travels with the nib, which is what drawing an arrow looks like.
+      def drawn = clamp01(write.current_draw())
+      def sx = dx * tf + ux * gap + px
+      def sy = dy * tf + uy * gap + py
+      def ex = dx * (1.0 - tt) - ux * gap + px
+      def ey = dy * (1.0 - tt) - uy * gap + py
       connect(~on: on,
-              from_at || Find.center(from, ~dx: dx * tf + ux * gap + px,
-                                     ~dy: dy * tf + uy * gap + py),
-              to_at || Find.center(to, ~dx: -(dx * tt + ux * gap) + px,
-                                   ~dy: -(dy * tt + uy * gap) + py),
+              from_at || Find.center(from, ~dx: sx, ~dy: sy),
+              (cond
+               | drawn >= 1.0:
+                   to_at || Find.center(to, ~dx: -(dx * tt + ux * gap) + px,
+                                        ~dy: -(dy * tt + uy * gap) + py)
+               | ~else:
+                   Find.center(from, ~dx: lerp(sx, ex, drawn),
+                               ~dy: lerp(sy, ey, drawn))),
               ~style: style,
               ~line: as_color(color),
               ~line_width: lw,
               ~arrow_size: arrow_size || 4 * lw,
               ~line_style: line_style,
-              ~label: label,
+              ~label: (if drawn >= 1.0 | label | #false),
               ~label_dx: label_dx,
               ~label_dy: label_dy,
               ~order: order)
