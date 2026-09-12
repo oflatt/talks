@@ -36,7 +36,7 @@ export:
 // room, the parentheses and the ωs fade in around them, the first bubble goes
 // and one naming the state value arrives.
 fun slide_update():
-  def canvas = titled("Update")
+  def canvas = titled("Update", ~tag: "Update title", ~nudge: [0.0, 0.0])
   def parts = code_parts()
   def plain = put(canvas, code_pict(parts, ~states: #false), code_x, code_y)
   def with_states = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
@@ -79,7 +79,8 @@ fun slide_update():
 // code line it comes from highlighted as it lands. Cross-fades between finished
 // pictures, since the highlight moves and a reveal could only add.
 fun slide_egraph():
-  def canvas = with_icon(titled("The Effectful E-Graph"))
+  def canvas = with_icon(titled("The Effectful E-Graph", ~tag: "Effectful E-Graph title",
+                                ~nudge: [0.0, 0.0]))
   def parts = code_parts()
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
 
@@ -167,7 +168,8 @@ fun slide_egraph():
 fun slide_rue():
   // The page under the graph, drawn once and never animated: the title, the icon
   // and the code.
-  def canvas = with_icon(titled("Dead Store Elimination"))
+  def canvas = with_icon(titled("Dead Store Elimination", ~tag: "Dead Store Elimination title",
+                                ~nudge: [0.0, 0.0]))
   def parts = code_parts()
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   def rule_over = chain_rule_over(parts, ~value: #true)
@@ -241,7 +243,8 @@ fun slide_rue():
 // as the slide before it except the rule, so the two can be read against each
 // other.
 fun slide_fork():
-  def canvas = titled("Extraction Goes Wrong")
+  def canvas = titled("Extraction Goes Wrong", ~tag: "Extraction failure title",
+                      ~nudge: [0.0, 0.0])
   def parts = code_parts()
   def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
   def rule_over = chain_rule_over(parts, ~value: #true)

@@ -21,9 +21,9 @@
 //   results.rhm    the plots
 //   workflow.rhm   the compiler workflow, before effects and after
 //
-// Every slide that Keynote generated still carries its `at(x, y, ~tag: ...)`
-// positions, so `raco glide` can open the file the slide lives in and write back
-// what is dragged.
+// Every slide that Keynote generated still carries its `at(x, y, ~name: ...)`
+// positions. Glide derives opaque editor identities from those call sites while
+// keeping the old Keynote labels readable in the editor.
 
 import:
   lib("glide-pptx/runtime.rhm") open
@@ -61,7 +61,10 @@ export:
   slide_38
   slide_39
 
-def all_slides:
+// The macro keeps this as an ordinary list for the show and snapshot script,
+// while recording the undecorated source slide behind each section wrapper for
+// Glide. It rejects an entry whose source owner is ambiguous at compile time.
+glide_slides all_slides:
   [slide_1,
    // 1 -- why effects belong in an e-graph at all
    divider(0, ~shots: section_shots),

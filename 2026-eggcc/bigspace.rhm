@@ -83,7 +83,7 @@ fun slide_12():
   // the press that leaves that picture puts the term and the rules where this slide
   // draws them, and a title set even slightly differently is the one thing on the
   // slide that would move.
-  def base_canvas = titled(flow_title)
+  def base_canvas = titled(flow_title, ~tag: "Big space title", ~nudge: [0.0, 0.0])
 
   // The rules, each under a key of its own rather than all three in one picture:
   // a rule that comes over to what it matched is that key drawn somewhere else, and
