@@ -633,21 +633,10 @@ fun slide_12():
            ~edges: es_graph)]
 
   // The third rule concludes nothing new: its right-hand side is one variable, so
-  // the press that moves to it has only `α` to move, and a rule that adds no node
-  // has nothing to fly out either. What it does is make two nodes equal, and neither
-  // of those movements says so. So the `+` the left-hand side is rooted at stays
-  // where it is, still lit and still pointing at the `+` it matched, while `α` goes
-  // over to the other side of the arrow: two nodes pointed at from one rule, which
-  // is what a union looks like before it happens.
-  def union_root = [#'plus_r]
-  fun union_chip(matching) :: Map:
-    if matching == #'rhs
-    | rule_chips(#'rule3, ~side: #'lhs, ~only: union_root)
-    | {}
-  fun union_point(matching) :: List:
-    if matching == #'rhs
-    | rule_points(#'rule3, ~side: #'lhs, ~only: union_root)
-    | []
+  // the press that moves to it has nothing to move and a rule that adds no node has
+  // nothing to fly out. What it does is make two nodes equal, and the press that
+  // matches it says that already: its variables point at the sum and at the `a`, and
+  // the `→` between them is the thing that becomes the line joining the two.
 
   // Then what extraction does with it: the classes drawn, the job named, and the
   // walk down the rows.
@@ -671,10 +660,13 @@ fun slide_12():
           rule_over(#'rule3, ~staged: #true)
             ++ (if matching == #false
                 | {}
-                | rule_chips(#'rule3, ~side: matching) ++ union_chip(matching))
-            ++ (if term == #'inline
-                | rule_term(#'rule3)
-                | rule_arrow(#'rule3))
+                | rule_chips(#'rule3, ~side: matching))
+            // The `→` stays up alongside the term, the way it does for the other
+            // two rules. It is keyed by the equality it becomes, so a press that
+            // takes it away is a press the equality has to fade in on instead of
+            // being moved into place -- which is what went wrong here.
+            ++ rule_arrow(#'rule3)
+            ++ (if term == #'inline | rule_term(#'rule3) | {})
     Frame(~picts: spots_of(keys_all, picks,
                            ~gold: (if matching == #false && term == #false
                                    | []
@@ -695,8 +687,7 @@ fun slide_12():
           ~edges: es_graph
                     ++ (if matching == #false
                         | []
-                        | rule_points(#'rule3, ~side: matching)
-                            ++ union_point(matching))
+                        | rule_points(#'rule3, ~side: matching))
                     ++ (if term == #'inline || term == #'home
                         | rule_term_edges(#'rule3)
                         | []))
@@ -759,14 +750,13 @@ fun slide_12():
           walking(~picks: reached, ~third: #true),
           // it comes over, and then matches, the same as the other two
           frame(~picks: reached, ~third: #true, ~term: #'over),
+          // Its variables point at what they matched, which for this rule is the
+          // whole of the story: the sum and the `a` are both pointed at, and what it
+          // concludes is that those two are one class.
           frame(~picks: reached, ~third: #true, ~matching: #'lhs),
-          // its right-hand side is one variable, so the term it stands for is one
-          // node: what the sum matched *is* what that variable matched, and that is
-          // the whole of what this rule adds
-          frame(~picks: reached, ~third: #true, ~matching: #'lhs, ~term: #'inline),
-          // and it fires: the node goes home onto the `a` it matched, the `→`
-          // becomes the dashed line down the middle of the class, and the two
-          // regions are one
+          // and it fires. This rule adds no operator, so there is no term to send
+          // home -- all that happens is that the `→` becomes the dashed line down
+          // the middle of the class, and the two regions are one.
           frame(~third: #true, ~merged: #true, ~term: #'home),
           // the same walk again, down the same rows
           walking(~third: #true, ~merged: #true, ~point: row_in),
