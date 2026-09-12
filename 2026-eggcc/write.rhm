@@ -4,8 +4,14 @@ import:
   draw
 
 export:
+  write_by_default
+  set_write_default
   write_out
   write_outline
+  write
+  write_in_turn
+  as_written
+  settled
 
 // `write_out`'s glyph outlines, drawn once and left unfilled.
 fun write_outline(str :: String,
@@ -28,7 +34,7 @@ fun write_outline(str :: String,
 fun write_out(str :: String,
               ~font: font0 :: draw.Font = current_font(),
               ~color: color = "black",
-              ~oversample: os :: Int = 2,
+              ~oversample: os :: Int = 1,
               ~line_width: lw :: Real = 3.0,
               ~extent: ext_arg = #false,   // #false => auto-scale by length
               ~bend: bend = fun (x): x,
@@ -191,3 +197,325 @@ fun write_out(str :: String,
     def letters = for List (i in 0..str.length()): t(str.substring(i, i+1), ~font: font0)
     values(anim, letters)
   | anim
+
+// ---------------------------------------------------------------------------
+// `write(p)` -- any pict, written out.
+//
+// `write_out` above traces a *string*, from the glyph outlines the font hands
+// over. Everything else on a slide -- a box, a node, an arrow, a converted text
+// box, a bubble with words in it -- has no outline to ask for, so its ink is
+// rasterised and the contours are found in the pixels.
+//
+// Colour is what makes that work on a composite. A pale bubble with blue around
+// it and black words inside it is one region of alpha, whose only boundary is the
+// outside of the bubble: trace that and the words appear from nowhere. Traced per
+// *colour* it is three regions, and the pen draws the blue and the black while the
+// pale washes in behind them. So the ink is split into the few colours it is
+// actually made of, and a region is traced if it is nearly all edge (a letter, a
+// rule, a border) and merely washed in if it is a blob (a fill).
+//
+// The result is a pict with `p`'s own bounds -- `overlay(p.ghost(), ...)`,
+// `refocus(p)`, which is how the pict paper turns a still into a moving version of
+// itself -- so it stands wherever `p` stood and nothing around it moves. It is one
+// epoch, so it costs no press that `p` did not already cost: writing changes an
+// epoch's extent, never a pict's duration.
+//
+// The trace is expensive and is done once, on the first frame that needs it: a
+// pict that is built and never drawn never pays for it, and a pict drawn over the
+// 20-odd frames of a press pays once.
+
+fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
+
+// Whether the deck draws what it shows or simply shows it. On, so that a still is
+// the thing that has to be asked for; off, and every helper falls back to the fade
+// it had before, which is what the title slide wants and what makes it possible to
+// see what the writing is costing.
+def _write_default = Array(#true)
+fun write_by_default(): _write_default[0]
+fun set_write_default(on :: Boolean): _write_default[0] := on
+
+// A traced region of one colour: its contours, and the colour to draw them in.
+fun trace_ink(p0 :: Pict, os :: Int, edginess :: Real):
+  def p = p0.snapshot(math.max(0, p0.duration - 1), 1.0)
+  def w = math.max(1, math.exact(math.ceiling(p.width * os)))
+  def h = math.max(1, math.exact(math.ceiling(p.height * os)))
+  def bm = draw.Bitmap([w, h])
+  block:
+    def bdc = bm.make_dc()
+    bdc.scale(1.0 * os, 1.0 * os)
+    p.draw(bdc, ~dx: 0, ~dy: 0)
+  def src = bm.argb_pixels()
+  fun inked(x, y): x >= 0 && x < w && y >= 0 && y < h && src[(y*w + x)*4] > 128
+  // Where the ink actually is. A stage of a slide is a slide-sized pict with one
+  // bubble on it, and tracing -- and then redrawing, twenty times a press -- the
+  // whole page to find that bubble is most of the work for none of the picture.
+  // Everything below runs on the ink's own rectangle.
+  def bounds:
+    recur rows(y = 0, x0 = w, y0 = h, x1 = -1, y1 = -1):
+      cond
+      | y >= h: [x0, y0, x1, y1]
+      | ~else:
+          def (rx0, rx1):
+            recur cols(x = 0, a = w, b = -1):
+              (if x >= w
+               | values(a, b)
+               | (if inked(x, y)
+                  | cols(x + 1, math.min(a, x), x)
+                  | cols(x + 1, a, b)))
+          (if rx1 < 0
+           | rows(y + 1, x0, y0, x1, y1)
+           | rows(y + 1, math.min(x0, rx0), math.min(y0, y), math.max(x1, rx1), y))
+  def bx0 = math.max(0, bounds[0])
+  def by0 = math.max(0, bounds[1])
+  def cw = math.max(1, bounds[2] - bx0 + 1)
+  def ch = math.max(1, bounds[3] - by0 + 1)
+  def blank_ink = bounds[2] < 0
+  // the few colours the ink is made of, by how much of it they are
+  def hist = MutableMap{}
+  for (y in by0..by0 + ch):
+    for (x in bx0..bx0 + cw):
+      when inked(x, y)
+      | def i = (y*w + x)*4
+        def k = [src[i+1] div 48, src[i+2] div 48, src[i+3] div 48]
+        hist[k] := hist.get(k, 0) + 1
+  def top:
+    def ks = hist.keys().sort(fun (a, b): hist[a] > hist[b])
+    ks.sublist(0, math.min(4, ks.length()))
+  fun clamp8(v :: Int) :: Int: math.min(255, v)
+  def centers:
+    for List (k in top): [clamp8(k[0]*48 + 24), clamp8(k[1]*48 + 24), clamp8(k[2]*48 + 24)]
+  def K = math.max(1, centers.length())
+  // Which colour each pixel belongs to, worked out once. Asking per pixel per
+  // region, which is what reads naturally, is four regions times five neighbour
+  // tests times a nearest-colour search for every pixel of the picture -- it made
+  // one bubble cost a second and a half.
+  def lbl = Array.make(cw * ch, -1)
+  def areas = Array.make(K, 0)
+  fun idx(x, y): (y - by0) * cw + (x - bx0)
+  for (y in by0..by0 + ch):
+    for (x in bx0..bx0 + cw):
+      when inked(x, y)
+      | def i = (y*w + x)*4
+        def r = src[i+1]
+        def g = src[i+2]
+        def b = src[i+3]
+        def k:
+          recur go(j = 0, best = 0, bd = 100000000):
+            if j >= K
+            | best
+            | block:
+                def c = centers[j]
+                def d = (r - c[0])*(r - c[0]) + (g - c[1])*(g - c[1]) + (b - c[2])*(b - c[2])
+                (if d < bd | go(j + 1, j, d) | go(j + 1, best, bd))
+        lbl[idx(x, y)] := k
+        areas[k] := areas[k] + 1
+  fun at_k(x, y):
+    (if x >= bx0 && x < bx0 + cw && y >= by0 && y < by0 + ch | lbl[idx(x, y)] | -1)
+  fun edge_k(k, x, y):
+    at_k(x, y) == k && !(at_k(x-1, y) == k && at_k(x+1, y) == k
+                           && at_k(x, y-1) == k && at_k(x, y+1) == k)
+  def seen = Array.make(cw * ch, 0)
+  fun trace1(k, sx, sy):
+    recur loop(cx = sx, cy = sy, from_dir = 4, acc = [[sx, sy]], steps = 0):
+      if steps > 4 * w * h
+      | acc
+      | recur find(j = 0):
+          if j > 7
+          | acc
+          | block:
+              def d = (from_dir + 1 + j) mod 8
+              def nx = cx + DX8[d]
+              def ny = cy + DY8[d]
+              if at_k(nx, ny) == k
+              | (if nx == sx && ny == sy && steps > 1
+                 | acc
+                 | block:
+                     seen[idx(nx, ny)] := 1
+                     // `acc ++ [pt]` copies the whole contour for every pixel of
+                     // it, which is most of what tracing used to cost; consing
+                     // leaves it in the order the pen wants anyway
+                     loop(nx, ny, (d + 4) mod 8, List.cons([nx, ny], acc), steps + 1))
+              | find(j + 1)
+  fun contours_of(k):
+    for values(acc :~ List = []) (y in by0..by0 + ch):
+      for values(acc2 :~ List = acc) (x in bx0..bx0 + cw):
+        (if edge_k(k, x, y) && seen[idx(x, y)] == 0
+         | block:
+             seen[idx(x, y)] := 1
+             acc2 ++ [trace1(k, x, y)]
+         | acc2)
+  // Contour points are pixel-adjacent, so most of them say nothing a straight
+  // line between their neighbours does not. Thinning them is invisible and the
+  // path is what a frame spends its time building.
+  def thin_by = math.max(1, os)
+  fun thin(c :~ List) :: List:
+    (if thin_by == 1
+     | c
+     | block:
+         def n = c.length()
+         (for List (i in 0..n): keep_when i mod thin_by == 0 || i == n - 1; c[i]))
+  fun minx(c :~ List): for values(m = 1.0 * w) (pt in c): math.min(m, 1.0 * pt[0])
+  fun maxx(c :~ List): for values(m = 0.0) (pt in c): math.max(m, 1.0 * pt[0])
+  // A region the pen traces, or one it just washes in: a letter or a border is
+  // nearly all edge, the fill of a box is a blob with a short edge for its area.
+  def strokes:
+    List.append(
+      & for List (k in 0..K):
+          def cs = contours_of(k)
+          def per = for values(n = 0) (c :~ List in cs): n + c.length()
+          def ar = math.max(1, areas[k])
+          (if 1.0 * per / ar < edginess
+           | []
+           | for List (c :~ List in cs): [thin(c), centers[k], minx(c), maxx(c)]))
+  def sorted = strokes.sort(fun (a, b): a[2] < b[2])
+  def groups:
+    recur go(cs :~ List = sorted, cur :~ List = [], cmax = -1.0, acc :~ List = []):
+      cond
+      | cs.length() == 0: (if cur.length() == 0 | acc | acc ++ [cur])
+      | cur.length() == 0 || (cs[0] :~ List)[2] <= cmax:
+          go(cs.sublist(1, cs.length()), cur ++ [cs[0]],
+             math.max(cmax, (cs[0] :~ List)[3]), acc)
+      | ~else:
+          go(cs.sublist(1, cs.length()), [cs[0]], (cs[0] :~ List)[3], acc ++ [cur])
+  def packed:
+    for List (g :~ List in groups):
+      def gmin = for values(m = 1.0 * w) (s :~ List in g): math.min(m, s[2])
+      def gmax = for values(m = 0.0) (s :~ List in g): math.max(m, s[3])
+      def gn = math.max(1, for values(n = 0) (s :~ List in g): n + (s[0] :~ List).length())
+      [g, gmin, gmax, gn]
+  [bm, cw, ch, packed, bx0, by0, blank_ink]
+
+def DX8 = [1, 1, 0, -1, -1, -1, 0, 1]
+def DY8 = [0, 1, 1, 1, 0, -1, -1, -1]
+
+// One frame of a traced pict: the pen tracing the outlines left to right, and the
+// ink filling in just behind it, as if a marker followed the nib a stroke back.
+//
+// The fill is not a phase of its own -- a thing traced and *then* filled reads as
+// two events, and the outline has to be faded out from under the fill so the
+// finished ink is not a weight heavier than it should be. Following the pen is one
+// event: the fill is the picture itself, clipped to what the marker has covered,
+// drawn over the traced line so that the line disappears under it exactly as the
+// marker reaches it. The edge is slanted, the way a chisel tip leaves it.
+fun ink_frame(tr :~ List, t :: Real, lw :: Real) :: Pict:
+  def bm = tr[0]
+  def w :~ Int = tr[1]
+  def h :~ Int = tr[2]
+  def groups :~ List = tr[3]
+  def ox :~ Int = tr[4]
+  def oy :~ Int = tr[5]
+  def G = math.max(1, groups.length())
+  def lag = math.min(4.0 / (G + 1.0), 0.2)
+  def tt = (G - 1) * lag + 1.0
+  def dur = 1.0 / tt
+  def obm = draw.Bitmap([w, h])
+  def target = obm.make_dc()
+  fun stroke(conts :~ List, budget :: Int):
+    recur go(cs :~ List = conts, left = budget):
+      when cs.length() > 0 && left > 0
+      | block:
+          def c :~ List = cs[0][0]
+          def col :~ List = cs[0][1]
+          def take = math.min(left, c.length())
+          when take >= 2
+          | block:
+              target.brush := draw.Brush.none
+              target.pen := draw.Pen(~color: draw.Color(col[0], col[1], col[2]), ~width: lw)
+              def pth = draw.Path()
+              pth.move_to([1.0 * (c[0][0] - ox), 1.0 * (c[0][1] - oy)])
+              for (i in 1..take):
+                pth.line_to([1.0 * (c[i][0] - ox), 1.0 * (c[i][1] - oy)])
+              target.path(pth)
+          go(cs.sublist(1, cs.length()), left - take)
+  // the pen: every group traces over its own slice of the epoch, and several are
+  // in flight at once, so the nib is wherever the rightmost of them has got to
+  def nib:
+    for values(x = 0.0) (gi in 0..G):
+      def g :~ List = groups[gi]
+      def local = (t - gi * lag / tt) / dur
+      cond
+      | local <= 0.0: x
+      | local >= 1.0: math.max(x, 1.0 * g[2] - ox)
+      | ~else: math.max(x, lerp(1.0 * g[1] - ox, 1.0 * g[2] - ox, local))
+  for (gi in 0..G):
+    def g :~ List = groups[gi]
+    def local = (t - gi * lag / tt) / dur
+    cond
+    | local >= 1.0: stroke(g[0], g[3])
+    | local > 0.0: stroke(g[0], math.exact(math.floor(local * g[3])))
+    | ~else: #void
+  // the marker, a stroke behind the nib and cut on the slant
+  def behind = math.min(0.55 * h, 30.0 * (lw / 2.0))
+  def slant = 0.22 * h
+  def fx = nib - behind
+  when fx > -slant
+  | block:
+      target.save()
+      def r = draw.Region()
+      r.polygon([[-1.0, -1.0], [fx + slant, -1.0], [fx - slant, 1.0 * h + 1.0], [-1.0, 1.0 * h + 1.0]])
+      target.clipping_region := r
+      target.bitmap(bm, ~dx: -1.0 * ox, ~dy: -1.0 * oy)
+      target.restore()
+  bitmap(obm)
+
+// A pict written out: same bounds, one epoch, `p` itself at the end of it.
+fun write(p :: Pict,
+          ~extent: ext :: maybe(Real) = #false,
+          ~oversample: os :: Int = 1,
+          ~line_width: lw :: Real = 2.0,
+          ~edginess: edginess :: Real = 0.10,
+          ~bend: bend = fun (x): x) :: Pict:
+  def cell = Array(#false)
+  fun traced():
+    when !cell[0]
+    | cell[0] := trace_ink(p, os, edginess)
+    cell[0]
+  def extent = ext || math.max(0.7, math.min(2.4, p.width / 340.0))
+  fun place(q :: Pict, dx :: Real, dy :: Real) :: Pict:
+    overlay(~horiz: #'left, ~vert: #'top, ~dx: dx, ~dy: dy, p.ghost(), q.launder())
+      .refocus(p)
+  animate(~extent: extent, ~bend: bend,
+          fun (n):
+            cond
+            | n >= 1.0: place(p, 0.0, 0.0)
+            | ~else:
+                def tr :~ List = traced()
+                (if tr[6]
+                 | place(nothing, 0.0, 0.0)
+                 | place(ink_frame(tr, n, lw * os).scale(1.0 / os),
+                         (tr[4] :~ Int) / (1.0 * os), (tr[5] :~ Int) / (1.0 * os))))
+
+// The settled picture of a pict: what it looks like once whatever it does is done.
+fun settled(p :: Pict) :: Pict:
+  p.snapshot(math.max(0, p.duration - 1), 1.0)
+
+// `p`, written -- unless it already animates, in which case that *is* how it
+// arrives and writing it again would throw its own animation away. This is what
+// lets an animated pict be handed to a helper as a child: the helper asks for it
+// written and gets back what the caller built.
+fun as_written(p :: Pict, ~& kws) :: Pict:
+  if p.duration > 1 || p.epoch_extent(0) > 0
+  | p
+  | write(p, ~& kws)
+
+// Layers, each written in turn and then staying put, all in one epoch: a bubble's
+// outline, and then the words inside it. `switch(~join: #'splice)` is what makes it
+// one epoch -- the extents add up, the durations do not -- so a thing that writes
+// itself in three goes still costs the one press it costs today.
+fun write_in_turn(ps :: List,
+                  ~horiz: horiz :: HorizAlignment = #'center,
+                  ~vert: vert :: VertAlignment = #'center,
+                  ~& kws) :: Pict:
+  def n = ps.length()
+  cond
+  | n == 0: nothing
+  | ~else:
+      switch(& for List (i in 0..n):
+                 overlay(~horiz: horiz, ~vert: vert,
+                         & for List (j in 0..n):
+                             def q :: Pict = ps[j]
+                             cond
+                             | j < i: settled(q)
+                             | j == i: as_written(q, ~& kws)
+                             | ~else: q.ghost()),
+             ~join: #'splice)

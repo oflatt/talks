@@ -2,6 +2,7 @@
 import:
   pict as pc
   draw
+  "write.rhm"
 
 export:
   Frame
@@ -72,6 +73,19 @@ def band_nodes = 0
 def band_above = 1
 
 fun lerp(a :: Real, b :: Real, t :: Real) :: Real: a + (b - a) * t
+
+// A pict that animates -- one that writes itself out, say -- at a moment of its
+// own animation. Everything a press does to a pict other than bring it on is done
+// to the *settled* picture: a node on its way across the slide is a node that has
+// finished being drawn, and redrawing it while it travels is two animations at
+// once. Only a key the second frame has and the first does not is sampled as the
+// press runs, so a new thing writes itself on the press that brings it.
+fun moving(p :: pc.Pict) :: Boolean:
+  p.duration > 1 || p.epoch_extent(0) > 0
+fun settled(p :: pc.Pict) :: pc.Pict:
+  if moving(p) | p.snapshot(math.max(0, p.duration - 1), 1.0) | p
+fun sampled(p :: pc.Pict, n :: Real) :: pc.Pict:
+  if moving(p) | p.snapshot(0, n) | p
 fun as_pict(q) :: pc.Pict: if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 fun grab(m :~ Map, key): if m.has_key(key) | m[key] | #false
 fun put(base :: pc.Pict, p, x :: Real, y :: Real) :: pc.Pict:
@@ -104,12 +118,17 @@ fun picts_between(a :: Frame, b :: Frame, t :: Real) :: Map:
     def near = if t < 0.5 | a | b
     def far = if t < 0.5 | b | a
     def ea :~ List = grab(near.picts, key) || grab(far.picts, key)
-    m ++ { key: ea[0] }
+    m ++ { key: settled(as_pict(ea[0])) }
 
-// Everything to draw, as [band, pict, x, y, alpha]. A key drawn differently by the
-// two frames yields two of these at one place, the arriving drawing over the
+// Everything to draw, as [band, pict, x, y, alpha, n]. A key drawn differently by
+// the two frames yields two of these at one place, the arriving drawing over the
 // leaving one, which reads as the one turning into the other.
-fun draws_between(a :: Frame, b :: Frame, t :: Real) :: List:
+//
+// `n` is where to sample a pict that animates: `#false` for the settled picture,
+// and `t` for a key this frame is bringing on, so that a pict which writes itself
+// out does so over the press that introduces it. A pict that does not animate is
+// unaffected either way, and still fades in on its alpha.
+fun draws_between(a :: Frame, b :: Frame, t :: Real, appear :~ Map) :: List:
   def spots :~ Map = spots_between(a, b, t)
   List.append(
     & for List (key in keys_of(a, b)):
@@ -117,11 +136,20 @@ fun draws_between(a :: Frame, b :: Frame, t :: Real) :: List:
         def eb :~ List = grab(b.picts, key) || []
         def [x, y] = spots[key]
         cond
-        | ea == []: [[entry_band(eb), eb[0], x, y, t]]
-        | eb == []: [[entry_band(ea), ea[0], x, y, 1.0 - t]]
-        | ea[0] === eb[0]: [[entry_band(ea), ea[0], x, y, 1.0]]
-        | ~else: [[entry_band(ea), ea[0], x, y, 1.0 - t],
-                  [entry_band(eb), eb[0], x, y, t]])
+        | ea == []:
+            // How it arrives. `appear` holds the written version if this press
+            // prepared one; a pict that animates is its own arrival and is played
+            // rather than faded, which is what `pict`'s own `magic_move` does with
+            // a child it is introducing (`child.snapshot(0, n)`, there) -- the
+            // difference being that `magic_move` gives that child an epoch of its
+            // own afterwards and a press here has only itself.
+            def arriving = grab(appear, key) || eb[0]
+            [[entry_band(eb), arriving, x, y,
+              (if moving(as_pict(arriving)) | 1.0 | t), t]]
+        | eb == []: [[entry_band(ea), ea[0], x, y, 1.0 - t, #false]]
+        | ea[0] === eb[0]: [[entry_band(ea), ea[0], x, y, 1.0, #false]]
+        | ~else: [[entry_band(ea), ea[0], x, y, 1.0 - t, #false],
+                  [entry_band(eb), eb[0], x, y, t, #false]])
 
 // The moment `t` of the way from `a` to `b`, over a `base` no press touches.
 fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
@@ -142,9 +170,13 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                   // to cover what it has reached, say, which as two picts would be
                   // one dissolving into the other. Called with both frames and `t`.
                   ~stage: stage :: maybe(Function.of_arity(4)) = #false,
-                  ~stage_band: stage_band :: Int = band_below) :: pc.Pict:
+                  ~stage_band: stage_band :: Int = band_below,
+                  // What each key this press brings on looks like on its way in,
+                  // worked out once by `magic_press`: tracing a pict is far too
+                  // expensive to do again for every frame of the press.
+                  ~appear: appear :: Map = {}) :: pc.Pict:
   def blank = pc.blank(~width: base.width, ~height: base.height)
-  def draws :~ List = draws_between(a, b, t)
+  def draws :~ List = draws_between(a, b, t, appear)
   def at :~ Map = picts_between(a, b, t)
   def spots :~ Map = spots_between(a, b, t)
   // a ghost of every pict where it is now: a ghost draws nothing and is still
@@ -186,7 +218,10 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
       | for values(q :~ pc.Pict = with_under) (l in edge_layers): put(q, l, 0.0, 0.0)
     for values(q :~ pc.Pict = wired) (d :~ List in draws):
       skip_when d[0] != band || (d[4] :~ Real) == 0.0
-      put(q, as_pict(d[1]).alpha(d[4]), d[2], d[3])
+      def shown:
+        def p = as_pict(d[1])
+        if d[5] | sampled(p, d[5]) | settled(p)
+      put(q, shown.alpha(d[4]), d[2], d[3])
 
 fun magic_still(base :: pc.Pict, f :: Frame, ~& kws) :: pc.Pict:
   magic_between(base, f, f, 0.0, ~& kws)
@@ -203,7 +238,20 @@ fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
   | shared == 0 && a.picts.length() > 0 && b.picts.length() > 0:
       println("magic_press: the two frames share no key, so the whole picture fades")
   | ~else: #void
-  pc.animate(~extent: extent, fun (t): magic_between(base, a, b, t, ~& kws))
+  // A key only the second frame has is a thing this press introduces, and how a
+  // thing arrives is an animation in the epoch before its time box -- which is
+  // this epoch. So it is written rather than faded, unless it brought an arrival
+  // of its own, in which case that is played instead. Worked out here and not in
+  // `magic_between`, which runs once per frame.
+  def appear:
+    cond
+    | !write.write_by_default(): {}
+    | ~else:
+        for values(m :~ Map = {}) (key in b.picts.keys()):
+          skip_when a.picts.has_key(key)
+          def e :~ List = b.picts[key]
+          m ++ { key: write.as_written(as_pict(e[0])) }
+  pc.animate(~extent: extent, fun (t): magic_between(base, a, b, t, ~appear: appear, ~& kws))
 
 // A whole slide: the first frame, then a press to each of the rest.
 fun magic_slide(base :: pc.Pict, frames :~ List, ~& kws) :: pc.Pict:

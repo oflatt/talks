@@ -72,23 +72,37 @@ fun shape_size(content :: Pict,
          height || (content.height + padding * 2))
 
 // A rounded rectangle around `child`s: pale fill, saturated border.
+// `~write` draws the bubble rather than simply having it: the outline is traced,
+// the fill follows the pen, and then whatever is inside it is written in turn. A
+// child that animates already -- one the caller built as a write of its own, or a
+// whole animation -- is left alone and played in its turn instead, which is what
+// makes `make_bubble` compose with the rest of the pict vocabulary. `~write: #false`
+// is the still bubble, for the title slide and for anything a press is moving
+// rather than introducing.
 fun make_bubble(~width: width :: maybe(Real) = #false,
                 ~height: height :: maybe(Real) = #false,
                 ~padding: padding :: Real = 30,
                 ~color: color :: draw.Color || String = talk_blue,
+                ~write: do_write :: Boolean = write.write_by_default(),
                 child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
   def content = gap_stack(child, ...)
-  def (w, h) = shape_size(content, width, height, padding)
-  rectangle(~around: content,
-            ~width: w,
-            ~height: h,
-            ~fill: pale(line_color),
-            ~line: line_color,
-            ~line_width: border_width,
-            ~rounded: corner_radius,
-            // The original ends in `pin-over`, which keeps the rectangle's
-            ~refocus: #false)
+  def (w, h) = shape_size(write.settled(content), width, height, padding)
+  fun shell(inside :: Pict) :: Pict:
+    rectangle(~around: inside,
+              ~width: w,
+              ~height: h,
+              ~fill: pale(line_color),
+              ~line: line_color,
+              ~line_width: border_width,
+              ~rounded: corner_radius,
+              // The original ends in `pin-over`, which keeps the rectangle's
+              ~refocus: #false)
+  if !do_write
+  | shell(content)
+  | block:
+      def empty = shell(content.ghost())
+      write.write_in_turn([empty, overlay(empty.ghost(), content)])
 
 // A fat arrow in the same clothes as `make_bubble`: pale fill, saturated border,
 // and whatever it is labelled with written inside its shaft rather than beside it.
@@ -943,9 +957,19 @@ fun fade_in(base :: Pict, extra :: Pict,
   fun over(e :: Pict) :: Pict:
     overlay(~horiz: horiz, ~vert: vert, ~dx: dx, ~dy: dy, settled, e)
       .refocus(settled)
-  // Two epochs, not three: the fade's own last frame is already `extra` at full
+  // How a thing arrives is an animation in the epoch *before* its time box: this
+  // is the epoch the press runs, and at the end of it `extra` is simply there. A
+  // fade was one way to spend that epoch and writing is another, so the epoch
+  // count is the same either way -- two, not three: the appearance's own last
+  // frame is already `extra` at full.
+  //
+  // `over` of an animated pict is animated, which is all that is needed to put the
+  // appearance in that epoch. An `extra` that animates already -- one built as a
+  // write, or as an animation of its own -- is left to arrive its own way.
   switch(base,
-         animate(fun (t): over(extra.alpha(t))))
+         (if write.write_by_default()
+          | over(write.as_written(extra))
+          | animate(fun (t): over(extra.alpha(t)))))
 
 // Dissolve `from` into `to` over one epoch. Unlike `cross_fade`, the two are
 // only briefly on screen together (`~overlap` of the epoch), so blocks of text
