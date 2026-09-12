@@ -88,21 +88,31 @@ fun make_bubble(~width: width :: maybe(Real) = #false,
   def line_color = as_color(color)
   def content = gap_stack(child, ...)
   def (w, h) = shape_size(write.settled(content), width, height, padding)
-  fun shell(inside :: Pict) :: Pict:
-    rectangle(~around: inside,
-              ~width: w,
-              ~height: h,
-              ~fill: pale(line_color),
-              ~line: line_color,
-              ~line_width: border_width,
-              ~rounded: corner_radius,
-              // The original ends in `pin-over`, which keeps the rectangle's
-              ~refocus: #false)
+  fun shell(inside :: Pict, ~fill: fill = pale(line_color), ~line: line = line_color) :: Pict:
+    // `~line_width` is a contract violation without a line to give it to
+    if line
+    | rectangle(~around: inside, ~width: w, ~height: h,
+                ~fill: fill, ~line: line, ~line_width: border_width,
+                ~rounded: corner_radius,
+                // The original ends in `pin-over`, which keeps the rectangle's
+                ~refocus: #false)
+    | rectangle(~around: inside, ~width: w, ~height: h,
+                ~fill: fill, ~line: #false,
+                ~rounded: corner_radius, ~refocus: #false)
   if !do_write
   | shell(content)
   | block:
-      def empty = shell(content.ghost())
-      write.write_in_turn([empty, overlay(empty.ghost(), content)])
+      // Three layers rather than one traced picture: a bubble's fill and its
+      // border are often the same colour to within the few the tracer sorts ink
+      // into, and traced as one thing a bubble has no outline to draw -- it is a
+      // blob, and a blob is washed in rather than drawn. Said as layers, the pen
+      // traces the border, the marker washes the inside in *under* it, and then
+      // whatever is in the bubble is written.
+      def ghosted = content.ghost()
+      def outline = shell(ghosted, ~fill: #false)
+      def inside = shell(ghosted, ~line: #false)
+      write.write_in_turn([inside, outline, overlay(outline.ghost(), content)],
+                          ~order: [1, 0, 2], ~extent: 1.3)
 
 // A fat arrow in the same clothes as `make_bubble`: pale fill, saturated border,
 // and whatever it is labelled with written inside its shaft rather than beside it.

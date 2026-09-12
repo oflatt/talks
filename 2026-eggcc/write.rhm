@@ -412,7 +412,11 @@ fun ink_frame(tr :~ List, t :: Real, lw :: Real) :: Pict:
   def groups :~ List = tr[3]
   def ox :~ Int = tr[4]
   def oy :~ Int = tr[5]
-  def G = math.max(1, groups.length())
+  // Ink the pen has nothing to trace -- a photograph, a plot, a blob of a shape --
+  // is all marker: the picture arrives under a nib sweeping across it at an even
+  // pace, which is what drawing something with no line in it looks like.
+  def GN = groups.length()
+  def G = math.max(1, GN)
   def lag = math.min(4.0 / (G + 1.0), 0.2)
   def tt = (G - 1) * lag + 1.0
   def dur = 1.0 / tt
@@ -437,15 +441,16 @@ fun ink_frame(tr :~ List, t :: Real, lw :: Real) :: Pict:
           go(cs.sublist(1, cs.length()), left - take)
   // the pen: every group traces over its own slice of the epoch, and several are
   // in flight at once, so the nib is wherever the rightmost of them has got to
-  def nib:
-    for values(x = 0.0) (gi in 0..G):
+  fun nib_of():
+    for values(x = 0.0) (gi in 0..GN):
       def g :~ List = groups[gi]
       def local = (t - gi * lag / tt) / dur
       cond
       | local <= 0.0: x
       | local >= 1.0: math.max(x, 1.0 * g[2] - ox)
       | ~else: math.max(x, lerp(1.0 * g[1] - ox, 1.0 * g[2] - ox, local))
-  for (gi in 0..G):
+  def nib: (if GN == 0 | lerp(0.0, 1.0 * w, t) | nib_of())
+  for (gi in 0..GN):
     def g :~ List = groups[gi]
     def local = (t - gi * lag / tt) / dur
     cond
@@ -515,20 +520,37 @@ fun as_written(p :: Pict, ~& kws) :: Pict:
 // outline, and then the words inside it. `switch(~join: #'splice)` is what makes it
 // one epoch -- the extents add up, the durations do not -- so a thing that writes
 // itself in three goes still costs the one press it costs today.
+// `~order` is the order they are *written* in, when that is not the order they are
+// stacked in: a bubble's fill is drawn under its outline and written after it, so
+// that the pen traces the border and the marker washes the inside in behind it
+// rather than over the top of it.
 fun write_in_turn(ps :: List,
                   ~horiz: horiz :: HorizAlignment = #'center,
                   ~vert: vert :: VertAlignment = #'center,
+                  ~order: order :: maybe(List) = #false,
+                  ~extent: total :: Real = 1.0,
                   ~& kws) :: Pict:
   def n = ps.length()
+  def turns = order || [for List (i in 0..n): i]
+  // `~extent` is the beat the whole thing takes, shared out, rather than each
+  // layer's own: three layers each taking `animate`'s beat is three seconds to
+  // put one bubble on the slide.
+  def stills:
+    for values(c = 0) (j in turns): (if (ps[j] :~ Pict).epoch_extent(0) > 0 | c | c + 1)
+  def per = total / math.max(1, stills)
+  def rank:
+    for values(m :~ Map = {}) (k in 0..turns.length()): m ++ { turns[k]: k }
   cond
   | n == 0: nothing
   | ~else:
-      switch(& for List (i in 0..n):
+      switch(& for List (k in 0..turns.length()):
                  overlay(~horiz: horiz, ~vert: vert,
                          & for List (j in 0..n):
                              def q :: Pict = ps[j]
+                             def mine = rank.get(j, -1)
                              cond
-                             | j < i: settled(q)
-                             | j == i: as_written(q, ~& kws)
+                             | mine >= 0 && mine < k: settled(q)
+                             | mine == k: as_written(q, ~extent: per, ~& kws)
+                             | mine < 0: settled(q)
                              | ~else: q.ghost()),
              ~join: #'splice)
