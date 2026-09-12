@@ -60,6 +60,7 @@ export:
   slide_37
   slide_38
   slide_39
+  slide_questions
 
 def all_slides:
   [slide_1,
@@ -76,11 +77,15 @@ def all_slides:
    // and then what the algorithm does instead, on the example the section before
    // this one was about
    in_section(2, slide_dp),
-   in_section(2, slide_34),
-   // 4 -- the numbers
+   // 4 -- the numbers. Every plot is in this section, `slide_34` included: it is a
+   // measurement rather than a step of the algorithm, and it was reading as the end
+   // of the section before this one.
    divider(3, ~shots: section_shots),
+   in_section(3, slide_34),
    in_section(3, slide_36), in_section(3, slide_37),
-   in_section(3, slide_38), in_section(3, slide_39)]
+   in_section(3, slide_38), in_section(3, slide_39),
+   // and out the way we came in
+   slide_questions]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the

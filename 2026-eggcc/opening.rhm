@@ -12,6 +12,7 @@ export:
   slide_1
   slide_2
   slide_20
+  slide_questions
 
 // -------------------------------------------------------------------------------------
 // slide_1
@@ -345,3 +346,19 @@ fun slide_20():
                              ~sep: 12.0))
 
   staged(base, [stage_1])
+
+
+// -------------------------------------------------------------------------------------
+// slide_questions: the title slide again, at the end, with the robot asking for them.
+//
+// It calls `slide_1` rather than repeating it, so the deck cannot end on a title that
+// has drifted from the one it opened with, and the whole slide is one `fade_in`: the
+// room has seen this picture already, and the only new thing on it is the question.
+fun slide_questions():
+  staged(slide_1(),
+         [put(blank_slide,
+              make_bubble(~color: talk_green,
+                          robot_says(#'smile, prose([["Questions?", #'bold]])))
+                .scale(1.3),
+              // the one empty corner: clear of the title, the faces and the logos
+              1280.0, 130.0)])

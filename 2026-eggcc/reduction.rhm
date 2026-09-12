@@ -417,12 +417,21 @@ fun slide_nphard():
                                         prose_stack([[["Problem is NP-hard!", #'bold]],
                                                      [["Give up??", #'bold]]]),
                                         ~sep: 14.0, ~scale: 0.8)),
-                 95.0, 566.0, band_callout] }
+                 95.0, 420.0, band_callout] }
   def np_no:
-    np_note(#'no, ~at: [95.0, 790.0], ~color: talk_green,
+    np_note(#'no, ~at: [95.0, 640.0], ~color: talk_green,
             ~rows: [[["No! Real-world e-graphs", #'bold]],
                     [["are easier, measured", #'bold]],
                     [["with a ", #'bold], ["parameter", #'bold_italic]]])
+  // and the parameter, named, with the bound it buys: Section 6 of the paper --
+  // STATEWALK DP is fixed-parameter tractable in the statewalk width, O(k n²) for
+  // an e-graph of size n, against the O(n²) of the greedy algorithm for pure
+  // e-graphs. The measured mean width across the benchmarks is 33.15.
+  def np_width:
+    np_note(#'width, ~at: [95.0, 890.0], ~color: talk_green,
+            ~rows: [[["statewalk width", #'bold_italic],
+                     [" is low in practice!", #'bold]],
+                    [["Complexity is ", #'bold], ["O(kn²)", #'bold_italic]]])
 
   fun np_callout(key, target, ~body: body :~ List, ~color: color,
                  ~content: content :: pc.Pict) :: Map:
@@ -485,9 +494,13 @@ fun slide_nphard():
      // and so the problem this talk is about is NP-hard, which is a fact about the
      // worst case and not about any e-graph a compiler has ever built
      frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true,
-           ~over: np_answer ++ np_give_up),
+           ~over: np_give_up),
      frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true,
-           ~over: np_answer ++ np_give_up ++ np_no)],
+           ~over: np_give_up ++ np_no),
+     // and the parameter that makes it tractable in practice, which is what the
+     // next section is about
+     frame(~chain: 2, ~clauses: 3, ~root: #true, ~picked: #true,
+           ~over: np_give_up ++ np_no ++ np_width)],
     ~wire: np_wire_specs, ~edge_band: band_wires)
 
 // The reduction's own edges. A state edge is thick and blue, like every other edge
