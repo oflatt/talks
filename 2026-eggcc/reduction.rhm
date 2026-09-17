@@ -8,6 +8,7 @@ import:
   "magicmove.rhm" open
   "theme.rhm" open
   "egraph.rhm" open
+  "write.rhm".already
   pict as pc
   draw
 
@@ -222,8 +223,7 @@ fun slide_nphard():
   // are the *same glyphs*, and a literal arriving is a recolour on the spot rather
   // than one word being swapped for another.
   def np_label_size = 40.0
-  fun np_label(text :: String) :: pc.Pict:
-    pc.text(text, ~font: draw.Font(~name: node_font, ~size: np_label_size))
+  fun np_label(text :: String) :: pc.Pict: node_label(text, ~size: np_label_size)
   // every node in its two drawings, plain and picked, each built once
   fun np_pict(color :: String, w :: Real, text :: String, ~fill: fill :: String):
     pc.overlay(as_pict(graph_node(~width: w, ~height: np_h, ~adj: "33878",
@@ -338,7 +338,8 @@ fun slide_nphard():
       def [p, x, y] = (np_lit_home :~ Map)[key]
       def word :~ pc.Pict = p
       def node :~ pc.Pict = as_pict(np_plain[key])
-      def pad = pc.overlay(pc.blank(~width: node.width, ~height: node.height), word)
+      // already there: it lies over the very words it copies
+      def pad = already(pc.overlay(pc.blank(~width: node.width, ~height: node.height), word))
       m ++ { key: [pad,
                    x - (pad.width - word.width) / 2,
                    y - (pad.height - word.height) / 2] }
@@ -379,22 +380,44 @@ fun slide_nphard():
           .launder()
       def region :~ pc.Pict = as_pict(((np_class_picts :~ Map)[[#'cls, #'g, c]] :~ List)[0])
       def padded:
-        pc.overlay(pc.blank(~width: region.width, ~height: region.height), words)
+        already(pc.overlay(pc.blank(~width: region.width, ~height: region.height), words))
       def [x, y] = np_seg_at(idx[0], words)
       m ++ { [#'cls, #'g, c]: [padded,
                                x - (padded.width - words.width) / 2,
                                y - (padded.height - words.height) / 2,
                                band_flight] }
+  // And each literal of a clause on its own, keyed by the term it becomes in the
+  // class and padded to that node's size, over the word in the formula: when the
+  // clause flies, each word goes to its own node and settles into it, the way the
+  // chain's literals settle into their operators.
+  def np_clause_lits:
+    for values(m :~ Map = {}) ([c, tag, p] in np_formula_segs, i in 0..):
+      skip_when c == #false || tag == #false
+      def [_, var, side] = tag :~ List
+      def lit = [var, side == 1]
+      def k:
+        for values(found = -1) (l in (np_members :~ List)[c] :~ List, j in 0..):
+          if found >= 0 | found | (if l == lit | j | -1)
+      def key = [#'g, c, k]
+      def word :~ pc.Pict = (p :~ pc.Pict).launder()
+      def node :~ pc.Pict = as_pict(np_plain[key])
+      def pad = already(pc.overlay(pc.blank(~width: node.width, ~height: node.height), word))
+      def [x, y] = np_seg_at(i, word)
+      m ++ { key: [pad, x - (pad.width - word.width) / 2, y - (pad.height - word.height) / 2,
+                   band_flight + 1] }
   fun np_clause_words(flown :: Int) :: Map:
     for values(m :~ Map = {}) (c in 0..np_clauses.length()):
       skip_when c < flown
-      m ++ { [#'cls, #'g, c]: (np_clause_home :~ Map)[[#'cls, #'g, c]] }
+      def lits:
+        for values(m2 :~ Map = {}) (key in (np_clause_lits :~ Map).keys()):
+          skip_when (key :~ List)[1] != c
+          m2 ++ { key: (np_clause_lits :~ Map)[key] }
+      m ++ { [#'cls, #'g, c]: (np_clause_home :~ Map)[[#'cls, #'g, c]] } ++ lits
 
   // At the end, the assignment the extraction spells out, said where the formula
   // can still be read above it.
   def np_answer:
-    def head = pc.text("Satisfying assignment:",
-                       ~font: draw.Font(~name: prose_font, ~size: 38.0, ~weight: #'bold))
+    def head = prose_text("Satisfying assignment:", ~size: 38.0, ~bold: #true)
     // on one line rather than three: what is under it is the last word of the
     // section, and the assignment has already been read off the picture by then
     def body:
@@ -465,7 +488,9 @@ fun slide_nphard():
           ~edges: np_wires(keys, ~picked: picked))
   magic_slide(
     page,
-    [// the formula
+    [// nothing yet, so that the formula is written on a press
+     Frame(),
+     // the formula
      frame(),
      // a copy of each literal leaves the line and goes to where its operator belongs
      frame(~chain: 1),

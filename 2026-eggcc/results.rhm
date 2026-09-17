@@ -12,6 +12,7 @@ import:
   "slidehelpers.rhm" open
   "theme.rhm" open
   "plots.rhm" open
+  "write.rhm".write
   pict as pc
 
 export:
@@ -28,9 +29,10 @@ fun slide_cdf():
                     ~tag: "Extraction CDF title", ~nudge: [0.0, 0.0])
   fun scene(ks :~ List) :: pc.Pict:
     pc.overlay(~horiz: #'left, ~vert: #'top, page, cdf_chart(~draw: ks))
+  // long enough to watch a curve being drawn, which is the point of drawing it
   pc.switch(scene([0.0, 0.0, 0.0]),
-            pc.animate(fun (t): scene([t, 0.0, 0.0])),
-            pc.animate(fun (t): scene([1.0, t, t])))
+            pc.animate(~extent: 1.8, fun (t): scene([t, 0.0, 0.0])),
+            pc.animate(~extent: 1.8, fun (t): scene([1.0, t, t])))
 
 // -------------------------------------------------------------------------------------
 // And how fast the code it picks runs. A series a press: ours grows out of the
@@ -47,21 +49,19 @@ fun slide_perf():
   def verdict:
     def bubble :~ pc.Pict:
       make_bubble(~color: talk_green,
-                  as_pict(linebox(~width: 376.0, ~height: 182.0,
-                                  ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                                  para(~align: #'center,
-                                       run("Non-trivial", ~font: prose_font, ~size: 75.0,
-                                           ~bold: #true)),
-                                  para(~align: #'center,
-                                       run("e-graphs!", ~font: prose_font, ~size: 75.0,
-                                           ~bold: #true)))))
+                  pc.stack(~horiz: #'center,
+                           prose_text("Non-trivial", ~size: 75.0, ~bold: #true),
+                           prose_text("e-graphs!", ~size: 75.0, ~bold: #true)))
     // in the plot's own empty quarter: under the row of crosses and over the run of
     // benchmarks where neither compiler has anything to show
     put(blank_slide, bubble, 620.0 - bubble.width / 2, 440.0 - bubble.height / 2)
   def full = scene(1.0, 1.0, 1.0)
+  // The verdict writes itself over the finished chart on the press after the last
+  // series. Not `fade_in`, whose first epoch is the picture it starts from: that
+  // picture is the one the series press has just ended on, and a press that shows it
+  // again is a press that does nothing.
   pc.switch(scene(0.0, 0.0, 0.0),
-            pc.animate(fun (t): scene(t, 0.0, 0.0)),
-            pc.animate(fun (t): scene(1.0, t, 0.0)),
-            pc.animate(fun (t): scene(1.0, 1.0, t)),
-            fade_in(full, pc.overlay(~horiz: #'left, ~vert: #'top, full.ghost(), verdict),
-                    ~horiz: #'left, ~vert: #'top))
+            pc.animate(~extent: 1.8, fun (t): scene(t, 0.0, 0.0)),
+            pc.animate(~extent: 1.8, fun (t): scene(1.0, t, 0.0)),
+            pc.animate(~extent: 1.8, fun (t): scene(1.0, 1.0, t)),
+            pc.overlay(~horiz: #'left, ~vert: #'top, full, write(verdict)).refocus(full))

@@ -11,6 +11,8 @@ import:
   "rules.rhm" open
   "chain.rhm" open
   "apply.rhm" open
+  "write.rhm".writer
+  "write.rhm".already
   pict as pc
 
 export:
@@ -61,18 +63,23 @@ fun slide_update():
     callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
             prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
                          [["after the update", #'plain]]]))
-  def explained = put(plain, explain, 0.0, 0.0)
-  def extent = 1.2
+  def extent = 1.6
   // One bubble out, then the other in -- not both at once. They are two different
   // sentences in the same place, and crossing them leaves the middle of the move
-  // showing the two of them printed over each other at half strength.
+  // showing the two of them printed over each other at half strength. So the first
+  // is unwritten over the first half of the move and the second written over the
+  // rest, while the code slides into its new form underneath.
+  def explain_w = writer(explain)
+  def name_state_w = writer(name_state)
   def moving:
     pc.overlay(~horiz: #'left, ~vert: #'top,
                pc.magic_move(plain, with_states, ~other: #'fade, ~extent: extent)
                  .time_pad(~after: -1),
-               pc.animate(~extent: extent, fun (t): explain.alpha(clamp01(1.0 - 2.0 * t))),
-               pc.animate(~extent: extent, fun (t): name_state.alpha(clamp01(2.0 * t - 1.0))))
-  pc.switch(plain, pc.cross_fade(plain, explained), moving)
+               pc.animate(~extent: extent, ~bend: fun (x): x,
+                          fun (t): explain_w.frame(clamp01(1.0 - 2.0 * t))),
+               pc.animate(~extent: extent, ~bend: fun (x): x,
+                          fun (t): name_state_w.frame(clamp01(2.0 * t - 1.0))))
+  pc.switch(fade_in(plain, explain, ~horiz: #'left, ~vert: #'top), moving)
 
 // -------------------------------------------------------------------------------------
 // slide_egraph: the chain of `update`s going into the e-graph, one per press, the
@@ -118,12 +125,14 @@ fun slide_egraph():
   // the copies of line `k`'s pieces, each over the piece it copies
   // `band_flight`, so a copy on its way out of the code box is drawn over the band
   // marking the line it came from rather than behind it.
+  // Each copy lies exactly over the piece it copies, so it is marked as already
+  // there: written, it would trace letters the room can see.
   fun line_copies(k :: Int) :: Map:
     def targets :~ Map = line_targets[k]
     def segs :~ List = ((parts[#'lines] :~ List)[k] :~ Map)[#'segs]
     for values(m :~ Map = {}) ([role, piece, dx] in segs_pieces(segs)):
       skip_when !targets.has_key(role)
-      m ++ { targets[role]: [piece, line_x() + dx, line_y(k), band_flight] }
+      m ++ { targets[role]: [already(piece), line_x() + dx, line_y(k), band_flight] }
 
   // The first write stores a value that the second one throws away. That is worth
   // saying as soon as the graph is up and before any rule is stated, because it is

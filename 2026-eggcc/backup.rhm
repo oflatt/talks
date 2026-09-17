@@ -1,0 +1,136 @@
+#lang rhombus/and_meta
+// The backup slides, after the closing slide: what eggcc does to a program too big
+// to draw, what it costs in compile time, and how this deck was made.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  "plots.rhm" open
+  "plotdata.rhm" open
+  "write.rhm" open
+  rhombus/logo as rhombus_logo
+  pict as pc
+  draw
+
+export:
+  slide_raytracer
+  slide_compile_times
+  slide_made
+
+// -------------------------------------------------------------------------------------
+// slide_raytracer: eggcc on a program too big to draw -- the raytracer benchmark,
+// the picture it renders, and the numbers, one a press. The picture is the
+// benchmark's own output: `tests/slow/raytracewithscreen.rs` prints its hundred by
+// hundred screen, and `media/raytrace.png` is that screen as pixels, rows bottom to
+// top as the program lays them. The times are `profile.json`'s, as on the chart; the
+// region count, the largest region and the solver's timeouts are the paper's
+// (Section 8, "Case study on a large program").
+fun slide_raytracer():
+  def page = titled("eggcc Scales to Big Programs", ~tag: "Raytracer title")
+  def shot = as_pict(image_pict(media("raytrace.png"), 560.0, 560.0))
+  def framed:
+    pc.overlay(pc.rectangle(~width: 560.0, ~height: 560.0, ~fill: #false,
+                            ~line: draw.Color(120, 120, 120), ~line_width: 2.0),
+               shot)
+  def rows :~ List = compile_rows
+  def last :~ List = rows[rows.length() - 1]
+  fun whole(x :: Real) :: String: to_string(math.exact(math.round(x)))
+  def facts:
+    [prose([["a raytracer", #'bold], [": 821 lines of Rust, 2503 of Bril", #'plain]]),
+     prose([["724 regions", #'bold], [" to extract from, the largest of ", #'plain],
+            ["4,016 terms", #'bold]]),
+     prose([["compiled in ", #'plain], ["4½ minutes", #'bold],
+            [", " +& whole(last[3]) +& " s of it extraction", #'plain]]),
+     prose([["the ILP solver timed out on ", #'plain], ["35", #'bold], [" of the 724", #'plain]]),
+     prose([["eggcc then LLVM -O3: as fast as ", #'plain], ["LLVM -O3", #'bold], [" alone", #'plain]])]
+  def x = 760.0
+  staged(page,
+         [put(blank_slide, framed, 120.0, 260.0),
+          & for List (f :~ pc.Pict in facts, i in 0..):
+              put(blank_slide, f, x, 300.0 + 100.0 * i)])
+
+// -------------------------------------------------------------------------------------
+// slide_compile_times: eggcc is slow to compile, and by how much. One series a press,
+// then the numbers said in words.
+fun slide_compile_times():
+  def page = titled("eggcc is Slow to Compile", ~tag: "Compile times title")
+  fun scene(ours :: Real, llvm :: Real) :: pc.Pict:
+    pc.overlay(~horiz: #'left, ~vert: #'top, page, compile_chart(~ours: ours, ~llvm: llvm))
+  def full = scene(1.0, 1.0)
+  // the numbers, read off the same data the chart is drawn from
+  def rows :~ List = compile_rows
+  def n = rows.length()
+  fun median(i :: Int) :: Real: (rows[n div 2] :~ List)[i]
+  fun secs(x :: Real) :: String: to_string(math.round(x * 10.0) / 10.0)
+  fun whole(x :: Real) :: String: to_string(math.exact(math.round(x)))
+  // minutes to the nearest half
+  fun minutes(x :: Real) :: String:
+    def halves = math.exact(math.round(x / 30.0))
+    (if halves mod 2 == 0 | to_string(halves div 2) | to_string(halves div 2) +& "½") +& " minutes"
+  def last :~ List = rows[n - 1]
+  def verdict:
+    def bubble :~ pc.Pict:
+      make_bubble(~color: talk_red,
+                  prose_stack([[["median ", #'plain], [secs(median(1)) +& " s", #'bold],
+                                [" against LLVM's ", #'plain], [secs(median(2)) +& " s", #'bold]],
+                               [["the raytracer: ", #'plain], [minutes(last[1]), #'bold],
+                                [", " +& whole(last[3]) +& " s of it extraction", #'plain]]]))
+    // in the empty upper left of the chart, over the short stems
+    put(blank_slide, bubble, 360.0, 300.0)
+  pc.switch(scene(0.0, 0.0),
+            pc.animate(~extent: 1.8, fun (t): scene(t, 0.0)),
+            pc.animate(~extent: 1.8, fun (t): scene(1.0, t)),
+            pc.overlay(~horiz: #'left, ~vert: #'top, full, write(verdict)).refocus(full))
+
+// -------------------------------------------------------------------------------------
+// slide_made: how this slideshow was made -- the pict fish and the Rhombus mark, as
+// the ICFP talk about the library drew them, and then the three things to say.
+
+def fish_blue = draw.Color(173, 216, 230)          // pict's own light blue
+def fish_line = draw.Color(60, 120, 170)
+
+// The pict fish: an ellipse for a body, a triangle for a tail, an eye, and its name
+// written on its side. Every piece is a path, so the fish draws itself.
+fun pict_fish(~scale: k :: Real = 1.0) :: pc.Pict:
+  def bw = 150.0 * k
+  def bh = 76.0 * k
+  def tail = 78.0 * k
+  def body_path = draw.Path()
+  body_path.ellipse([tail * 0.45, 0.0, bw, bh])
+  // the tail: a triangle pointing left, tucked under the back of the body
+  def tail_path = draw.Path()
+  tail_path.polygon([[0.0, bh / 2 - tail * 0.55], [0.0, bh / 2 + tail * 0.55],
+                     [tail * 0.9, bh / 2]])
+  def w = tail * 0.45 + bw
+  def tail_pict = written_shape(tail_path, ~width: w, ~height: bh,
+                                ~fill: fish_blue, ~line: fish_line, ~line_width: 3.0 * k)
+  def body = written_shape(body_path, ~width: w, ~height: bh,
+                           ~fill: fish_blue, ~line: fish_line, ~line_width: 3.0 * k)
+  def eye_path = draw.Path()
+  def er = 6.0 * k
+  eye_path.ellipse([0.0, 0.0, 2 * er, 2 * er])
+  def eye = written_shape(eye_path, ~width: 2 * er, ~height: 2 * er, ~fill: "black")
+  def name = prose_text("Pict", ~size: 44.0 * k, ~bold: #true, ~color: fish_line)
+  def base = pc.overlay(~horiz: #'left, ~vert: #'top, tail_pict, body)
+  def eyed = put(base, eye, tail * 0.45 + bw - 40.0 * k - er, bh * 0.36 - er)
+  put(eyed, name, tail * 0.45 + bw * 0.28 - name.width / 2 + 10.0 * k, (bh - name.height) / 2)
+
+fun slide_made():
+  def page = titled("How was this slideshow made?", ~tag: "Made with title")
+  def fish = pict_fish(~scale: 2.6)
+  def logo :~ pc.Pict = as_pict(rhombus_logo.to_pict(pc.dc))
+  def mark = logo.scale(fish.height / logo.height)
+  def pair = pc.beside(~sep: 80.0, ~vert: #'center, fish, mark)
+  def lines:
+    [prose([["Rhombus", #'bold], [" + ", #'plain], ["pict", #'bold],
+            [": animated pictures as values", #'plain]]),
+     prose([["every word, box and arrow is a path the pen traces", #'plain]]),
+     prose([["Animated Pictures for Slide Presentations", #'bold_italic],
+            [", ICFP 2026", #'plain]])]
+  def x = 95.0
+  def stages:
+    [put(blank_slide, pair, (slide_width - pair.width) / 2, 230.0),
+     & for List (l :~ pc.Pict in lines, i in 0..):
+         put(blank_slide, l, x, 640.0 + 90.0 * i)]
+  staged(page, stages)

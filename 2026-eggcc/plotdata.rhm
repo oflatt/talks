@@ -26,6 +26,7 @@ export:
   perf_solver_timeouts
   cdf_series
   cdf_timeout_secs
+  compile_rows
 
 // The file sits beside this one; `media_lookup` resolves against the directory the
 // module is loaded from, which is what makes that true however the deck is run.
@@ -83,6 +84,30 @@ def perf_rows :~ List:
 // is what the row of crosses along the top of the chart is counting.
 def perf_solver_timeouts :~ Int:
   for values(n = 0) (row :~ List in perf_rows): if row[3] | n + 1 | n
+
+// ------------------------------------------------------------ compile times
+// One row per benchmark, every suite: how long eggcc took to compile it, how long
+// LLVM at -O3 took, and how much of eggcc's time was extraction. Sorted by ours.
+//
+//   [benchmark, eggcc seconds, LLVM-O3 seconds, extraction seconds]
+fun row_of(benchmark :: String, method :: String):
+  for values(found = #false) (r :~ Map in profile):
+    skip_when found != #false
+    skip_when str(r[#'benchmark]) != benchmark || str(r[#'runMethod]) != method
+    r
+def compile_rows :~ List:
+  def names:
+    for List (r :~ Map in profile):
+      keep_when str(r[#'runMethod]) == dp_treatment
+      str(r[#'benchmark])
+  def rows:
+    for List (b in names):
+      def ours = row_of(b, dp_treatment)
+      def llvm = row_of(b, "llvm-O3-O0")
+      keep_when ours != #false && llvm != #false
+      [b, (ours :~ Map)[#'eggccCompileTimeSecs], (llvm :~ Map)[#'llvmCompileTimeSecs],
+       (ours :~ Map)[#'eggccExtractionTimeSecs]]
+  rows.sort(fun (a :~ List, b :~ List): (a[1] :~ Real) < (b[1] :~ Real))
 
 // ------------------------------------------------------------------- the CDF
 // Every region the comparison run extracted, once per extraction method: how long

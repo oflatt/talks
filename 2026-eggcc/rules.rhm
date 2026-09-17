@@ -10,6 +10,7 @@ import:
   "slidehelpers.rhm" open
   "theme.rhm" open
   "egraph.rhm" open
+  "write.rhm".written_shape
   pict as pc
   draw
 
@@ -24,10 +25,14 @@ export:
   rules_line_3_at
   update_rule
 
-def rule_font = code_face with (size = 36.0)
-fun rule_code(s :: String) :: pc.Pict: pc.text(s, ~font: rule_font)
-fun rule_greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face with (size = 36.0))
-fun rule_sub(s :: String) :: pc.Pict: rule_code(s).scale(0.6)
+// The pieces a rule is set in, each in a colour of its own: a piece that is written
+// has to know its colour when it is made, since what writes it is the piece itself.
+fun rule_code(s :: String, ~color: color = "black") :: pc.Pict:
+  code_text(s, ~size: 36.0, ~color: color)
+fun rule_greek(s :: String, ~color: color = "black") :: pc.Pict:
+  math_text(s, ~size: 36.0, ~color: color)
+fun rule_sub(s :: String, ~color: color = "black") :: pc.Pict:
+  rule_code(s, ~color: color).scale(0.6)
 fun rule_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
 // ------------------------------------------------------------------- the rules
@@ -58,7 +63,7 @@ def rule_size = 45.0
 // on one slide and inside a bubble on the one before, and both places are packed to
 // fit what is actually drawn.
 fun rw(s :: String, color) :: pc.Pict:
-  pc.text(s, ~font: draw.Font(~name: math_font, ~size: rule_size)).colorize(color)
+  math_text(s, ~size: rule_size, ~color: color)
 // The gaps are blanks of a stated width rather than spaces: a rule laid out one
 // piece at a time carries the font's side bearings once per piece, which came to
 // 25% more width than the same string set as one run.
@@ -201,15 +206,17 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
   def premise1 = segs_pict(premise1_segs)
   def premise2 = segs_pict(premise2_segs)
   def introduced = segs_pict(introduced_segs)
-  fun same(): pc.text(" ≡ ", ~font: prose_face with (size = 36.0))
+  fun same(~color: color) :: pc.Pict: prose_text(" ≡ ", ~size: 36.0, ~color: color)
   // Each equality in the colour of the class it makes, which is what ties the two
   // statements to the two regions in the graph.
   def value_eq:
-    rule_line(rule_code("v"), rule_sub("1"), same(), rule_code("v"),
-              rule_sub("3")).colorize(value_class)
+    def col = value_class
+    rule_line(rule_code("v", ~color: col), rule_sub("1", ~color: col), same(~color: col),
+              rule_code("v", ~color: col), rule_sub("3", ~color: col))
   def state_eq:
-    rule_line(rule_greek("ω"), rule_sub("2"), same(), rule_greek("ω"),
-              rule_sub("3")).colorize(state_class)
+    def col = state_class
+    rule_line(rule_greek("ω", ~color: col), rule_sub("2", ~color: col), same(~color: col),
+              rule_greek("ω", ~color: col), rule_sub("3", ~color: col))
   def eq_sep = 72.0
   def equalities = pc.beside(~sep: eq_sep, ~vert: #'bottom, value_eq, state_eq)
   def below:
@@ -223,9 +230,10 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
   def body:
     pc.stack(~sep: row_sep, ~horiz: #'center, premise1, premise2, bar, below)
   def box:
-    as_pict(shape_pict(~width: body.width + 40.0, ~height: body.height + 40.0,
-                       ~geom: preset_geom("roundRect", [pair("adj", "val 6000")]),
-                       ~fill: hex("E2E2E2"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
+    def bw = body.width + 40.0
+    def bh = body.height + 40.0
+    written_shape(rounded_path(bw, bh, 0.06 * math.min(bw, bh)), ~width: bw, ~height: bh,
+                  ~fill: draw.Color(0xE2, 0xE2, 0xE2), ~line: "black", ~line_width: 1.0)
   // Where each row is drawn inside the box: the body is centred in the box, which
   // is 20 bigger on every side, and each row is centred in the body. A copy flown
   // out of the rule starts at these coordinates, so it starts exactly where the

@@ -10,6 +10,7 @@ import:
   lib("glide-pptx/runtime.rhm") open
   "slidehelpers.rhm" open
   "magicmove.rhm" open
+  "write.rhm" open
   pict as pc
   pict/text as text
   draw
@@ -35,9 +36,13 @@ export:
   greek
   in_section
   keynote_blue
-  linebox
   math_face
   math_font
+  math_text
+  code_text
+  prose_text
+  box_dx
+  box_dy
   media
   crop_pict
   robot
@@ -190,37 +195,49 @@ fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
 // nodes' borders and the edges between them. See `chain_wire`.
 def keynote_blue = draw.Color(4, 51, 255)
 
-// Keynote's centred one-line text box, which the deck has forty-one of. Every one
-// of them spelled out `~anchor: #'center` and `~wrap: #false` again; they say it
-// once here instead. `~width` and `~height` stay the size Keynote gave the box --
-// the glyphs are free to overflow it, and several of them do, which is Keynote's
-// geometry rather than a mistake to correct here.
-//
-// The name is seven letters to match `textbox`, so that swapping one for the other
-// leaves every continuation line in this file at the column shrubbery wants it.
-fun linebox(~width: w :: Real, ~height: h :: Real, & paras, ~& kws):
-  textbox(~width: w, ~height: h, ~anchor: #'center, ~wrap: #false, & paras, ~& kws)
+// Every word the deck draws goes through one of these three, so that it is text
+// that writes itself when a press brings it on: `written_text` carries the glyph
+// outlines its pen traces, and settles into exactly the text `pict.text` draws.
+fun prose_text(s :: String, ~size: size :: Real = 40.0,
+               ~bold: bold :: Boolean = #false, ~italic: italic :: Boolean = #false,
+               ~color: color = "black") :: pc.Pict:
+  written_text(s, ~color: color,
+               ~font: draw.Font(~name: prose_font, ~size: size,
+                                ~weight: if bold | #'bold | #'normal,
+                                ~style: if italic | #'italic | #'normal))
+fun code_text(s :: String, ~size: size :: Real = code_size,
+              ~italic: italic :: Boolean = #false, ~color: color = "black") :: pc.Pict:
+  written_text(s, ~color: color,
+               ~font: draw.Font(~name: code_font, ~size: size,
+                                ~style: if italic | #'italic | #'normal))
+fun math_text(s :: String, ~size: size :: Real = code_size, ~color: color = "black") :: pc.Pict:
+  written_text(s, ~color: color, ~font: draw.Font(~name: math_font, ~size: size))
+
+// Where Keynote's text boxes put their ink: 4 across and 3 down from the corner of
+// the box, measured against the deck's 48pt labels. A label that used to be a text
+// box at (x, y) is text at (x + box_dx, y + box_dy).
+def box_dx = 4.0
+def box_dy = 3.0
 
 // The size the code box is set at, which the rule under it is scaled to match.
 def code_size = 40.0
 
 def code_face = draw.Font(~name: code_font, ~size: code_size)
 def math_face = draw.Font(~name: math_font, ~size: code_size)
-fun code(s :: String) :: pc.Pict: pc.text(s, ~font: code_face)
+fun code(s :: String) :: pc.Pict: code_text(s)
 fun code_sub(s :: String) :: pc.Pict: code(s).scale(0.6)
 // the Greek is set in the notation face, as everywhere else in the deck: PT Mono
 // has none
-fun greek(s :: String) :: pc.Pict: pc.text(s, ~font: math_face)
+fun greek(s :: String) :: pc.Pict: math_text(s)
 def code_indent = code("  ").width    // the body, inside the signature
 
-// A bordered box. The runtime's shape rather than pict's `rectangle`: a pict
-// outline borrows the pen *style* of the surface it lands on, and the canvas
-// leaves a transparent pen behind it, so a pict's border drawn straight onto a
-// slide comes out invisible. The runtime's shapes set their own pen.
+// A bordered box, drawn from its path so that a press can write it. `~rounded` is
+// in OOXML's units, thousandths of a percent of the shorter side, as the shapes
+// Keynote exported had it.
 fun frame_box(w :: Real, h :: Real, ~rounded: r = #false) :: pc.Pict:
-  as_pict(shape_pict(~width: w, ~height: h,
-                     ~geom: if r | preset_geom("roundRect", [pair("adj", "val " +& r)]) | #false,
-                     ~fill: hex("FFFFFF"), ~line: make_stroke(hex("000000"), ~width: 1.0)))
+  def radius = if r | r / 100000.0 * math.min(w, h) | 0.0
+  written_shape(rounded_path(w, h, radius), ~width: w, ~height: h,
+                ~fill: "white", ~line: "black", ~line_width: 1.0)
 
 // A line built from its pieces, in the order they are written. A piece with a role
 // is one that stands for a node in the graph; `#false` is punctuation.
@@ -264,23 +281,20 @@ fun bubble_at(node, ~spot: spot :~ List, ~body: body :~ List,
                 ~color: color, ~padding: 18.0, content)
 
 // A word for a bubble that has to fit somewhere narrow.
-def small_face = draw.Font(~name: prose_font, ~size: 32.0, ~weight: #'bold)
-fun small_prose(s :: String) :: pc.Pict: pc.text(s, ~font: small_face)
+fun small_prose(s :: String) :: pc.Pict: prose_text(s, ~size: 32.0, ~bold: #true)
 
 // A sentence for a bubble, in the deck's Helvetica Neue: each item is a string
-// and how it is set, `#'plain`, `#'bold` or `#'sub`.
+// and how it is set, `#'plain`, `#'bold`, `#'bold_italic` -- for the one word in a
+// bubble that names a thing rather than says it -- or `#'sub`.
 def prose_face = draw.Font(~name: prose_font, ~size: 40.0)
-def prose_bold = prose_face with (weight = #'bold)
-// for the one word in a bubble that names a thing rather than says it
-def prose_bold_italic = prose_bold with (style = #'italic)
 fun prose(items :: List) :: pc.Pict:
   pc.beside(~vert: #'bottom,
             & for List ([s, style] in items):
                 match style
-                | #'bold: pc.text(s, ~font: prose_bold)
-                | #'bold_italic: pc.text(s, ~font: prose_bold_italic)
-                | #'sub: pc.text(s, ~font: prose_face).scale(0.6)
-                | ~else: pc.text(s, ~font: prose_face))
+                | #'bold: prose_text(s, ~bold: #true)
+                | #'bold_italic: prose_text(s, ~bold: #true, ~italic: #true)
+                | #'sub: prose_text(s).scale(0.6)
+                | ~else: prose_text(s))
 
 // Several of those, stacked. A bubble beside the code box has the slide's right
 // half to live in, and a sentence long enough to need more than that is broken
@@ -336,19 +350,20 @@ fun crop_pict(p :: pc.Pict, ~at: at :~ List, ~size: size :~ List) :: pc.Pict:
         ~width: w, ~height: h)
 
 // A slide with the deck's title at the deck's place, and nothing else yet.
-// The title is placed inside this helper, so each call supplies the explicit
-// identity and correction that Glide writes at the outer source site.
+//
+// The title is text rather than Keynote's text box, so that it is a thing the deck
+// can write. `~box` is where Keynote's box was; the text lands where the box put
+// its ink -- measured, on the box's 85pt bold: 4 across and 15 up from the corner
+// -- give or take the letter-spacing Keynote took out. `~tag` is kept for Glide,
+// which names a slide's title by it; `~nudge` is a correction to where it goes.
+def title_face = draw.Font(~name: prose_font, ~size: 85.0, ~weight: #'bold)
 fun titled(title :: String, ~tag: tag :: String,
-           ~nudge: nudge :: maybe(List) = #false) :: pc.Pict:
-  as_pict(slide_canvas(
-            ~width: slide_width, ~height: slide_height,
-            ~background: hex("FFFFFF"),
-            at(95.0, 85.0, ~tag: tag, ~name: title, ~nudge: nudge,
-               textbox(~width: 1730.0, ~height: 112.988, ~autofit: #'shrink,
-                       ~insets: insets(4.0, 4.0, 4.0, 4.0),
-                       para(~line_spacing: pair(#'percent, 0.8),
-                            run(title, ~font: prose_font, ~size: 85.0, ~bold: #true,
-                                ~spacing: -1.7))))))
+           ~nudge: nudge :: maybe(List) = #false,
+           ~box: box :: List = [95.0, 85.0]) :: pc.Pict:
+  def [nx, ny] = nudge || [0.0, 0.0]
+  put(as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
+                           ~background: hex("FFFFFF"))),
+      written_text(title, ~font: title_face), box[0] + 4.0 + nx, box[1] - 15.0 + ny)
 
 // Keynote's little "program becomes a tree" icon in the top-right corner.
 fun with_icon(canvas :: pc.Pict) :: pc.Pict:

@@ -37,7 +37,7 @@ def flow_title = "E-Graphs Explore a Big Space"
 
 def term_font = draw.Font(~name: prose_font, ~size: 45.0)
 def term_strs = ["(", "a", " ", "+", " ", "1", ")", " ", "-", " ", "1"]
-def term_glyphs = for List (s in term_strs): pc.text(s, ~font: term_font)
+def term_glyphs = for List (s in term_strs): prose_text(s, ~size: 45.0)
 def values(term_offs, term_w):
   for values(acc :~ List = [], dx :~ Real = 0.0) (g :~ pc.Pict in term_glyphs, i in 0..):
     values(acc ++ [dx - 1.5 * i], dx + g.width)

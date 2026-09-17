@@ -3,6 +3,7 @@ import:
   pict as pc
   draw
   "write.rhm"
+  "slidehelpers.rhm".reword_between
 
 export:
   Frame
@@ -147,7 +148,12 @@ fun draws_between(a :: Frame, b :: Frame, t :: Real, appear :~ Map) :: List:
             [[entry_band(eb), arriving, x, y,
               (if moving(as_pict(arriving)) | 1.0 | t), t]]
         | eb == []: [[entry_band(ea), ea[0], x, y, 1.0 - t, #false]]
-        | ea[0] === eb[0]: [[entry_band(ea), ea[0], x, y, 1.0, #false]]
+        | ea[0] === eb[0] || grab(appear, key) == #'same:
+            [[entry_band(ea), ea[0], x, y, 1.0, #false]]
+        | grab(appear, key):
+            // the same kind of bubble with other words in it: the old words are
+            // taken back and the new ones written, the shell staying put
+            [[entry_band(eb), appear[key], x, y, 1.0, t]]
         | ~else: [[entry_band(ea), ea[0], x, y, 1.0 - t, #false],
                   [entry_band(eb), eb[0], x, y, t, #false]])
 
@@ -172,9 +178,14 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                   ~stage: stage :: maybe(Function.of_arity(4)) = #false,
                   ~stage_band: stage_band :: Int = band_below,
                   // What each key this press brings on looks like on its way in,
-                  // worked out once by `magic_press`: tracing a pict is far too
-                  // expensive to do again for every frame of the press.
-                  ~appear: appear :: Map = {}) :: pc.Pict:
+                  // and how a key drawn as one bubble and then another changes,
+                  // worked out once by `magic_press` rather than per frame.
+                  ~appear: appear :: Map = {},
+                  // `[gone, new]` pairs of edge specs: an edge this press takes
+                  // away that becomes one it brings on -- a rule's pointer at what
+                  // it matched becoming the edge of the node it added. The wire is
+                  // asked to draw `[#'morph, gone, new, t]` for each.
+                  ~pairs: pairs :: List = []) :: pc.Pict:
   def blank = pc.blank(~width: base.width, ~height: base.height)
   def draws :~ List = draws_between(a, b, t, appear)
   def at :~ Map = picts_between(a, b, t)
@@ -187,20 +198,29 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
       def [x, y] = spots[key]
       put(q, as_pict(at[key]).ghost(), x, y)
   def both_es: for List (e in a.edges): keep_when b.edges.contains(e); e
-  def gone_es: for List (e in a.edges): skip_when b.edges.contains(e); e
-  def new_es: for List (e in b.edges): skip_when a.edges.contains(e); e
+  def paired_gone = for List (pr :~ List in pairs): pr[0]
+  def paired_new = for List (pr :~ List in pairs): pr[1]
+  def gone_es:
+    for List (e in a.edges): skip_when b.edges.contains(e) || paired_gone.contains(e); e
+  def new_es:
+    for List (e in b.edges): skip_when a.edges.contains(e) || paired_new.contains(e); e
+  // an edge that is another edge's continuation is drawn as the one turning into
+  // the other, by the wire, which is handed both specs and how far along it is
+  def morph_es = for List ([gone, new] in pairs): [#'morph, gone, new, t]
   // An edge this press is bringing on is *drawn*, not faded: `current_draw` says
   // how much of it there is yet, and whatever the wire draws lines with reads it.
   // The alpha still ramps, quickly, because a wire may draw more than lines and
   // what does not honour the parameter has to arrive somehow.
+  // An edge this press brings on starts once the nodes it joins are most of the
+  // way written, and takes the rest of the press to draw.
+  def edge_t = math.min(1.0, math.max(0.0, (t - 0.3) / 0.7))
   fun layers_of(draw_them :: Function.of_arity(3)) :: List:
     for List ([specs, al, drawn] in [[both_es, 1.0, 1.0],
                                      [gone_es, 1.0 - t, 1.0],
-                                     [new_es, (if write.write_by_default()
-                                               | math.min(1.0, 3.0 * t)
-                                               | t), t]]):
+                                     [new_es, math.min(1.0, 3.0 * edge_t), edge_t],
+                                     [morph_es, 1.0, 1.0]]):
       keep_when specs != [] && al > 0.0
-      parameterize { write.current_draw: (if write.write_by_default() | drawn | 1.0) }:
+      parameterize { write.current_draw: drawn }:
         draw_them(ghosts, specs, at).alpha(al)
   def edge_layers = layers_of(wire)
   def under_layers = if under_wire | layers_of(under_wire) | []
@@ -238,6 +258,24 @@ fun magic_still(base :: pc.Pict, f :: Frame, ~& kws) :: pc.Pict:
 // One press. Two frames with no key in common have nothing to move, and the whole
 // picture fades: that is worth saying out loud, since it looks exactly like an
 // ordinary cross-fade and so passes unnoticed.
+// The edges this press takes away that become edges it brings on: a pointer
+// (`#'point`, `#'m`) at a node, and an edge arriving at that same node. Each is
+// paired once, in order.
+fun pair_edges(gone :~ List, new :~ List) :: List:
+  def (pairs, _):
+    for values(acc :~ List = [], left :~ List = new) (g :~ List in gone):
+      skip_when !(g[0] == #'point || g[0] == #'m)
+      def hit:
+        for values(found = #false) (n :~ List in left):
+          skip_when found
+          skip_when n[0] == #'point || n[0] == #'m || n[0] == #'grow
+          skip_when n.length() < 3 || n[2] != g[2]
+          n
+      if hit
+      | values(acc ++ [[g, hit]], left.remove(hit))
+      | values(acc, left)
+  pairs
+
 fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
                 ~extent: extent :: Real = 1.2, ~& kws) :: pc.Pict:
   def shared:
@@ -250,20 +288,42 @@ fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
   // A key only the second frame has is a thing this press introduces, and how a
   // thing arrives is an animation in the epoch before its time box -- which is
   // this epoch. So it is written rather than faded, unless it brought an arrival
-  // of its own, in which case that is played instead. Worked out here and not in
-  // `magic_between`, which runs once per frame.
+  // of its own, in which case that is played instead. A key both frames have but
+  // draw as two bubbles of one kind is reworded: the old words unwrite and the new
+  // ones write while the shell stays. Worked out here and not in `magic_between`,
+  // which runs once per frame.
   def appear:
-    cond
-    | !write.write_by_default(): {}
-    | ~else:
-        for values(m :~ Map = {}) (key in b.picts.keys()):
-          skip_when a.picts.has_key(key)
-          def e :~ List = b.picts[key]
-          m ++ { key: write.as_written(as_pict(e[0])) }
-  pc.animate(~extent: extent, fun (t): magic_between(base, a, b, t, ~appear: appear, ~& kws))
+    for values(m :~ Map = {}) (key in b.picts.keys()):
+      def eb :~ List = b.picts[key]
+      cond
+      | !a.picts.has_key(key): m ++ { key: write.as_written(as_pict(eb[0])) }
+      | ~else:
+          def ea :~ List = a.picts[key]
+          def pa = as_pict(ea[0])
+          def pb = as_pict(eb[0])
+          cond
+          | ea[0] === eb[0]: m
+          | write.looks_same(pa, pb):
+              // built again for this frame but drawn the same: a scene rebuilt per
+              // press makes a new pict for every key, and cross-fading a picture
+              // into itself is work, while rewording it would rewrite words that
+              // never changed
+              m ++ { key: #'same }
+          | ~else:
+              // a bubble reworded keeps its shell; anything else that says other
+              // words unwrites and writes; a restyling -- a node turning green --
+              // cross-fades where it stands
+              def sw = reword_between(pa, pb) || write.rewrite_between(pa, pb)
+              if sw | m ++ { key: sw } | m
+  def gone = for List (e in a.edges): skip_when b.edges.contains(e); e
+  def new = for List (e in b.edges): skip_when a.edges.contains(e); e
+  def pairs = pair_edges(gone, new)
+  pc.animate(~extent: extent,
+             fun (t): magic_between(base, a, b, t, ~appear: appear, ~pairs: pairs, ~& kws))
 
 // A whole slide: the first frame, then a press to each of the rest.
-fun magic_slide(base :: pc.Pict, frames :~ List, ~& kws) :: pc.Pict:
+fun magic_slide(base :: pc.Pict, frames :~ List,
+                ~extent: extent :: Real = 1.2, ~& kws) :: pc.Pict:
   pc.switch(magic_still(base, frames[0], ~& kws),
             & for List (i in 1..frames.length()):
-                magic_press(base, frames[i - 1], frames[i], ~& kws))
+                magic_press(base, frames[i - 1], frames[i], ~extent: extent, ~& kws))

@@ -77,9 +77,7 @@ fun chain_nodes(~picked: picked :: List = [],
                 // key -> [fill] or [fill, second fill], for the statewalk DP, which
                 // fills a class by the extractable sets it has stored a walk for
                 ~fills: fills :: Map = {}) :: Map:
-  fun label(s): run(s, ~font: node_font, ~size: 40.0)
-  fun sub(i): run(to_string(i), ~font: node_font, ~size: 40.0, ~baseline: -0.06)
-  fun node(key, color, lw, runs):
+  fun node(key, color, lw, label):
     def w = (chain_box :~ Map)[key] :~ Real
     def two :~ List = if fills.has_key(key) | fills[key] | []
     graph_node(~width: w, ~height: if w > 100 | 64.0 | 63.486,
@@ -92,19 +90,19 @@ fun chain_nodes(~picked: picked :: List = [],
                        | picked.contains(key): node_green
                        | ~else: node_white),
                ~fill2: if two.length() > 1 | two[1] | #false,
-               & runs)
-  fun leaf(key, s): node(key, "000000", 3.0, [label(s)])
-  fun value(key, i): node(key, "000000", 3.0, [label("v"), sub(i)])
+               ~label: label)
+  fun leaf(key, s): node(key, "000000", 3.0, node_label(s))
+  fun value(key, i): node(key, "000000", 3.0, node_label("v", ~sub: to_string(i)))
   fun state(key, i):
     node(key, stateful_hex, 4.0,
-         if i == 0 | [label("ω")] | [label("ω"), sub(i)])
-  fun op(key): node(key, stateful_hex, 4.0, [label("update")])
+         if i == 0 | node_label("ω") | node_label("ω", ~sub: to_string(i)))
+  fun op(key): node(key, stateful_hex, 4.0, node_label("update"))
   // `return` takes a state as well as a value, so it is one of the stateful ones
-  {#'ret: node(#'ret, stateful_hex, 4.0, [label("return")]),
+  {#'ret: node(#'ret, stateful_hex, 4.0, node_label("return")),
    #'a: leaf(#'a, "a"), #'x: leaf(#'x, "x"), #'one: leaf(#'one, "1"),
    // the value the second write stores, and the reason the two writes cost
    // different amounts to perform
-   #'xp: node(#'xp, "000000", 3.0, [label("x+1")]),
+   #'xp: node(#'xp, "000000", 3.0, node_label("x+1")),
    #'s0: state(#'s0, 0), #'s1: state(#'s1, 1),
    #'s2: state(#'s2, 2), #'s3: state(#'s3, 3),
    #'v1: value(#'v1, 1), #'v2: value(#'v2, 2), #'v3: value(#'v3, 3),
@@ -506,6 +504,19 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     // a statewalk being laid down, in the colour of the branch it took
     | e[0] == #'walk:
         chain_wire(q, at, [[e[1], e[2]]], ~line_width: 11, ~color: hex_color(e[3]))
+    // a rule's pointer at the node it matched, becoming the edge of the node the
+    // rule added: `e[1]` is the pointer spec, `e[2]` the edge it becomes, `e[3]`
+    // how far along the press is
+    | e[0] == #'morph:
+        def [_, chip, node] = e[1] :~ List
+        def new :~ List = e[2]
+        def value = new[0] == #'v
+        arrow_morph(~on: q, ~t: e[3],
+                    ~from_a: at[chip], ~to_a: at[node],
+                    ~from_b: at[new[1]], ~to_b: at[new[2]],
+                    ~color_a: chip_line_color, ~color_b: (if value | "black" | keynote_blue),
+                    ~line_width_a: 3, ~line_width_b: (if value | 4 | 6),
+                    ~gap_a: 4, ~gap_b: 4)
     | ~else: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: keynote_blue)
 
 // and the pointers, thin, gold and dashed, so they read as something laid over the

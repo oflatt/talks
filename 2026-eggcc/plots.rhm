@@ -22,6 +22,7 @@ export:
   perf_stages
   cdf_chart
   cdf_stages
+  compile_chart
 
 // ------------------------------------------------------------------- the ink
 def plot_line = draw.Color(40, 40, 40)
@@ -255,3 +256,78 @@ def cdf_stages :~ List:
   [cdf_chart(~draw: [0.0, 0.0, 0.0]),
    cdf_chart(~draw: [1.0, 0.0, 0.0]),
    cdf_chart(~draw: [1.0, 1.0, 1.0])]
+
+// ------------------------------------------------------------ compile times
+// How long each compiler takes over a benchmark, on a log scale: eggcc is a stem
+// out of the bottom of the chart, LLVM at -O3 a square, one column per benchmark
+// sorted by ours -- so the gap between the two, and how it grows to the right, is
+// the thing read. Two decades between them at the far end.
+def ct_w = 1180.0
+def ct_h = 560.0
+def ct_x = 300.0
+def ct_y = 262.0
+def ct_lo = -1.0          // log10 seconds at the bottom: a tenth of a second
+def ct_hi = 3.0           // and at the top: a thousand
+def llvm3_color = draw.Color(20, 20, 20)
+
+fun ct_yv(secs :: Real) :: Real:
+  def l = math.log(math.max(secs, 1.0e-9)) / math.log(10.0)
+  ct_h * (1.0 - (math.max(ct_lo, math.min(ct_hi, l)) - ct_lo) / (ct_hi - ct_lo))
+
+fun compile_body(~ours: ours :: Real, ~llvm: llvm :: Real) :: pc.Pict:
+  def rows :~ List = compile_rows
+  def n = rows.length()
+  fun xv(i :: Int) :: Real: (i + 0.5) * ct_w / n
+  pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+          fun pt(x :: Real, y :: Real): draw.Point(dx + x, dy + y)
+          dc.pen := pen(plot_grid, 1.5)
+          for (d in [0, 1, 2]):
+            dc.line(pt(0.0, ct_yv(math.expt(10.0, d))), pt(ct_w, ct_yv(math.expt(10.0, d))))
+          for (row :~ List in rows, i in 0..):
+            def x = xv(i)
+            def k_ours = stagger(ours, i, n, 0.55)
+            skip_when k_ours <= 0.0
+            def y_ours = lerp(ct_h, ct_yv(row[1] :~ Real), k_ours)
+            dc.pen := pen(ours_color, 4.0)
+            dc.line(pt(x, ct_h), pt(x, y_ours))
+            dc.brush := draw.Brush(~color: ours_color)
+            dc.pen := pen(ours_color, 1.0)
+            dc.ellipse(draw.Rect(pt(x - 7.0, y_ours - 7.0), draw.Size(14.0, 14.0)))
+            def k_llvm = stagger(llvm, i, n, 0.55)
+            when k_llvm > 0.0
+            | def y_llvm = ct_yv(row[2] :~ Real)
+              dc.brush := draw.Brush(~color: llvm3_color with (alpha = k_llvm))
+              dc.pen := draw.Pen.none
+              dc.rectangle(draw.Rect(pt(x - 6.0, y_llvm - 6.0), draw.Size(12.0, 12.0))),
+        ~width: ct_w, ~height: ct_h)
+
+fun compile_chart(~ours: ours :: Real = 1.0, ~llvm: llvm :: Real = 1.0) :: pc.Pict:
+  def frame:
+    pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
+            dc.pen := pen(plot_line, 3.0)
+            dc.line(draw.Point(dx, dy), draw.Point(dx, dy + ct_h))
+            dc.line(draw.Point(dx, dy + ct_h), draw.Point(dx + ct_w, dy + ct_h)),
+          ~width: ct_w, ~height: ct_h)
+  def start = put(blank_slide, frame, ct_x, ct_y)
+  def with_ticks:
+    for values(q :~ pc.Pict = start) (d in -1..4, name in ["0.1 s", "1 s", "10 s", "100 s", "1000 s"]):
+      def lab :~ pc.Pict = axis_text(name)
+      put(q, lab, ct_x - 16.0 - lab.width, ct_y + ct_yv(math.expt(10.0, d)) - lab.height / 2)
+  def y_label = (axis_text("Compile time") :~ pc.Pict).rotate(math.pi / 2)
+  def x_label :~ pc.Pict = axis_text("Every benchmark in the suite, sorted by eggcc")
+  def rows :~ List = compile_rows
+  def n = rows.length()
+  def base:
+    put(put(put(with_ticks, compile_body(~ours: ours, ~llvm: llvm), ct_x, ct_y),
+            y_label, ct_x - 150.0, ct_y + ct_h / 2 - (y_label :~ pc.Pict).height / 2),
+        x_label, ct_x + (ct_w - x_label.width) / 2, ct_y + ct_h + 22.0)
+  // each series named in the clear air above its right-hand end
+  fun name_at(q :~ pc.Pict, s :: String, c, secs :: Real, k :: Real) :: pc.Pict:
+    if k <= 0.0
+    | q
+    | block:
+        def lab :~ pc.Pict = name_text(s, c).alpha(math.min(1.0, k * 1.6))
+        put(q, lab, ct_x + ct_w + 34.0, ct_y + ct_yv(secs) - lab.height / 2)
+  def last :~ List = rows[n - 1]
+  name_at(name_at(base, "eggcc", ours_color, last[1], ours),
+          "LLVM -O3", llvm3_color, last[2], llvm)

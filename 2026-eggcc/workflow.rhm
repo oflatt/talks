@@ -45,20 +45,16 @@ export:
 // A stage of the workflow: a bubble in the deck's own style, named, with the thing
 // itself inside it. The box and its contents are separate picts, since the contents
 // are what changes and what travels on.
-def stage_name_face = draw.Font(~name: prose_font, ~size: 36.0, ~weight: #'bold)
-def stage_code_face = draw.Font(~name: code_font, ~size: 40.0)
-def stage_greek_face = draw.Font(~name: math_font, ~size: 40.0)
-
 // the same three spellings the code box uses, for the lines a stage holds that no
 // other slide draws
-fun stage_code(s :: String) :: pc.Pict: pc.text(s, ~font: stage_code_face)
-fun stage_greek(s :: String) :: pc.Pict: pc.text(s, ~font: stage_greek_face)
+fun stage_code(s :: String) :: pc.Pict: code_text(s, ~size: 40.0)
+fun stage_greek(s :: String) :: pc.Pict: math_text(s, ~size: 40.0)
 fun stage_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
 fun stage_pieces(label :: String, body :: pc.Pict, at :~ List,
                  ~width: w :: maybe(Real) = #false,
                  ~height: h :: maybe(Real) = #false) :: Map:
-  def name = pc.text(label, ~font: stage_name_face)
+  def name = prose_text(label, ~size: 36.0, ~bold: #true)
   def inside = pc.stack(~sep: 18.0, ~horiz: #'center, name, body)
   def box:
     as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
@@ -81,12 +77,11 @@ def flow_gear = make_gear(~size: 190.0, ~teeth: 11)
 // it the same size, so renaming it is a change of words in one place rather than a
 // shape that grows.
 fun extract_arrow(~safe: safe :: Boolean) :: pc.Pict:
-  def face = draw.Font(~name: prose_font, ~size: 30.0, ~weight: #'bold)
+  fun word(s :: String) :: pc.Pict: prose_text(s, ~size: 30.0, ~bold: #true)
   def label:
     if safe
-    | pc.stack(~sep: 2.0, ~horiz: #'center,
-               pc.text("Effect-safe", ~font: face), pc.text("extraction!", ~font: face))
-    | pc.text("Extract!", ~font: face)
+    | pc.stack(~sep: 2.0, ~horiz: #'center, word("Effect-safe"), word("extraction!"))
+    | word("Extract!")
   as_pict(make_arrow(~width: 330.0, ~height: 164.0, ~color: talk_blue, label))
 
 // Where each stage sits. Both pictures share these, so the second is the first with
@@ -134,7 +129,7 @@ fun workflow_scene(~section: section :: Int,
   // two come to
   def optimized_body:
     if section == 0
-    | pc.text("a", ~font: term_font)
+    | prose_text("a", ~size: 45.0)
     | stage_line(stage_code("return update(a, x+1, "),
                  stage_greek("ω"), stage_code(")")).scale(0.52)
   def optimized = stage_pieces("Optimized Program", optimized_body, flow_optimized_at)
@@ -218,8 +213,10 @@ fun slide_40():
     { #'program: [input_line, term_x, term_y, band_nodes],
       #'rule_1: [rules_line_1, & rules_line_1_at, band_nodes],
       #'rule_2: [rules_line_2, & rules_line_2_at, band_nodes] }
+  // It opens empty, so that the first stage is written on a press like the rest.
   magic_slide(page,
-              [& for List (k in 1..(flow_steps :~ List).length() + 1):
+              [Frame(),
+               & for List (k in 1..(flow_steps :~ List).length() + 1):
                    workflow_frame(scene, flow_keys(~upto: k)),
                Frame(~picts: handoff)],
               ~wire: workflow_wire)

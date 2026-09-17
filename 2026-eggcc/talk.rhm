@@ -37,6 +37,7 @@ import:
   "workflow.rhm" open
   "dp.rhm" open
   "shots.rhm" open
+  "backup.rhm" open
 
 export:
   slide_width
@@ -60,6 +61,9 @@ export:
   slide_cdf
   slide_perf
   slide_questions
+  slide_raytracer
+  slide_compile_times
+  slide_made
 
 // The macro keeps this as an ordinary list for the show and snapshot script,
 // while recording the undecorated source slide behind each section wrapper for
@@ -87,7 +91,9 @@ glide_slides all_slides:
    in_section(3, slide_eval_setup),
    in_section(3, slide_cdf), in_section(3, slide_perf),
    // and out the way we came in
-   slide_questions]
+   slide_questions,
+   // the backup slides, for the questions that ask for them
+   slide_raytracer, slide_compile_times, slide_made]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the

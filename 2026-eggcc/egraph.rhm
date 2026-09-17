@@ -11,6 +11,7 @@ import:
   lib("glide-pptx/runtime.rhm") open
   "slidehelpers.rhm" open
   "theme.rhm" open
+  "write.rhm" open
   pict as pc
   draw
 
@@ -33,6 +34,7 @@ export:
   node_es_2
   node_fork
   node_green
+  node_label
   node_match
   node_middle
   node_white
@@ -86,63 +88,67 @@ fun hex_color(h :: String) :: draw.Color:
   fun part(i :: Int) :: Int: String.to_number(h.substring(i, i + 2), ~radix: 16)
   draw.Color(part(0), part(2), part(4))
 
-// A rounded-rect path matching what the `roundRect` preset draws, inset by half a
-// line width so that a fill drawn with it stays under the border rather than beside
-// it. `adj` is thousandths of a percent of the shorter side, as OOXML has it.
-fun round_rect_path(w :: Real, h :: Real, adj :: String, inset :: Real) :: draw.Path:
-  def r = (String.to_number(adj) :~ Real) / 100000.0 * math.min(w, h)
-  def p = draw.Path()
-  p.rounded_rectangle([inset, inset, w - 2 * inset, h - 2 * inset],
-                      math.max(0.0, r - inset))
-  p
+// A node's label: the term it stands for, in the notation face, with an optional
+// subscript. The subscript is as Keynote set it: 58% of the size, its baseline 6% of
+// the size below the line's. A pict's baseline is measured up from its bottom, so
+// trimming that much off the digit's bottom is what lowers it.
+fun node_label(s :: String, ~sub: sub :: maybe(String) = #false,
+               ~size: size :: Real = 40.0) :: pc.Pict:
+  def face = draw.Font(~name: node_font, ~size: size)
+  def main = written_text(s, ~font: face)
+  if sub
+  | def below = written_text(sub, ~font: face with (size = 0.58 * size))
+    pc.beside(~vert: #'baseline, main, below.pad(~bottom: -0.06 * size))
+  | main
 
-// A node of an e-graph. `~fill2` gives it a second fill over the part of it right of
-// `~split`, for a class the DP has stored two statewalks for: one box in two
-// colours, rather than two boxes or a mark laid on top.
+// A node of an e-graph: a rounded box drawn from its path, so that a press can
+// write it, with its label in the middle. `~fill2` gives it a second fill over the
+// part of it right of `~split`, for a class the DP has stored two statewalks for:
+// one box in two colours, rather than two boxes or a mark laid on top.
 fun graph_node(~width: w :: Real, ~height: h :: Real, ~adj: adj :: String,
                ~line: line :: String, ~line_width: lw :: Real,
                ~fill: fill :: String = node_white,
                ~fill2: fill2 :: maybe(String) = #false,
-               ~split: split :: Real = 0.5, & runs):
-  def shape:
-    shape_pict(~width: w, ~height: h,
-               ~geom: preset_geom("roundRect", [pair("adj", "val " +& adj)]),
-               ~fill: if fill2 | #false | hex(fill),
-               ~line: make_stroke(hex(line), ~width: lw),
-               ~body: body(~anchor: #'center, ~insets: insets(0.0, 0.0, 0.0, 0.0),
-                           para(~align: #'center, & runs)))
-  cond
-  | !fill2: shape
-  | ~else:
-      def path = round_rect_path(w, h, adj, lw / 2)
-      def under:
-        pc.dc(fun (target :: draw.DC, dx, dy):
-                target.save()
-                target.pen := draw.Pen(~color: draw.Color(0, 0, 0, 0.0), ~width: 0)
-                fun paint(color :: String):
-                  target.brush := draw.Brush(~color: hex_color(color))
-                  target.path(path, ~dx: dx, ~dy: dy)
-                paint(fill)
-                // the far side again, through a window cut where the split falls
-                def window = draw.Region()
-                window.rectangle([dx + w * split, dy, w * (1 - split), h])
-                target.clipping_region := window
-                paint(fill2)
-                target.restore(),
-              ~width: w, ~height: h)
-      pc.overlay(under, as_pict(shape))
+               ~split: split :: Real = 0.5,
+               ~label: label :: maybe(pc.Pict) = #false) :: pc.Pict:
+  def r = (String.to_number(adj) :~ Real) / 100000.0 * math.min(w, h)
+  def path = rounded_path(w, h, r)
+  // two colours: the fill, and the far side painted again through a window cut
+  // where the split falls, both at whatever opacity the writer has got the fill to
+  def paint:
+    if fill2
+    | fun (target :: draw.DC, dx, dy, alpha :: Real):
+        target.pen := draw.Pen.none
+        target.brush := draw.Brush(~color: hex_color(fill) with (alpha = alpha))
+        target.path(path, ~dx: dx, ~dy: dy)
+        def was = target.clipping_region
+        def window = draw.Region()
+        window.rectangle([dx + w * split, dy, w * (1 - split), h])
+        target.clipping_region := window
+        target.brush := draw.Brush(~color: hex_color(fill2) with (alpha = alpha))
+        target.path(path, ~dx: dx, ~dy: dy)
+        target.clipping_region := was
+    | #false
+  def box = written_shape(path, ~width: w, ~height: h,
+                          ~fill: if fill2 | #false | hex_color(fill),
+                          ~line: hex_color(line), ~line_width: lw, ~paint: paint)
+  // how round its corners are, as a share of the shorter side, for an arrow to aim
+  // at its border rather than at the box round it
+  (if label | pc.overlay(box, label) | box).set_metadata({ #'corner: r / math.min(w, h) })
 
 // The pointer that walks an extraction down a graph, a press per class, in the
 // blue the bubbles are drawn in. Both extraction walks use it, so a press means
 // the same thing on either slide; each says where to put it, since the two graphs
 // leave the room for it in different places.
+// It is the `rightArrow` preset Keynote drew, redrawn as a path: the shaft 45% of
+// the height, the head 60% of the shorter side long.
 def walk_hex = "2684EB"                       // `talk_blue`, as the runtime spells it
 fun walk_arrow(~facing: facing :: String = "rightArrow",
-               ~width: w :: Real = 80.0, ~height: h :: Real = 34.0):
-  shape_pict(~width: w, ~height: h,
-             ~geom: preset_geom(facing,
-                                [pair("adj1", "val 45000"), pair("adj2", "val 60000")]),
-             ~fill: hex(walk_hex))
+               ~width: w :: Real = 80.0, ~height: h :: Real = 34.0) :: pc.Pict:
+  def head = 0.6 * math.min(w, h) / w
+  written_shape(arrow_path(w, h, ~head: head, ~shaft: 0.45,
+                           ~facing: if facing == "leftArrow" | #'left | #'right),
+                ~width: w, ~height: h, ~fill: hex_color(walk_hex))
 
 
 def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
@@ -200,14 +206,9 @@ fun eclass_tube(p :: pc.Pict, from :: List, c1 :: List, c2 :: List, to :: List,
   def path = draw.Path()
   path.move_to(from)
   path.curve_to(c1, c2, to)
+  // a stroke along the curve, which a press writes by running the pen down it
   fun stroked(pen :: draw.Pen) :: pc.Pict:
-    pc.dc(fun (target :: draw.DC, dx, dy):
-            target.save()
-            target.pen := pen
-            target.brush := draw.Brush.none
-            target.path(path, ~dx: dx, ~dy: dy)
-            target.restore(),
-          ~width: w, ~height: h)
+    written_stroke(path, ~width: w, ~height: h, ~pen: pen)
   let p = put(p, stroked(draw.Pen(~color: (if solid | eclass_solid | eclass_grey),
                                   ~width: thickness, ~cap: cap)),
               0.0, 0.0)
@@ -273,10 +274,10 @@ fun chip_at(piece :: pc.Pict, x :: Real, y :: Real,
   | [piece, x, y, band]
 
 fun gold_chip(p :: pc.Pict) :: pc.Pict:
-  pc.overlay(as_pict(shape_pict(~width: p.width + 2 * chip_pad,
-                                ~height: p.height + 2 * chip_pad,
-                                ~geom: preset_geom("roundRect",
-                                                   [pair("adj", "val 20000")]),
-                                ~fill: hex(node_match),
-                                ~line: make_stroke(hex(chip_line), ~width: 1.0))),
+  def w = p.width + 2 * chip_pad
+  def h = p.height + 2 * chip_pad
+  pc.overlay(written_shape(rounded_path(w, h, 0.2 * math.min(w, h)),
+                           ~width: w, ~height: h,
+                           ~fill: hex_color(node_match), ~line: hex_color(chip_line),
+                           ~line_width: 1.0),
              p)
