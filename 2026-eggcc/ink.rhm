@@ -29,15 +29,31 @@ export:
 
 // One closed subpath. `cmds` are the datum's own commands: an `Array` of two numbers
 // is a point the pen moves or draws to, one of six is a cubic curve. `pts` is the
-// polyline, `cum` the length along it at each point, `total` the whole.
-class Sub(cmds :: List, pts :: List, cum :: List, total :: Real,
+// polyline, `cum` the length along it at each point, `total` the whole; `kinds` says
+// of each leg whether it came from a line or a curve, and `tcum` is the pen's *time*
+// at each point -- see `hand_time` -- with `ttotal` the whole of that.
+class Sub(cmds :: List, pts :: List, kinds :: List, cum :: List, total :: Real,
+          tcum :: List, ttotal :: Real,
           x0 :: Real, y0 :: Real, x1 :: Real, y1 :: Real)
 
-class Ink(subs :: List, total :: Real,
+class Ink(subs :: List, total :: Real, ttotal :: Real,
           x0 :: Real, y0 :: Real, x1 :: Real, y1 :: Real):
   method is_empty(): subs == []
 
 def curve_steps = 10
+
+// How a hand travels a path: quickly along a straight, slowing into and out of
+// each end of it, and taking its time round a curve. A pen at constant speed reads
+// as a plotter. A straight leg costs its length over `straight_speed`; a leg of a
+// flattened curve costs its length as it is -- and a curve is many short legs, so
+// a corner is slow the way drawing one is.
+def straight_speed = 2.4
+fun hand_time(len :: Real, kind) :: Real:
+  if kind == #'line | len / straight_speed | len
+// where the pen is within one straight leg at time-fraction `u` of that leg:
+// eased, so it starts and stops rather than jerks
+fun ease_leg(u :: Real, kind) :: Real:
+  if kind == #'line | u * u * (3.0 - 2.0 * u) | u
 
 fun dist(ax :: Real, ay :: Real, bx :: Real, by :: Real) :: Real:
   def dx = bx - ax
@@ -59,34 +75,41 @@ fun flatten_cubic(p0x, p0y, c :~ Array) :: List:
 
 fun sub_of(cmds :: List) :: Sub:
   def first :~ Array = cmds[0]
-  def pts:
-    for values(acc :~ List = [[first[0], first[1]]]) (c :~ Array in cmds.rest):
+  // the polyline, and what kind of leg each step of it is
+  def (pts, kinds):
+    for values(acc :~ List = [[first[0], first[1]]], ks :~ List = []) (c :~ Array in cmds.rest):
       def [lx, ly] = acc.last
       if c.length() == 6
-      | acc ++ flatten_cubic(lx, ly, c)
-      | acc ++ [[c[0], c[1]]]
+      | def more = flatten_cubic(lx, ly, c)
+        values(acc ++ more, ks ++ (for List (_ in more): #'curve))
+      | values(acc ++ [[c[0], c[1]]], ks ++ [#'line])
   // the pen comes back to where it started: a closed subpath draws that last leg
   def [sx, sy] = pts[0]
   def [ex, ey] = pts.last
-  def closed_pts = if dist(sx, sy, ex, ey) > 1.0e-6 | pts ++ [[sx, sy]] | pts
-  def cum:
-    for values(acc :~ List = [0.0]) (i in 1..closed_pts.length()):
+  def closing = dist(sx, sy, ex, ey) > 1.0e-6
+  def closed_pts = if closing | pts ++ [[sx, sy]] | pts
+  def closed_kinds = if closing | kinds ++ [#'line] | kinds
+  def (cum, tcum):
+    for values(acc :~ List = [0.0], tacc :~ List = [0.0]) (i in 1..closed_pts.length()):
       def [ax, ay] = closed_pts[i - 1]
       def [bx, by] = closed_pts[i]
-      acc ++ [(acc.last :~ Real) + dist(ax, ay, bx, by)]
+      def len = dist(ax, ay, bx, by)
+      values(acc ++ [(acc.last :~ Real) + len],
+             tacc ++ [(tacc.last :~ Real) + hand_time(len, closed_kinds[i - 1])])
   def x0 = for values(m :~ Real = sx) ([x, y] in closed_pts): math.min(m, x)
   def x1 = for values(m :~ Real = sx) ([x, y] in closed_pts): math.max(m, x)
   def y0 = for values(m :~ Real = sy) ([x, y] in closed_pts): math.min(m, y)
   def y1 = for values(m :~ Real = sy) ([x, y] in closed_pts): math.max(m, y)
-  Sub(cmds, closed_pts, cum, cum.last, x0, y0, x1, y1)
+  Sub(cmds, closed_pts, closed_kinds, cum, cum.last, tcum, tcum.last, x0, y0, x1, y1)
 
 fun ink_of_subs(subs :: List) :: Ink:
   def total = for values(n :~ Real = 0.0) (s :~ Sub in subs): n + s.total
+  def ttotal = for values(n :~ Real = 0.0) (s :~ Sub in subs): n + s.ttotal
   cond
-  | subs == []: Ink([], 0.0, 0.0, 0.0, 0.0, 0.0)
+  | subs == []: Ink([], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
   | ~else:
       def s0 :~ Sub = subs[0]
-      Ink(subs, total,
+      Ink(subs, total, ttotal,
           for values(m :~ Real = s0.x0) (s :~ Sub in subs): math.min(m, s.x0),
           for values(m :~ Real = s0.y0) (s :~ Sub in subs): math.min(m, s.y0),
           for values(m :~ Real = s0.x1) (s :~ Sub in subs): math.max(m, s.x1),
@@ -112,8 +135,10 @@ fun open_sub_of(cmds :: List) :: Sub:
   def s = sub_of(cmds)
   // undo the closing leg `sub_of` added
   def pts = s.pts.take(s.pts.length() - 1)
+  def kinds = s.kinds.take(s.kinds.length() - 1)
   def cum = s.cum.take(s.cum.length() - 1)
-  Sub(cmds, pts, cum, cum.last, s.x0, s.y0, s.x1, s.y1)
+  def tcum = s.tcum.take(s.tcum.length() - 1)
+  Sub(cmds, pts, kinds, cum, cum.last, tcum, tcum.last, s.x0, s.y0, s.x1, s.y1)
 
 // The ink of a string in a font, laid out from the origin exactly as `pict.text`
 // draws it -- checked: the filled outline lands on the same pixels.
@@ -151,12 +176,16 @@ fun path_of(ink :: Ink) :: draw.Path:
     p.close()
   p
 
-// The first `length` of a subpath as an open path, or `#false` when that is too
-// little to see.
-fun prefix_of(s :: Sub, length :: Real) :: maybe(draw.Path):
+// The first so-much of a subpath as an open path, or `#false` when that is too
+// little to see. `upto` is a pen time by default -- so the prefix runs quickly along
+// the straights and slows round the curves, as a hand does -- or a length, with
+// `~hand: #false`, for a pen at constant speed.
+fun prefix_of(s :: Sub, upto :: Real, ~hand: hand :: Boolean = #true) :: maybe(draw.Path):
+  def marks :~ List = if hand | s.tcum | s.cum
+  def whole = if hand | s.ttotal | s.total
   cond
-  | length <= 0.0: #false
-  | length >= s.total:
+  | upto <= 0.0: #false
+  | upto >= whole:
       def p = draw.Path()
       p.move_to(s.pts[0])
       p.lines(s.pts.rest)
@@ -166,32 +195,35 @@ fun prefix_of(s :: Sub, length :: Real) :: maybe(draw.Path):
       def [fx, fy] = s.pts[0]
       p.move_to([fx, fy])
       recur go(i = 1):
-        def c :~ Real = s.cum[i]
+        def c :~ Real = marks[i]
         def [bx, by] = s.pts[i]
-        if c <= length
+        if c <= upto
         | p.line_to([bx, by])
           go(i + 1)
         | def [ax, ay] = s.pts[i - 1]
-          def prev :~ Real = s.cum[i - 1]
-          def t = (length - prev) / math.max(1.0e-9, c - prev)
+          def prev :~ Real = marks[i - 1]
+          def u = (upto - prev) / math.max(1.0e-9, c - prev)
+          def t = if hand | ease_leg(u, s.kinds[i - 1]) | u
           p.line_to([ax + (bx - ax) * t, ay + (by - ay) * t])
       p
 
 // The first `frac` of the whole ink, subpath after subpath, as open paths to
 // stroke. One path each: appending open paths joins them with a line.
-fun prefix_paths(ink :: Ink, frac :: Real) :: List:
-  def budget = frac * ink.total
+fun prefix_paths(ink :: Ink, frac :: Real, ~hand: hand :: Boolean = #true) :: List:
+  def budget = frac * (if hand | ink.ttotal | ink.total)
   def (out, _):
     for values(acc :~ List = [], left :~ Real = budget) (s :~ Sub in ink.subs):
-      def take = math.min(left, s.total)
-      def piece = prefix_of(s, take)
+      def whole = if hand | s.ttotal | s.total
+      def take = math.min(left, whole)
+      def piece = prefix_of(s, take, ~hand: hand)
       values((if piece | acc ++ [piece] | acc), left - take)
   out
 
 // Stroke the first `frac` of an ink onto `dc` with `pen`, at an offset.
 fun stroke_prefix(dc :: draw.DC, ink :: Ink, frac :: Real, pen :: draw.Pen,
-                  ~dx: dx :: Real = 0.0, ~dy: dy :: Real = 0.0):
-  def ps = prefix_paths(ink, frac)
+                  ~dx: dx :: Real = 0.0, ~dy: dy :: Real = 0.0,
+                  ~hand: hand :: Boolean = #true):
+  def ps = prefix_paths(ink, frac, ~hand: hand)
   when ps != []
   | dc.pen := pen
     dc.brush := draw.Brush.none

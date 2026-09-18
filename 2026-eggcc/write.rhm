@@ -171,6 +171,8 @@ fun written_text(str :: String,
   fun glyphs() :: List:
     when !cell[0]
     | cell[0] := text_glyphs(text_ink(str, font))
+  // letters are traced at the pen's constant pace: a hand's pacing is for the shapes,
+  // whose long straights and rounded corners are where a constant pace reads as a plotter
     cell[0]
   fun frame(n :: Real) :: Pict:
     cond
@@ -194,7 +196,7 @@ fun written_text(str :: String,
                    target.brush := draw.Brush(~color: col)
                    target.path(path_of(g), ~dx: dx, ~dy: dy)
                | u < 0.5:
-                   stroke_prefix(target, g, 2.0 * u, draw.Pen(~color: col, ~width: lw),
+                   stroke_prefix(target, g, 2.0 * u, draw.Pen(~color: col, ~width: lw), ~hand: #false,
                                  ~dx: dx, ~dy: dy)
                | ~else:
                    // the fill comes in as the traced line goes out from under it, so
@@ -203,7 +205,7 @@ fun written_text(str :: String,
                    target.pen := draw.Pen.none
                    target.brush := draw.Brush(~color: col with (alpha = fill_in))
                    target.path(path_of(g), ~dx: dx, ~dy: dy)
-                   stroke_prefix(target, g, 1.0,
+                   stroke_prefix(target, g, 1.0, ~hand: #false,
                                  draw.Pen(~color: col with (alpha = 1.0 - fill_in), ~width: lw),
                                  ~dx: dx, ~dy: dy)
              target.restore(),

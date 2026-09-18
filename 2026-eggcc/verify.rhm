@@ -1,0 +1,28 @@
+#lang rhombus
+// `make check`: each slide's presses and how long they run, and any press that
+// changes nothing -- its end looks like its start -- which is a press of the
+// clicker that does no work.
+import:
+  file("talk.rhm") open
+  pict as pc
+  draw
+fun as_pict_of(v) :: pc.Pict:
+  if v is_a pc.Pict | v | pc.Pict.from_handle(v)
+fun pixels(p :: pc.Pict):
+  def q = p.scale(0.2)
+  def bm = draw.Bitmap([math.exact(math.ceiling(q.width)), math.exact(math.ceiling(q.height))])
+  q.draw(bm.make_dc())
+  bm.argb_pixels()
+def total:
+  for values(n = 0) (mk in all_slides, i in 0..):
+    def p = as_pict_of(mk())
+    def exts = for List (e in 0..p.duration): math.round(p.epoch_extent(e) * 100) / 100
+    println("slide " +& (i + 1) +& ": " +& exts)
+    for (e in 1..p.duration):
+      def a = pixels(p.snapshot(e, 0.0))
+      def b = pixels(p.snapshot(e, 1.0))
+      def diff = for values(d = 0) (k in 0..a.length()): if math.abs(a[k] - b[k]) > 24 | d + 1 | d
+      when diff < 40
+      | println("  DEAD PRESS: slide " +& (i + 1) +& " epoch " +& e +& " changes only " +& diff +& " bytes")
+    n + p.duration
+println("total epochs " +& total)

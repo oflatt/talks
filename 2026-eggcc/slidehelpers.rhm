@@ -1,4 +1,6 @@
 #lang rhombus
+// The deck's bubbles, arrows and outline. HELPERS.md, beside this file, says how a
+// talk is built out of these and the modules around them.
 import:
   slideshow open   // re-exports pict + pict/text
   draw

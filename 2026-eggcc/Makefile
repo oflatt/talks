@@ -4,12 +4,15 @@
 #   make show          run the talk
 #   make show SKIP=20  run it from slide 21, without building the twenty before
 #   make frames        render every epoch to frames/ as PNGs, for checking a change
+#   make check         list every press's duration and flag presses that change nothing
 #   make clean         drop the PDF and the compiled code
+#
+# HELPERS.md says how the slides are built.
 
 RACKET ?= racket
 SOURCES := $(wildcard *.rhm) $(wildcard media/*)
 
-.PHONY: all show frames clean
+.PHONY: all show frames check clean
 
 all: talk.pdf
 
@@ -24,6 +27,9 @@ show:
 
 frames:
 	$(RACKET) snapshot.rhm frames
+
+check:
+	$(RACKET) verify.rhm
 
 clean:
 	rm -f talk.pdf

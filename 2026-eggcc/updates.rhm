@@ -481,11 +481,28 @@ fun slide_update_story():
     for List (f :: Frame in frames):
       Frame(~picts: f.picts ++ { #'title: [title, title_x, title_y, band_callout] },
             ~edges: f.edges)
-  def frames:
-    entitled(egraph_frames(parts), title_graph)
-      ++ entitled(rue_frames(parts), title_rule)
-      ++ entitled(fork_frames(parts), title_wrong)
+  def eg = entitled(egraph_frames(parts), title_graph)
+  def ru = entitled(rue_frames(parts), title_rule)
+  def fk = entitled(fork_frames(parts), title_wrong)
+  def frames = eg ++ ru ++ fk
+  // The first walk down the graph steps a row a press, but its first four rows are
+  // classes of one node each -- there is nothing to choose in them -- so those four
+  // presses are one: the pointer runs down the rows and the picks land as it
+  // passes, in one quicker go. `chain_walk_frames` puts the row the pointer first
+  // lands on two frames into the fork's part.
+  def walk_start = eg.length() + ru.length() + 2
+  def quick = for List (k in 0..4): walk_start + k
+  def presses:
+    for List (i in 1..frames.length()):
+      chain_press(page, frames[i - 1], frames[i],
+                  ~extent: if quick.contains(i) | 0.4 | 1.0)
+  def grouped:
+    recur go(i = 1, acc :~ List = []):
+      cond
+      | i >= frames.length(): acc
+      | i == walk_start:
+          go(i + 4, acc ++ [pc.switch(& for List (k in 0..4): presses[i - 1 + k],
+                                      ~join: #'splice)])
+      | ~else: go(i + 1, acc ++ [presses[i - 1]])
   // no still for the first frame: the join has just drawn it
-  pc.switch(opening[#'pict], join,
-            & for List (i in 1..frames.length()):
-                chain_press(page, frames[i - 1], frames[i]))
+  pc.switch(opening[#'pict], join, & grouped)
