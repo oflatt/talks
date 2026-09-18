@@ -1,10 +1,13 @@
 #lang rhombus/and_meta
 // The evaluation's numbers, read out of eggcc's own `profile.json`.
 //
-// `profile.json` is copied verbatim from the eggcc repo (the run in
-// `nightly-runs/gurobi/data/`, which is the only one that carries both the cycle
-// counts and all three extraction-time series). Nothing here reshapes it: the
-// charts are drawn from the same fields the paper's matplotlib scripts read, so
+// `profile.json` is copied verbatim from the eggcc repo: it is
+// `eggcc-submission-combined.json` at the repo's root, byte for byte the
+// `nightly/data/profile.json` of 2026-03-02 that the paper's `nightly/` figures and
+// numbers were generated from -- 1632 rows, 9610 regions in the solver comparison,
+// with Gurobi's and CBC's timeouts in it. (Until 2026-09-17 the deck read a smaller
+// run of 284 regions in which Gurobi never hit the wall.) Nothing here reshapes it:
+// the charts are drawn from the same fields the paper's matplotlib scripts read, so
 // a re-run of the benchmarks is a file copy rather than a redrawing.
 //
 //   infra/graphs.py:make_normalized_chart       the per-benchmark performance chart

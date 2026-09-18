@@ -108,18 +108,23 @@ fun slide_perf():
   def last_note:
     bubble_at(dot, ~spot: dot_at(perf_last()), ~body: [960.0, 400.0], ~color: talk_green,
               ~content: prose([["6x slower than LLVM O3", #'bold]]))
-  def notes = put(put(blank_slide, first_note, 0.0, 0.0), last_note, 0.0, 0.0)
-  def notes_w = writer(notes)
+  // a press each, and both go together
+  def first_w = writer(first_note)
+  def last_w = writer(last_note)
+  fun noted(base :: pc.Pict, k1 :: Real, k2 :: Real) :: pc.Pict:
+    put(put(base, first_w.frame(k1), 0.0, 0.0), last_w.frame(k2), 0.0, 0.0)
   // The verdict writes itself over the finished chart on the press after the last
   // series. Not `fade_in`, whose first epoch is the picture it starts from: that
   // picture is the one the series press has just ended on, and a press that shows it
   // again is a press that does nothing.
   pc.switch(scene(0.0, 0.0, 0.0),
             pc.animate(~extent: 1.8, fun (t): scene(t, 0.0, 0.0)),
-            pc.animate(~extent: 1.6, ~bend: fun (x): x,
-                       fun (t): put(scene(1.0, 0.0, 0.0), notes_w.frame(t), 0.0, 0.0)),
+            pc.animate(~extent: 1.2, ~bend: fun (x): x,
+                       fun (t): noted(scene(1.0, 0.0, 0.0), t, 0.0)),
+            pc.animate(~extent: 1.2, ~bend: fun (x): x,
+                       fun (t): noted(scene(1.0, 0.0, 0.0), 1.0, t)),
             pc.animate(~extent: 1.8,
-                       fun (t): put(scene(1.0, t, 0.0), notes_w.frame(1.0 - clamp01(t / 0.35)),
-                                    0.0, 0.0)),
+                       fun (t): noted(scene(1.0, t, 0.0), 1.0 - clamp01(t / 0.35),
+                                      1.0 - clamp01(t / 0.35))),
             pc.animate(~extent: 1.8, fun (t): scene(1.0, 1.0, t)),
             pc.overlay(~horiz: #'left, ~vert: #'top, full, write(verdict)).refocus(full))

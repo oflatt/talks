@@ -199,19 +199,29 @@ fun divider(k :: Int, ~shots: shots :: maybe(List) = #false,
       // and what matters is which disc is lit
       def p :~ pc.Pict = outline_to_header(sections, ~at: k, ~canvas: section_canvas(),
                                            ~intro: k == 0, ~shots: shots, ~next: coming)
-      p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'right }))
+      // with a title to write, the rise ends on the next slide's opening picture
+      // and is the press that moves on: no held page, which the cut would repeat
+      p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'right }
+                                ++ (if next | { #'hold: #false } | {})))
 
 // `~cut: #true` is for the first slide of a section: the divider it follows has
 // just put the header where this slide's header is, so it arrives with a cut and
 // the bar stays put. A pan would carry the bar off the top and bring the same bar
 // back in from the bottom.
-fun in_section(k :: Int, mk, ~cut: cut :: Boolean = #false):
+//
+// `~hold: #false` is for a slide whose last press hands over to the next slide --
+// it ends on the picture the next one opens with, and the next arrives with a cut
+// -- so that last press is the one that moves on, rather than resting first on a
+// page the cut would then repeat.
+fun in_section(k :: Int, mk, ~cut: cut :: Boolean = #false, ~hold: hold :: Boolean = #true):
   in_prose_face(
     fun ():
       def p :~ pc.Pict = section_header(sections, ~at: k, ~canvas: as_pict(mk()))
-      if cut
-      | p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'none })
-      | p)
+      def marks:
+        (if cut | { #'transition: #'none } | {}) ++ (if hold | {} | { #'hold: #false })
+      if marks == {}
+      | p
+      | p.epoch_set_metadata(0, p.epoch_metadata(0) ++ marks))
 
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
@@ -227,13 +237,21 @@ def keynote_blue = draw.Color(4, 51, 255)
 // Every word the deck draws goes through one of these three, so that it is text
 // that writes itself when a press brings it on: `written_text` carries the glyph
 // outlines its pen traces, and settles into exactly the text `pict.text` draws.
+//
+// `~arrive` says how prose comes on. Sentences -- what a bubble says, an equation
+// -- are written, letter by letter. A label -- a big short word over a picture,
+// read at a glance -- pops instead (`#'pop`), and a title fades (`#'fade`).
 fun prose_text(s :: String, ~size: size :: Real = 40.0,
                ~bold: bold :: Boolean = #false, ~italic: italic :: Boolean = #false,
-               ~color: color = "black") :: pc.Pict:
-  written_text(s, ~color: color,
-               ~font: draw.Font(~name: prose_font, ~size: size,
-                                ~weight: if bold | #'bold | #'normal,
-                                ~style: if italic | #'italic | #'normal))
+               ~color: color = "black",
+               ~arrive: arrive = #'write) :: pc.Pict:
+  def font = draw.Font(~name: prose_font, ~size: size,
+                       ~weight: if bold | #'bold | #'normal,
+                       ~style: if italic | #'italic | #'normal)
+  match arrive
+  | #'pop: popped(pc.text(s, ~font: font).colorize(as_color(color)))
+  | #'fade: faded(pc.text(s, ~font: font).colorize(as_color(color)))
+  | ~else: written_text(s, ~color: color, ~font: font)
 fun code_text(s :: String, ~size: size :: Real = code_size,
               ~italic: italic :: Boolean = #false, ~color: color = "black") :: pc.Pict:
   written_text(s, ~color: color,
@@ -389,8 +407,9 @@ def title_face = draw.Font(~name: prose_font, ~size: 85.0, ~weight: #'bold)
 def title_x = 95.0 + 4.0
 def title_y = 85.0 - 15.0
 // The title on its own, for a slide that changes its title while everything under
-// it stays: a frame key, which a press then unwrites and writes.
-fun title_text(title :: String) :: pc.Pict: written_text(title, ~font: title_face)
+// it stays: a frame key. A title fades rather than writes -- it is read whole -- so
+// a press that brings one on fades it up, and one that changes it cross-fades.
+fun title_text(title :: String) :: pc.Pict: faded(pc.text(title, ~font: title_face))
 // The white page every slide starts from.
 fun page_canvas() :: pc.Pict:
   as_pict(slide_canvas(~width: slide_width, ~height: slide_height,

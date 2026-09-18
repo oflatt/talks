@@ -318,7 +318,15 @@ fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
   def gone = for List (e in a.edges): skip_when b.edges.contains(e); e
   def new = for List (e in b.edges): skip_when a.edges.contains(e); e
   def pairs = pair_edges(gone, new)
-  pc.animate(~extent: extent,
+  // `~extent` is the least a press takes. A press that brings on something with a
+  // lot to write -- a bubble with five lines in it -- takes what that writing asks
+  // for instead, since the writing is sampled over the press and a long sentence
+  // squeezed into a short press is a flash.
+  def wanted:
+    for values(m :~ Real = extent) (key in appear.keys()):
+      def v = appear[key]
+      if v is_a pc.Pict | math.max(m, (v :~ pc.Pict).epoch_extent(0)) | m
+  pc.animate(~extent: wanted,
              fun (t): magic_between(base, a, b, t, ~appear: appear, ~pairs: pairs, ~& kws))
 
 // A whole slide: the first frame, then a press to each of the rest.

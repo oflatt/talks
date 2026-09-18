@@ -217,8 +217,7 @@ def np_picked_keys:
 // chain of assignments, a clause class at a time, the root, and last the thing the
 // whole picture is for: an effect-safe extraction is a satisfying assignment.
 fun slide_nphard():
-  def page = with_icon(titled(nphard_title,
-                              ~tag: "NP-hardness title", ~nudge: [0.0, 0.0]))
+  def page = titled(nphard_title, ~tag: "NP-hardness title", ~nudge: [0.0, 0.0])
   // A label, and a node with one in the middle of it.
   //
   // The box is drawn empty and the label laid over it as a pict, rather than handed
@@ -421,7 +420,7 @@ fun slide_nphard():
   // At the end, the assignment the extraction spells out, said where the formula
   // can still be read above it.
   def np_answer:
-    def head = prose_text("Satisfying assignment:", ~size: 38.0, ~bold: #true)
+    def head = prose_text("Satisfying assignment:", ~size: 38.0, ~bold: #true, ~arrive: #'pop)
     // on one line rather than three: what is under it is the last word of the
     // section, and the assignment has already been read off the picture by then
     def body:

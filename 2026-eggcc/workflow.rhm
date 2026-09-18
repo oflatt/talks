@@ -51,10 +51,22 @@ fun stage_code(s :: String) :: pc.Pict: code_text(s, ~size: 40.0)
 fun stage_greek(s :: String) :: pc.Pict: math_text(s, ~size: 40.0)
 fun stage_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 
+// The box a stage is drawn in, sized to hold every body that stage ever shows: the
+// two pictures put different things in the same boxes, and a box sized to its
+// contents would grow between them and carry its name a few pixels along with it.
+fun stage_fit(label :: String, bodies :: List) :: List:
+  def name = prose_text(label, ~size: 36.0, ~bold: #true, ~arrive: #'pop)
+  for values(acc :~ List = [0.0, 0.0]) (body :: pc.Pict in bodies):
+    def box :: pc.Pict:
+      as_pict(make_bubble(~color: talk_blue, ~padding: 24,
+                          pc.stack(~sep: 18.0, ~horiz: #'center, name, body.ghost())))
+    [math.max(acc[0], box.width), math.max(acc[1], box.height)]
+
 fun stage_pieces(label :: String, body :: pc.Pict, at :~ List,
                  ~width: w :: maybe(Real) = #false,
                  ~height: h :: maybe(Real) = #false) :: Map:
-  def name = prose_text(label, ~size: 36.0, ~bold: #true)
+  // the stage's name is a label, and pops; what is in the box is written
+  def name = prose_text(label, ~size: 36.0, ~bold: #true, ~arrive: #'pop)
   def inside = pc.stack(~sep: 18.0, ~horiz: #'center, name, body)
   def box:
     as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
@@ -107,32 +119,38 @@ fun workflow_scene(~section: section :: Int,
                    ~ir: ir :: Boolean = #false,
                    ~safe: safe :: Boolean = #false) :: Map:
   def parts = code_parts()
-  def program_body:
-    if section == 0
-    | input_line
-    | code_updates(parts, ~states: #false).scale(flow_code_scale)
+  // both sections' bodies, so every box is sized once for both and stays put
+  def program_bodies:
+    [input_line, code_updates(parts, ~states: #false).scale(flow_code_scale)]
+  def program_body = program_bodies[section]
   // each picture holds the rules its own section works with: the two the term is
   // rewritten by, and then the one about writes that the last few slides were
   // about -- which is written as if nothing had effects, and is the point
   def rule_1 = rules_line_1.scale(flow_rules_scale)
   def rule_2 = rules_line_2.scale(flow_rules_scale)
-  def rules_body:
-    if section == 0
-    | pc.stack(~sep: 10.0, ~horiz: #'left, rule_1, rule_2)
-    | ((update_rule(~value: #true) :~ Map)[#'body] :~ pc.Pict).scale(flow_rule_scale)
-  def program = stage_pieces("Input Program", program_body, flow_program_at)
-  def rules = stage_pieces("Optimization Rules", rules_body, flow_rules_at)
+  def rules_bodies:
+    [pc.stack(~sep: 10.0, ~horiz: #'left, rule_1, rule_2),
+     ((update_rule(~value: #true) :~ Map)[#'body] :~ pc.Pict).scale(flow_rule_scale)]
+  def rules_body = rules_bodies[section]
+  def [program_w, program_h] = stage_fit("Input Program", program_bodies)
+  def [rules_w, rules_h] = stage_fit("Optimization Rules", rules_bodies)
+  def program = stage_pieces("Input Program", program_body, flow_program_at,
+                             ~width: program_w, ~height: program_h)
+  def rules = stage_pieces("Optimization Rules", rules_body, flow_rules_at,
+                           ~width: rules_w, ~height: rules_h)
   def egraph:
     stage_pieces("E-Graph", flow_gear, flow_egraph_at,
                  ~width: flow_egraph_size[0], ~height: flow_egraph_size[1])
   // what comes out: the term the rules reduce to, and the one write the program's
   // two come to
-  def optimized_body:
-    if section == 0
-    | prose_text("a", ~size: 45.0)
-    | stage_line(stage_code("return update(a, x+1, "),
-                 stage_greek("ω"), stage_code(")")).scale(0.52)
-  def optimized = stage_pieces("Optimized Program", optimized_body, flow_optimized_at)
+  def optimized_bodies:
+    [prose_text("a", ~size: 45.0),
+     stage_line(stage_code("return update(a, x+1, "),
+                stage_greek("ω"), stage_code(")")).scale(0.52)]
+  def optimized_body = optimized_bodies[section]
+  def [optimized_w, optimized_h] = stage_fit("Optimized Program", optimized_bodies)
+  def optimized = stage_pieces("Optimized Program", optimized_body, flow_optimized_at,
+                               ~width: optimized_w, ~height: optimized_h)
   def ir_stage:
     stage_pieces("Dataflow IR",
                  code_updates(parts, ~states: #true).scale(flow_code_scale),

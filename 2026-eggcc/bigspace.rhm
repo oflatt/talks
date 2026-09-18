@@ -229,7 +229,8 @@ fun slide_12():
       put(put(blank_slide, top, flow_x, row_in + 14.0), bot, flow_x, row_out + 86.0)
     { #'flow: [arrow(~on: probe, top, bot, ~line_width: 4,
                      ~color: draw.Color(150, 150, 150),
-                     ~label: prose_text("data flow", ~color: draw.Color(0x78, 0x78, 0x78)),
+                     ~label: prose_text("data flow", ~color: draw.Color(0x78, 0x78, 0x78),
+                                        ~arrive: #'pop),
                      // far enough left that the label clears the line it names
                      ~label_dx: -120, ~label_dy: 0),
                0.0, 0.0, band_above] }

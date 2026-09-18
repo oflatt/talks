@@ -30,6 +30,8 @@ export:
   arriving
   arrival_of
   already
+  popped
+  faded
   ink_bounds
   written_text
   written_shape
@@ -94,6 +96,33 @@ fun arrival_of(p :: Pict) :: maybe(Arrival):
 // turns it into something else cross-fades rather than rewording.
 fun already(p :: Pict) :: Pict:
   arriving(p, Arrival(fun (n): if n >= 1.0 | p | p.ghost(), 0.0, ~kind: #'still, ~lead: 0.0))
+
+// Two arrivals for things that are not written. A label pops: it grows in from a
+// little smaller than itself, overshooting a touch as it fades up, the way a label
+// arrives in a Manim scene -- for a big short word over a picture, which is read at
+// a glance rather than followed letter by letter. A title fades where it stands.
+// Both keep the pict's own bounds, so what they are placed by never moves.
+fun back_out(t :: Real) :: Real:
+  def c1 = 1.70158
+  def c3 = c1 + 1.0
+  1.0 + c3 * math.expt(t - 1.0, 3) + c1 * math.expt(t - 1.0, 2)
+fun pop_frame(p :: Pict, n :: Real) :: Pict:
+  cond
+  | n >= 1.0: p
+  | n <= 0.0: p.ghost()
+  | ~else:
+      def s = 0.55 + 0.45 * back_out(n)
+      def a = smooth(clamp01(n / 0.6))
+      overlay(p.ghost(), p.scale(s).alpha(a))
+fun popped(p :: Pict, ~weight: weight :: Real = 0.45) :: Pict:
+  arriving(p, Arrival(fun (n): pop_frame(p, n), weight, ~kind: #'pop, ~lead: 0.5))
+fun faded(p :: Pict, ~weight: weight :: Real = 0.6) :: Pict:
+  arriving(p, Arrival(fun (n):
+                        cond
+                        | n >= 1.0: p
+                        | n <= 0.0: p.ghost()
+                        | ~else: p.alpha(smooth(n)),
+                      weight, ~kind: #'fade, ~lead: 0.5))
 
 // Where a pict's ink is, as `[x0, y0, x1, y1]` in its own coordinates, or `#false`
 // for one that draws nothing. For lining things up on what is drawn rather than on

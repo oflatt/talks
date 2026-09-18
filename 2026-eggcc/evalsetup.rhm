@@ -43,7 +43,9 @@ export:
 def eval_title = "Case Study: eggcc"
 
 // ------------------------------------------------------------------ the panels
-fun panel_title(s :: String) :: pc.Pict: prose_text(s, ~size: 38.0, ~bold: #true)
+// the captions over the three panels: labels, so they pop rather than write
+fun panel_title(s :: String) :: pc.Pict:
+  prose_text(s, ~size: 38.0, ~bold: #true, ~arrive: #'pop)
 fun ev_code(s :: String) :: pc.Pict: code_text(s, ~size: 22.0)
 fun ev_label(s :: String) :: pc.Pict: code_text(s, ~size: 22.0, ~italic: #true)
 
@@ -176,57 +178,97 @@ def opt_pict:
 
 // ------------------------------------------------------------------ the e-graph
 // The term eggcc builds, in the paper's own syntax (Figure 4a: operators `f(e, ...)`,
-// tuples `(e, ...)`, projections `e[n]`, and effectful operators drawn with a bold
-// border):
+// tuples `(e, ...)`, projections `e[n]`, the region argument `Γ`, and effectful
+// operators drawn with a bold border):
 //
 //   Print( loop[1], loop[0] )
-//   loop = DoWhile( (σ, 1, 2, a), ( IsEven(a), σ, lb·2, 2, a/2 ) )
+//   loop = DoWhile( (σ, 1, 2, a), ( IsEven(Γ[3]), Γ[0], Γ[1]·Γ[2], Γ[2], Γ[3]/Γ[2] ) )
 //
 // `[1]` is the accumulator `lb` coming out of the loop, `[0]` the state it threaded
-// through. The loop's inputs are drawn as its edges to `σ`, `1`, `2` and `a`, so
-// that the state is one blue path: `σ` into the loop, out through `[0]`, into
-// `Print`. Its body is a region of its own, drawn as a box whose header names the
-// region's argument `Γ` -- the loop's inputs, one iteration on -- and inside it the
-// five values the body hands back: the test that keeps the loop going, then the
-// next `σ`, `lb`, `2` and `a`. `IsEven` is the parity test the paper's first rule
-// names (`Eq(Mul(Div(a, 2), 2), a)`), drawn as one node.
+// through. Tuples are nodes of their own with a port per element, each port
+// pointing at the element, so the loop points at one tuple of inputs and at one
+// tuple that is its body; the body is a region of its own -- a term with a
+// statewalk of its own, from `Γ` through `Γ[0]` to the tuple -- drawn like the rest
+// of the term, above the loop that takes it, and boxed to say it is a region. Its
+// operators point at projections of `Γ`, the region's argument, which is the loop's
+// inputs one iteration on. `IsEven` is the parity test the paper's first rule names
+// (`Eq(Mul(Div(a, 2), 2), a)`), drawn as one node.
 //
 // The rule then says `loop[1] ≊ Bitand(a, Neg(a))`, and the state that comes out of
 // the loop is the state that went in.
 //
-//   [key, what is written in it, its colour, its width, centre x, top y, its size]
+//   [key, what is written in it, its colour, its width, centre x, top y, its kind]
+//   -- a node, a tuple (a wide box with parentheses), or a port (a dot in a tuple)
 def ev_h = 64.0
-def ev_h_small = 52.0
-fun ev_height(size) :: Real: if size == #'small | ev_h_small | ev_h
+def ev_tuple_h = 56.0
+def ev_port = 14.0
+fun ev_height(kind) :: Real:
+  match kind
+  | #'tuple: ev_tuple_h
+  | #'port: ev_port
+  | ~else: ev_h
 def ev_nodes:
-  [[[#'s], "σ", stateful_hex, 64.0, 660.0, 300.0, #'big],
-   [[#'one], "1", "000000", 64.0, 740.0, 300.0, #'big],
-   [[#'two], "2", "000000", 64.0, 820.0, 300.0, #'big],
-   [[#'a], "a", "000000", 64.0, 1330.0, 300.0, #'big],
-   [[#'loop], "DoWhile", stateful_hex, 160.0, 830.0, 400.0, #'big],
-   // the body: what one iteration hands to the next, the test first
-   [[#'pred], "IsEven(a)", "000000", 130.0, 967.0, 600.0, #'small],
-   [[#'b_s], "σ", stateful_hex, 50.0, 1073.0, 600.0, #'small],
-   [[#'b_lb], "lb·2", "000000", 80.0, 1154.0, 600.0, #'small],
-   [[#'b_two], "2", "000000", 50.0, 1235.0, 600.0, #'small],
-   [[#'b_a], "a/2", "000000", 70.0, 1311.0, 600.0, #'small],
-   [[#'neg], "Neg", "000000", 90.0, 1430.0, 470.0, #'big],
-   [[#'g0], "[0]", stateful_hex, 64.0, 780.0, 800.0, #'big],
-   [[#'g1], "[1]", "000000", 64.0, 880.0, 800.0, #'big],
-   [[#'and], "Bitand", "000000", 140.0, 1400.0, 800.0, #'big],
-   // right of its projections, clear of the bubble under the CFG
-   [[#'print], "Print", stateful_hex, 130.0, 960.0, 920.0, #'big]]
+  [// the loop's inputs, across the top on the right, and the tuple they make
+   [[#'s], "σ", stateful_hex, 64.0, 1140.0, 300.0, #'node],
+   [[#'one], "1", "000000", 64.0, 1230.0, 300.0, #'node],
+   [[#'two], "2", "000000", 64.0, 1310.0, 300.0, #'node],
+   [[#'a], "a", "000000", 64.0, 1390.0, 300.0, #'node],
+   [[#'inputs], "", "000000", 200.0, 1290.0, 440.0, #'tuple],
+   [[#'it0], "", stateful_hex, ev_port, 1215.0, 461.0, #'port],
+   [[#'it1], "", "000000", ev_port, 1265.0, 461.0, #'port],
+   [[#'it2], "", "000000", ev_port, 1315.0, 461.0, #'port],
+   [[#'it3], "", "000000", ev_port, 1365.0, 461.0, #'port],
+   // the body, across the top on the left: the region's argument, its projections,
+   // what the iteration computes from them, and the tuple it hands back
+   [[#'arg], "Γ", stateful_hex, 64.0, 860.0, 336.0, #'node],
+   [[#'p0], "[0]", stateful_hex, 64.0, 725.0, 426.0, #'node],
+   [[#'p1], "[1]", "000000", 64.0, 805.0, 426.0, #'node],
+   [[#'p2], "[2]", "000000", 64.0, 885.0, 426.0, #'node],
+   [[#'p3], "[3]", "000000", 64.0, 965.0, 426.0, #'node],
+   [[#'b_mul], "×", "000000", 64.0, 815.0, 516.0, #'node],
+   [[#'b_div], "/", "000000", 56.0, 905.0, 516.0, #'node],
+   [[#'pred], "IsEven", "000000", 120.0, 1000.0, 516.0, #'node],
+   [[#'body_tuple], "", "000000", 300.0, 800.0, 612.0, #'tuple],
+   [[#'bt0], "", "000000", ev_port, 675.0, 633.0, #'port],
+   [[#'bt1], "", stateful_hex, ev_port, 737.0, 633.0, #'port],
+   [[#'bt2], "", "000000", ev_port, 800.0, 633.0, #'port],
+   [[#'bt3], "", "000000", ev_port, 862.0, 633.0, #'port],
+   [[#'bt4], "", "000000", ev_port, 925.0, 633.0, #'port],
+   // the loop, under both, and what comes out of it
+   [[#'loop], "DoWhile", stateful_hex, 160.0, 1290.0, 700.0, #'node],
+   [[#'neg], "Neg", "000000", 90.0, 1490.0, 540.0, #'node],
+   [[#'g0], "[0]", stateful_hex, 64.0, 1130.0, 820.0, #'node],
+   [[#'g1], "[1]", "000000", 64.0, 1240.0, 820.0, #'node],
+   [[#'and], "Bitand", "000000", 140.0, 1460.0, 820.0, #'node],
+   [[#'print], "Print", stateful_hex, 130.0, 1220.0, 930.0, #'node]]
 
-// the loop's body, a region of its own: the box it lives in, and what its argument is
-def ev_region_box = [890.0, 500.0, 470.0, 220.0]
-def ev_body_keys = [[#'pred], [#'b_s], [#'b_lb], [#'b_two], [#'b_a]]
+// the loop's body, a region of its own: the box it lives in, and what is in it
+def ev_region_box = [580.0, 296.0, 500.0, 390.0]
+def ev_body_keys:
+  [[#'arg], [#'p0], [#'p1], [#'p2], [#'p3], [#'b_mul], [#'b_div], [#'pred],
+   [#'body_tuple], [#'bt0], [#'bt1], [#'bt2], [#'bt3], [#'bt4]]
+def ev_input_keys = [[#'inputs], [#'it0], [#'it1], [#'it2], [#'it3]]
+// Its own colour, and not the grey the e-classes are washed in: a region is a
+// different kind of thing from a class, and the two are on the slide together.
+def region_line = draw.Color(60, 150, 140)
+def region_fill = draw.Color(230, 246, 243)
 
 // what each node is built from: `#'v` a value, `#'s` a state, blue and thick
 def ev_edges:
-  [[#'s, [#'loop], [#'s]], [#'v, [#'loop], [#'one]], [#'v, [#'loop], [#'two]],
-   [#'v, [#'loop], [#'a]],
-   // the loop to its body
-   [#'v, [#'loop], [#'body]],
+  [// the loop takes a tuple of inputs, whose ports point at them, and its body
+   [#'s, [#'loop], [#'inputs]], [#'v, [#'loop], [#'body_tuple]],
+   [#'s, [#'it0], [#'s]], [#'v, [#'it1], [#'one]], [#'v, [#'it2], [#'two]],
+   [#'v, [#'it3], [#'a]],
+   // inside the body: projections of the argument, operators over them, and the
+   // tuple's ports pointing at what each element is
+   [#'s, [#'p0], [#'arg]], [#'v, [#'p1], [#'arg]], [#'v, [#'p2], [#'arg]],
+   [#'v, [#'p3], [#'arg]],
+   [#'v, [#'b_mul], [#'p1]], [#'v, [#'b_mul], [#'p2]],
+   [#'v, [#'b_div], [#'p2]], [#'v, [#'b_div], [#'p3]],
+   [#'v, [#'pred], [#'p3]],
+   [#'v, [#'bt0], [#'pred]], [#'s, [#'bt1], [#'p0]], [#'v, [#'bt2], [#'b_mul]],
+   [#'v, [#'bt3], [#'p2]], [#'v, [#'bt4], [#'b_div]],
+   // what comes out
    [#'s, [#'g0], [#'loop]], [#'v, [#'g1], [#'loop]],
    [#'v, [#'neg], [#'a]],
    [#'v, [#'and], [#'a]], [#'v, [#'and], [#'neg]],
@@ -241,31 +283,48 @@ def ev_program_edges:
 def ev_extracted = [[#'a], [#'s], [#'neg], [#'and], [#'print]]
 
 def ev_at:
-  for values(m :~ Map = {}) ([key, _, _, w, x, y, size] in ev_nodes):
-    m ++ { key: [(x :~ Real) - (w :~ Real) / 2, y, w, ev_height(size)] }
+  for values(m :~ Map = {}) ([key, _, _, w, x, y, kind] in ev_nodes):
+    m ++ { key: [(x :~ Real) - (w :~ Real) / 2, y, w, ev_height(kind)] }
 fun ev_middle(key) :: List:
   def [x, y, w, h] = ev_at[key]
   [(x :~ Real) + (w :~ Real) / 2, (y :~ Real) + (h :~ Real) / 2]
+
+// A tuple: a wide box with a parenthesis at each end, and its ports laid over it as
+// nodes of their own, so that an edge can leave from the port of the element it is.
+fun tuple_node(w :: Real) :: pc.Pict:
+  def box = written_shape(rounded_path(w, ev_tuple_h, 12.0), ~width: w, ~height: ev_tuple_h,
+                          ~fill: "white", ~line: "black", ~line_width: 3.0)
+  def lp = node_label("(", ~size: 44.0)
+  def rp = node_label(")", ~size: 44.0)
+  put(put(box, lp, 10.0, (ev_tuple_h - lp.height) / 2),
+      rp, w - 10.0 - rp.width, (ev_tuple_h - rp.height) / 2)
+fun port_node(color :: String) :: pc.Pict:
+  pc.circle(~size: ev_port, ~fill: hex_color(color), ~line: hex_color(color))
 
 // ------------------------------------------------------------------- the slide
 fun slide_eval_setup():
   def page = titled(eval_title, ~tag: "Eval setup title",
                     ~nudge: [0.0, 0.0])
-  fun node(color :: String, w :: Real, text :: String, size, ~fill: fill :: String):
-    graph_node(~width: w, ~height: ev_height(size), ~adj: "33878",
-               ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
-               ~fill: fill,
-               ~label: node_label(text, ~size: if size == #'small | 30.0 | 40.0))
+  fun node(color :: String, w :: Real, text :: String, kind, ~fill: fill :: String):
+    match kind
+    | #'tuple: tuple_node(w)
+    | #'port: port_node(color)
+    | ~else:
+        graph_node(~width: w, ~height: ev_h, ~adj: "33878",
+                   ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
+                   ~fill: fill, ~label: node_label(text))
   fun drawings(~fill: fill :: String) :: Map:
-    for values(m :~ Map = {}) ([key, text, color, w, _, _, size] in ev_nodes):
-      m ++ { key: node(color, w, text, size, ~fill: fill) }
+    for values(m :~ Map = {}) ([key, text, color, w, _, _, kind] in ev_nodes):
+      m ++ { key: node(color, w, text, kind, ~fill: fill) }
   def plain = drawings(~fill: node_white)
   def green = drawings(~fill: node_green)
+  // the ports go over the tuples they sit in, and over the edges that leave them
   fun spots(keys :~ List, ~picked: picked :~ List = []) :: Map:
-    for values(m :~ Map = {}) ([key, _, _, _, _, _, _] in ev_nodes):
+    for values(m :~ Map = {}) ([key, _, _, _, _, _, kind] in ev_nodes):
       skip_when !keys.contains(key)
       def [x, y, _, _] = ev_at[key]
-      m ++ { key: [(if picked.contains(key) | green | plain)[key], x, y] }
+      def drawn = (if picked.contains(key) | green | plain)[key]
+      m ++ { key: (if kind == #'port | [drawn, x, y, band_point] | [drawn, x, y]) }
   fun wires(keys :~ List, ~picked: picked :: Boolean) :: List:
     def es = if picked | ev_program_edges ++ ev_picked_edges | ev_edges
     for List (e :~ List in es):
@@ -273,17 +332,17 @@ fun slide_eval_setup():
       e
 
   def program_keys:
-    [[#'s], [#'one], [#'two], [#'a], [#'loop], [#'body], & ev_body_keys,
+    [[#'s], [#'one], [#'two], [#'a], & ev_input_keys, [#'loop], & ev_body_keys,
      [#'g0], [#'g1], [#'print]]
   def all_keys = program_keys ++ [[#'neg], [#'and]]
-  // the body's region: a box round its five values, its argument named in the corner
+  // the body's region: a box round its term, its argument named in the corner
   def region:
     def [bx, by, bw, bh] = ev_region_box
     def box = written_shape(rounded_path(bw, bh, 14.0), ~width: bw, ~height: bh,
-                            ~fill: draw.Color(244, 244, 244), ~line: draw.Color(150, 150, 150),
+                            ~fill: region_fill, ~line: region_line,
                             ~line_width: 2.0, ~style: #'long_dash)
-    def cap = math_text("body over Γ = (σ, lb, 2, a)", ~size: 26.0,
-                        ~color: draw.Color(90, 90, 90))
+    def cap = math_text("loop body:  Γ = (σ, lb, 2, a)", ~size: 24.0,
+                        ~color: region_line)
     // the header in the nodes' band: two things in one band have no order between
     // them, and in the box's band the box was drawn over it
     { [#'body]: [box, bx, by, band_below],
@@ -311,8 +370,8 @@ fun slide_eval_setup():
                  0.0, 0.0, band_callout] }
   // the program eggcc emits, right of the graph and clear of the one-liner's nodes
   def opt:
-    { [#'opt]: [opt_pict, 1520.0, 452.0],
-      [#'opt_cap]: caption("optimized program", 1520.0) }
+    { [#'opt]: [opt_pict, 1560.0, 452.0],
+      [#'opt_cap]: caption("optimized program", 1560.0) }
   fun frame(~says: said :: Boolean = #false,
             ~graph: graph :: Boolean = #false,
             ~rule: rule :: Boolean = #false,

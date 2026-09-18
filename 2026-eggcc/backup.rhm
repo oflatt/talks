@@ -33,15 +33,24 @@ fun slide_raytracer():
     pc.overlay(pc.rectangle(~width: 560.0, ~height: 560.0, ~fill: #false,
                             ~line: draw.Color(120, 120, 120), ~line_width: 2.0),
                shot)
-  def rows :~ List = compile_rows
-  def last :~ List = rows[rows.length() - 1]
+  // the raytracer's own row of the compile times, found by name rather than taken
+  // as the slowest: which benchmark is slowest is the data's to say
+  def ray :~ List:
+    for values(found :~ List = []) (row :~ List in compile_rows):
+      if found == [] && (row[0] :~ String).contains("raytrace") | row | found
   fun whole(x :: Real) :: String: to_string(math.exact(math.round(x)))
+  // seconds as minutes to the nearest quarter: "3¼ minutes"
+  fun minutes(secs :: Real) :: String:
+    def quarters = math.exact(math.round(secs / 15.0))
+    def whole_min = quarters div 4
+    def part = ["", "¼", "½", "¾"][quarters mod 4]
+    to_string(whole_min) +& part +& " minutes"
   def facts:
     [prose([["a raytracer", #'bold], [": 821 lines of Rust, 2503 of Bril", #'plain]]),
      prose([["724 regions", #'bold], [" to extract from, the largest of ", #'plain],
             ["4,016 terms", #'bold]]),
-     prose([["compiled in ", #'plain], ["4½ minutes", #'bold],
-            [", " +& whole(last[3]) +& " s of it extraction", #'plain]]),
+     prose([["compiled in ", #'plain], [minutes(ray[1]), #'bold],
+            [", " +& whole(ray[3]) +& " s of it extraction", #'plain]]),
      prose([["the ILP solver timed out on ", #'plain], ["35", #'bold], [" of the 724", #'plain]])]
   def x = 760.0
   staged(page,

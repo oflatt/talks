@@ -12,6 +12,7 @@ import:
   "chain.rhm" open
   "apply.rhm" open
   "write.rhm".writer
+  "write.rhm".write
   "write.rhm".already
   pict as pc
 
@@ -51,8 +52,12 @@ fun update_opening() :: Map:
   def canvas = put(page_canvas(), title, title_x, title_y)
   def parts = code_parts()
   def code_states = code_pict(parts, ~states: #true)
-  def plain = put(canvas, code_pict(parts, ~states: #false), code_x, code_y)
+  def code_plain = code_pict(parts, ~states: #false)
+  def plain = put(canvas, code_plain, code_x, code_y)
   def with_states = put(canvas, code_states, code_x, code_y)
+  // the code on a layer of its own, for the press that writes it onto the page
+  def code_layer = put(pc.blank(~width: slide_width, ~height: slide_height),
+                       code_plain, code_x, code_y)
   // The bubbles are a layer of their own over the code, pinned at measured
   // points: `magic_move` rebuilds its two pictures piece by piece, and a balloon
   // pinned by a finder does not survive that. Kept apart, the layer can fade out
@@ -90,7 +95,12 @@ fun update_opening() :: Map:
                           fun (t): explain_w.frame(clamp01(1.0 - 2.0 * t))),
                pc.animate(~extent: extent, ~bend: fun (x): x,
                           fun (t): name_state_w.frame(clamp01(2.0 * t - 1.0))))
-  { #'pict: pc.switch(fade_in(plain, explain, ~horiz: #'left, ~vert: #'top), moving),
+  // the page with its title; the code writes itself; the bubble explains a line;
+  // then the states move in
+  { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
+                      pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain))
+                        .refocus(plain),
+                      moving),
     #'title: title, #'bubble: name_state, #'code: code_states, #'parts: parts }
 
 // -------------------------------------------------------------------------------------
@@ -102,10 +112,9 @@ fun slide_egraph():
   chain_slide(egraph_page(parts, "The Effectful E-Graph", ~tag: "Effectful E-Graph title"),
               egraph_frames(parts))
 
-// The page under the graph, drawn once and never animated: the title, the icon and
-// the code.
+// The page under the graph, drawn once and never animated: the title and the code.
 fun egraph_page(parts :~ Map, title :: String, ~tag: tag :: String) :: pc.Pict:
-  put(with_icon(titled(title, ~tag: tag, ~nudge: [0.0, 0.0])),
+  put(titled(title, ~tag: tag, ~nudge: [0.0, 0.0]),
       code_pict(parts, ~states: #true), code_x, code_y)
 
 // The presses that build the graph, one line of the program at a time.
@@ -437,11 +446,10 @@ fun slide_update_story():
   def title_rule = title_text("Dead Store Elimination")
   def title_wrong = title_text("Extraction Goes Wrong")
 
-  // The join from the opening to the graph: the page and the code stay, the
-  // opening's last bubble unwrites with its title while the next title writes,
-  // and the icon comes up. It ends on exactly the page the graph presses stand on.
+  // The join from the opening to the graph: the page and the code stay, and the
+  // opening's last bubble goes with its title while the next title comes. It ends
+  // on exactly the page the graph presses stand on.
   def bare = put(page_canvas(), code_states, code_x, code_y)
-  def icon = with_icon(blank_slide)
   def old_w = writer(title_update)
   def new_w = writer(title_graph)
   def bubble_w = writer(bubble)
@@ -452,13 +460,12 @@ fun slide_update_story():
                  def coming = clamp01(2.0 * t - 1.0)
                  def q1 = put(bare, old_w.frame(going), title_x, title_y)
                  def q2 = put(q1, new_w.frame(coming), title_x, title_y)
-                 def q3 = put(q2, bubble_w.frame(going), 0.0, 0.0)
-                 put(q3, icon.alpha(smooth(t)), 0.0, 0.0))
+                 put(q2, bubble_w.frame(going), 0.0, 0.0))
 
   // The graph presses, on a page with no title: the title is a key in every frame,
   // one pict per part, so a press within a part leaves it alone and the press
   // that crosses into the next part unwrites it and writes the new one.
-  def page = put(with_icon(page_canvas()), code_states, code_x, code_y)
+  def page = put(page_canvas(), code_states, code_x, code_y)
   fun entitled(frames :~ List, title :: pc.Pict) :: List:
     for List (f :: Frame in frames):
       Frame(~picts: f.picts ++ { #'title: [title, title_x, title_y, band_callout] },

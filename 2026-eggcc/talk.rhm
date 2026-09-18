@@ -75,7 +75,11 @@ glide_slides all_slides:
    // Each divider is told the title of the slide after it, and writes it as the
    // outline goes up -- one press -- so the cut to that slide changes nothing.
    divider(0, ~shots: section_shots, ~next: useful_title),
-   in_section(0, slide_2, ~cut: #true), in_section(0, slide_40), in_section(0, slide_12),
+   in_section(0, slide_2, ~cut: #true),
+   // the workflow's last press hands its term and rules to exactly where the next
+   // slide draws them, so it is the press that moves on, and the two meet on a cut
+   in_section(0, slide_40, ~hold: #false),
+   in_section(0, slide_12, ~cut: #true),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
    // the `update` example is one slide: the code stays put while the graph, the

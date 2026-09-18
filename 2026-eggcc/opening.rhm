@@ -115,7 +115,7 @@ def useful_title = "E-Graphs are Super Useful!"
 
 // A label of the grid, in Keynote's 48pt, and where its text box was.
 fun label(s :: String, x :: Real, y :: Real) :: List:
-  [prose_text(s, ~size: 48.0), x + box_dx, y + box_dy]
+  [prose_text(s, ~size: 48.0, ~arrive: #'pop), x + box_dx, y + box_dy]
 fun logo(file :: String, w :: Real, h :: Real, x :: Real, y :: Real,
          ~crop: crop = #false) :: List:
   [image_pict(media(file), w, h, ~crop: crop), x, y]
@@ -126,7 +126,7 @@ fun label_over(s :: String, piece :: List, y :: Real) :: List:
   def p = as_pict(img)
   def box = ink_bounds(p) || [0.0, 0.0, p.width, p.height]
   def cx = lx + ((box[0] :~ Real) + (box[2] :~ Real)) / 2
-  def word = prose_text(s, ~size: 48.0)
+  def word = prose_text(s, ~size: 48.0, ~arrive: #'pop)
   [word, cx - word.width / 2, y + box_dy]
 // A stage: its pieces on a transparent layer, each at its place on the slide.
 fun layer(pieces :: List) :: pc.Pict:
