@@ -12,6 +12,7 @@ import:
   "rules.rhm" open
   pict as pc
   draw
+  "write.rhm".popped
 
 export:
   slide_40
@@ -49,7 +50,7 @@ export:
 // other slide draws
 fun stage_code(s :: String) :: pc.Pict: code_text(s, ~size: 40.0)
 fun stage_greek(s :: String) :: pc.Pict: math_text(s, ~size: 40.0)
-fun stage_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
+fun stage_line(& pieces) :: pc.Pict: popped(pc.beside(~vert: #'bottom, & pieces))
 
 // The box a stage is drawn in, sized to hold every body that stage ever shows: the
 // two pictures put different things in the same boxes, and a box sized to its

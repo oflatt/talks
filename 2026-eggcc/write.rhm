@@ -41,6 +41,8 @@ export:
   writer
   write
   unwrite
+  extent_for
+  unwrite_pace
   words_of
   rewrite_between
   looks_same
@@ -111,9 +113,12 @@ fun pop_frame(p :: Pict, n :: Real) :: Pict:
   | n >= 1.0: p
   | n <= 0.0: p.ghost()
   | ~else:
-      def s = 0.55 + 0.45 * back_out(n)
+      def k = back_out(n)
+      def s = 0.55 + 0.45 * k
       def a = smooth(clamp01(n / 0.6))
-      overlay(p.ghost(), p.scale(s).alpha(a))
+      // from a little below its place, up into it -- overshooting with the scale
+      def g = p.ghost()
+      overlay(~dy: 0.45 * p.height * (1.0 - k), g, p.scale(s).alpha(a)).refocus(g)
 fun popped(p :: Pict, ~weight: weight :: Real = 0.45) :: Pict:
   arriving(p, Arrival(fun (n): pop_frame(p, n), weight, ~kind: #'pop, ~lead: 0.5))
 fun faded(p :: Pict, ~weight: weight :: Real = 0.6) :: Pict:
@@ -400,11 +405,20 @@ fun words_of(p :: Pict) :: List:
 // How long a piece that only fades wants, and how far into it the next may start.
 def fade_weight = 0.5
 def fade_lead = 0.5
-// The most a whole picture spends writing itself, and the least -- and the pace,
-// which scales what the parts add up to before those limits: under 1 is quicker.
-def write_cap = 2.0
-def write_floor = 0.4
-def write_pace = 0.75
+// The pace, which scales what the parts add up to: under 1 is quicker. The limits
+// are wide, so that what a picture takes follows how much there is to write rather
+// than cramming a long sentence into the time a short one gets.
+def write_cap = 3.0
+def write_floor = 0.3
+def write_pace = 0.5
+// Taking words back is quicker than putting them down: an unwrite runs at this
+// share of the write's time.
+def unwrite_pace = 0.5
+// The most a picture's parts may add up to, in weight. Past this the parts are
+// started closer together rather than the picture taking longer: a long paragraph
+// has its lines in flight at once, the way Manim's `Write` shortens its lag as the
+// text grows, and finishes in the same time a shorter one would.
+def write_span = 4.0
 
 class Writer(root :: Pict, parts :: List, starts :: List, durs :: List, total :: Real):
   // The picture at progress `n`, linear in time.
@@ -439,14 +453,24 @@ fun writer(root :: Pict) :: Writer:
     if part.arrival | (part.arrival :~ Arrival).lead | fade_lead
   // a part that takes no time is there at once; it still needs a moment to divide by
   def durs = for List (part :~ Part in parts): math.max(0.001, weight_of(part))
-  def starts:
+  def spaced:
     for values(acc :~ List = []) (i in 0..parts.length()):
       if i == 0
       | [0.0]
       | acc ++ [(acc.last :~ Real) + weight_of(parts[i - 1]) * lead_of(parts[i - 1])]
-  def total:
+  fun span_of(starts :~ List) :: Real:
     for values(m :~ Real = 0.0) (s :~ Real in starts, d :~ Real in durs): math.max(m, s + d)
-  Writer(root, parts, starts, durs, total)
+  // over the span, the starts are drawn together -- each part keeps its own time,
+  // and more of them are in flight at once -- so that the whole ends at the span
+  def starts:
+    cond
+    | span_of(spaced) <= write_span || parts.length() < 2: spaced
+    | ~else:
+        def k:
+          for values(k :~ Real = 1.0) (s :~ Real in spaced, d :~ Real in durs):
+            if s > 0.0 | math.min(k, math.max(0.0, (write_span - d) / s)) | k
+        for List (s :~ Real in spaced): s * k
+  Writer(root, parts, starts, durs, span_of(starts))
 
 fun extent_for(total :: Real) :: Real:
   math.min(write_cap, math.max(write_floor, total * write_pace))
@@ -474,7 +498,8 @@ fun unwrite(p :: Pict,
             ~extent: ext :: maybe(Real) = #false,
             ~bend: bend = fun (x): x) :: Pict:
   def w = writer(p)
-  animate(~extent: ext || extent_for(w.total), ~bend: bend, fun (n): w.frame(1.0 - n))
+  animate(~extent: ext || unwrite_pace * extent_for(w.total), ~bend: bend,
+          fun (n): w.frame(1.0 - n))
 
 // One thing said and then another in its place: `a` unwrites, then `b` writes, in
 // one epoch. `#false` unless both have words and the words differ -- a node that
@@ -486,13 +511,18 @@ fun rewrite_between(a :: Pict, b :: Pict,
   cond
   | wa == [] || wb == [] || wa == wb: #false
   | ~else:
+      // the old words go at the unwriting pace, the new come at the writing one,
+      // and the press takes what the two add up to
       def ra = writer(a)
       def rb = writer(b)
-      animate(~extent: ext || extent_for(0.7 * (ra.total + rb.total)), ~bend: fun (x): x,
+      def out_t = unwrite_pace * extent_for(ra.total)
+      def in_t = extent_for(rb.total)
+      def split = out_t / (out_t + in_t)
+      animate(~extent: ext || (out_t + in_t), ~bend: fun (x): x,
               fun (t):
-                if t < 0.5
-                | ra.frame(1.0 - 2.0 * t)
-                | rb.frame(2.0 * t - 1.0))
+                if t < split
+                | ra.frame(1.0 - t / split)
+                | rb.frame((t - split) / (1.0 - split)))
 
 // Whether a pict has an animation of its own already.
 fun moving(p :: Pict) :: Boolean:

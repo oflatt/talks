@@ -13,6 +13,8 @@ import:
   "apply.rhm" open
   "write.rhm".writer
   "write.rhm".write
+  "write.rhm".extent_for
+  "write.rhm".unwrite_pace
   "write.rhm".already
   pict as pc
 
@@ -79,22 +81,25 @@ fun update_opening() :: Map:
     callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
             prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
                          [["after the update", #'plain]]]))
-  def extent = 1.3
   // One bubble out, then the other in -- not both at once. They are two different
   // sentences in the same place, and crossing them leaves the middle of the move
   // showing the two of them printed over each other at half strength. So the first
-  // is unwritten over the first half of the move and the second written over the
-  // rest, while the code slides into its new form underneath.
+  // is unwritten and then the second written, each at the pace its own words ask
+  // for, while the code slides into its new form underneath over the whole press.
   def explain_w = writer(explain)
   def name_state_w = writer(name_state)
+  def out_t = unwrite_pace * extent_for(explain_w.total)
+  def in_t = extent_for(name_state_w.total)
+  def extent = math.max(1.0, out_t + in_t)
+  def split = out_t / extent
   def moving:
     pc.overlay(~horiz: #'left, ~vert: #'top,
                pc.magic_move(plain, with_states, ~other: #'fade, ~extent: extent)
                  .time_pad(~after: -1),
                pc.animate(~extent: extent, ~bend: fun (x): x,
-                          fun (t): explain_w.frame(clamp01(1.0 - 2.0 * t))),
+                          fun (t): explain_w.frame(clamp01(1.0 - t / split))),
                pc.animate(~extent: extent, ~bend: fun (x): x,
-                          fun (t): name_state_w.frame(clamp01(2.0 * t - 1.0))))
+                          fun (t): name_state_w.frame(clamp01((t - split) / (1.0 - split)))))
   // the page with its title; the code writes itself; the bubble explains a line;
   // then the states move in
   { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
@@ -453,11 +458,17 @@ fun slide_update_story():
   def old_w = writer(title_update)
   def new_w = writer(title_graph)
   def bubble_w = writer(bubble)
+  // the bubble and the old title go at the pace the bubble's words ask for, and
+  // the new title comes at its own
+  def out_t = unwrite_pace * extent_for(bubble_w.total)
+  def in_t = extent_for(new_w.total)
+  def join_extent = math.max(0.8, out_t + in_t)
+  def split = out_t / join_extent
   def join:
-    pc.animate(~extent: 1.3, ~bend: fun (x): x,
+    pc.animate(~extent: join_extent, ~bend: fun (x): x,
                fun (t):
-                 def going = clamp01(1.0 - 2.0 * t)
-                 def coming = clamp01(2.0 * t - 1.0)
+                 def going = clamp01(1.0 - t / split)
+                 def coming = clamp01((t - split) / (1.0 - split))
                  def q1 = put(bare, old_w.frame(going), title_x, title_y)
                  def q2 = put(q1, new_w.frame(coming), title_x, title_y)
                  put(q2, bubble_w.frame(going), 0.0, 0.0))

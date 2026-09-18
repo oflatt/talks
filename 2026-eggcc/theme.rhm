@@ -199,29 +199,19 @@ fun divider(k :: Int, ~shots: shots :: maybe(List) = #false,
       // and what matters is which disc is lit
       def p :~ pc.Pict = outline_to_header(sections, ~at: k, ~canvas: section_canvas(),
                                            ~intro: k == 0, ~shots: shots, ~next: coming)
-      // with a title to write, the rise ends on the next slide's opening picture
-      // and is the press that moves on: no held page, which the cut would repeat
-      p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'right }
-                                ++ (if next | { #'hold: #false } | {})))
+      // with a title to write, the rise ends on the next slide's opening picture,
+      // and the show sees that: the rise is the press that moves on, and the next
+      // slide is cut to
+      p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'right }))
 
-// `~cut: #true` is for the first slide of a section: the divider it follows has
-// just put the header where this slide's header is, so it arrives with a cut and
-// the bar stays put. A pan would carry the bar off the top and bring the same bar
-// back in from the bottom.
-//
-// `~hold: #false` is for a slide whose last press hands over to the next slide --
-// it ends on the picture the next one opens with, and the next arrives with a cut
-// -- so that last press is the one that moves on, rather than resting first on a
-// page the cut would then repeat.
-fun in_section(k :: Int, mk, ~cut: cut :: Boolean = #false, ~hold: hold :: Boolean = #true):
+// The first slide of a section arrives on the picture its divider ends on -- the
+// header where this slide's header is, and the title -- and the show sees that for
+// itself and cuts to it rather than panning; likewise any slide the one before it
+// hands over to. Nothing has to be said here.
+fun in_section(k :: Int, mk):
   in_prose_face(
     fun ():
-      def p :~ pc.Pict = section_header(sections, ~at: k, ~canvas: as_pict(mk()))
-      def marks:
-        (if cut | { #'transition: #'none } | {}) ++ (if hold | {} | { #'hold: #false })
-      if marks == {}
-      | p
-      | p.epoch_set_metadata(0, p.epoch_metadata(0) ++ marks))
+      section_header(sections, ~at: k, ~canvas: as_pict(mk())))
 
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
@@ -253,10 +243,14 @@ fun prose_text(s :: String, ~size: size :: Real = 40.0,
   | #'fade: faded(pc.text(s, ~font: font).colorize(as_color(color)))
   | ~else: written_text(s, ~color: color, ~font: font)
 fun code_text(s :: String, ~size: size :: Real = code_size,
-              ~italic: italic :: Boolean = #false, ~color: color = "black") :: pc.Pict:
-  written_text(s, ~color: color,
-               ~font: draw.Font(~name: code_font, ~size: size,
-                                ~style: if italic | #'italic | #'normal))
+              ~italic: italic :: Boolean = #false, ~color: color = "black",
+              ~arrive: arrive = #'write) :: pc.Pict:
+  def font = draw.Font(~name: code_font, ~size: size,
+                       ~style: if italic | #'italic | #'normal)
+  match arrive
+  | #'pop: popped(pc.text(s, ~font: font).colorize(as_color(color)))
+  | #'fade: faded(pc.text(s, ~font: font).colorize(as_color(color)))
+  | ~else: written_text(s, ~color: color, ~font: font)
 fun math_text(s :: String, ~size: size :: Real = code_size, ~color: color = "black") :: pc.Pict:
   written_text(s, ~color: color, ~font: draw.Font(~name: math_font, ~size: size))
 
@@ -281,10 +275,13 @@ def code_indent = code("  ").width    // the body, inside the signature
 // A bordered box, drawn from its path so that a press can write it. `~rounded` is
 // in OOXML's units, thousandths of a percent of the shorter side, as the shapes
 // Keynote exported had it.
-fun frame_box(w :: Real, h :: Real, ~rounded: r = #false) :: pc.Pict:
+// `~arrive: #'fade` for the box round a block of code, which comes up whole while
+// its lines pop in, rather than being traced.
+fun frame_box(w :: Real, h :: Real, ~rounded: r = #false, ~arrive: arrive = #'write) :: pc.Pict:
   def radius = if r | r / 100000.0 * math.min(w, h) | 0.0
-  written_shape(rounded_path(w, h, radius), ~width: w, ~height: h,
-                ~fill: "white", ~line: "black", ~line_width: 1.0)
+  def box = written_shape(rounded_path(w, h, radius), ~width: w, ~height: h,
+                          ~fill: "white", ~line: "black", ~line_width: 1.0)
+  if arrive == #'fade | faded(box) | box
 
 // A line built from its pieces, in the order they are written. A piece with a role
 // is one that stands for a node in the graph; `#false` is punctuation.

@@ -6,6 +6,7 @@
 import:
   lib("glide-pptx/runtime.rhm") open
   "theme.rhm" open
+  "write.rhm".popped
   pict as pc
   draw
 
@@ -80,9 +81,13 @@ fun code_parts() :: Map:
   // state form alone and fades in.
   def sig_head = code("fun foo(a, x")
   def sig_close = code("):")
+  // Each line comes up as one thing, popping into place, and the lines cascade:
+  // code is read as lines, not followed letter by letter, and a block of it should
+  // be there in well under a second. The pieces inside are still the picts the
+  // moves and the copies match on.
   def header:
-    {#'plain: pc.beside(~vert: #'bottom, sig_head, sig_close),
-     #'states: pc.beside(~vert: #'bottom, sig_head, code(", "), greek("ω"), sig_close)}
+    {#'plain: popped(pc.beside(~vert: #'bottom, sig_head, sig_close)),
+     #'states: popped(pc.beside(~vert: #'bottom, sig_head, code(", "), greek("ω"), sig_close))}
   // Two writes to one address: the first stores `x`, the second overwrites it with
   // `x + 1`. The program still needs what `a` held before, and it needs the memory
   // it ends with, so it returns both.
@@ -120,9 +125,9 @@ fun code_parts() :: Map:
          [#false, [code(", ")]],
          [#'state_in, [omega_in] ++ omega_in_sub],
          [#false, [close]]]
-      {#'plain: pc.beside(~vert: #'bottom, v, v_sub, op, arg1, arg_comma,
-                          & wrote, close),
-       #'states: segs_pict(segs),
+      {#'plain: popped(pc.beside(~vert: #'bottom, v, v_sub, op, arg1, arg_comma,
+                                 & wrote, close)),
+       #'states: popped(segs_pict(segs)),
        #'omega: omega_out,
        #'segs: segs}
   // What the program hands back, and so what extraction is asked for: what `a` held
@@ -138,8 +143,8 @@ fun code_parts() :: Map:
        [#false, [code(", ")]],
        [#'state, [greek("ω"), code_sub("2")]],
        [#false, [code(")")]]]
-    {#'plain: pc.beside(~vert: #'bottom, ret_head, ret_v, ret_sub),
-     #'states: segs_pict(segs),
+    {#'plain: popped(pc.beside(~vert: #'bottom, ret_head, ret_v, ret_sub)),
+     #'states: popped(segs_pict(segs)),
      #'segs: segs}
   def lines = updates ++ [ret]
   // The frame is measured, and measured against the *state* form: a box sized to
@@ -150,7 +155,7 @@ fun code_parts() :: Map:
       math.max(m, (l[#'states] :~ pc.Pict).width)
   def content_w = math.max((header[#'states] :~ pc.Pict).width, code_indent + body_w)
   def frame = frame_box(content_w + 2 * code_inset,
-                        (1 + lines.length()) * code_row + 2 * code_inset)
+                        (1 + lines.length()) * code_row + 2 * code_inset, ~arrive: #'fade)
   {#'frame: frame, #'header: header, #'lines: lines}
 
 // The box with its five lines -- the signature, then one per `update` -- in one

@@ -329,9 +329,14 @@ fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
   pc.animate(~extent: wanted,
              fun (t): magic_between(base, a, b, t, ~appear: appear, ~pairs: pairs, ~& kws))
 
-// A whole slide: the first frame, then a press to each of the rest.
+// A whole slide: the first frame, then a press to each of the rest. `~extent_of`
+// gives a press its own pace, by the index of the frame it lands on; a press it
+// says nothing for takes `~extent`.
 fun magic_slide(base :: pc.Pict, frames :~ List,
-                ~extent: extent :: Real = 1.0, ~& kws) :: pc.Pict:
+                ~extent: extent :: Real = 1.0,
+                ~extent_of: extent_of :: maybe(Function.of_arity(1)) = #false,
+                ~& kws) :: pc.Pict:
   pc.switch(magic_still(base, frames[0], ~& kws),
             & for List (i in 1..frames.length()):
-                magic_press(base, frames[i - 1], frames[i], ~extent: extent, ~& kws))
+                magic_press(base, frames[i - 1], frames[i],
+                            ~extent: (extent_of && extent_of(i)) || extent, ~& kws))

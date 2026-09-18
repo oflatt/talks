@@ -73,23 +73,22 @@ glide_slides all_slides:
   [slide_1,
    // 1 -- why effects belong in an e-graph at all
    // Each divider is told the title of the slide after it, and writes it as the
-   // outline goes up -- one press -- so the cut to that slide changes nothing.
+   // outline goes up -- one press, which is also the press that moves on.
    divider(0, ~shots: section_shots, ~next: useful_title),
-   in_section(0, slide_2, ~cut: #true),
+   in_section(0, slide_2),
    // the workflow's last press hands its term and rules to exactly where the next
-   // slide draws them, so it is the press that moves on, and the two meet on a cut
-   in_section(0, slide_40, ~hold: #false),
-   in_section(0, slide_12, ~cut: #true),
+   // slide draws them; the show sees that, and the two meet on a cut
+   in_section(0, slide_40), in_section(0, slide_12),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
    // the `update` example is one slide: the code stays put while the graph, the
    // rule and the extraction happen beside it, and only the title changes
    divider(1, ~shots: section_shots, ~next: update_title),
-   in_section(1, slide_update_story, ~cut: #true),
+   in_section(1, slide_update_story),
    in_section(1, slide_41),
    // 3 -- what makes it hard, and the algorithm
    divider(2, ~shots: section_shots, ~next: nphard_title),
-   in_section(2, slide_nphard, ~cut: #true),
+   in_section(2, slide_nphard),
    // and then what the algorithm does instead, on the example the section before
    // this one was about
    in_section(2, slide_dp),
@@ -98,7 +97,7 @@ glide_slides all_slides:
    // of the section before this one.
    divider(3, ~shots: section_shots, ~next: eval_title),
    // what the evaluation runs on, walked through on one program, before the numbers
-   in_section(3, slide_eval_setup, ~cut: #true),
+   in_section(3, slide_eval_setup),
    in_section(3, slide_cdf), in_section(3, slide_perf),
    // and out the way we came in
    slide_questions,

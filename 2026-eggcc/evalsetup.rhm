@@ -46,8 +46,9 @@ def eval_title = "Case Study: eggcc"
 // the captions over the three panels: labels, so they pop rather than write
 fun panel_title(s :: String) :: pc.Pict:
   prose_text(s, ~size: 38.0, ~bold: #true, ~arrive: #'pop)
-fun ev_code(s :: String) :: pc.Pict: code_text(s, ~size: 22.0)
-fun ev_label(s :: String) :: pc.Pict: code_text(s, ~size: 22.0, ~italic: #true)
+// code pops in, a line at a time; the labels on the CFG's edges are labels too
+fun ev_code(s :: String) :: pc.Pict: code_text(s, ~size: 22.0, ~arrive: #'pop)
+fun ev_label(s :: String) :: pc.Pict: code_text(s, ~size: 22.0, ~italic: #true, ~arrive: #'pop)
 
 // A basic block: its label, then its instructions, in a box.
 def block_pad = 16.0
@@ -55,7 +56,8 @@ fun bril_block(label :: String, lines :: List) :: pc.Pict:
   def body:
     pc.stack(~sep: 4.0, ~horiz: #'left,
              ev_label(label), & for List (s in lines): ev_code("  " +& s))
-  put(frame_box(body.width + 2 * block_pad, body.height + 2 * block_pad, ~rounded: 6000),
+  put(frame_box(body.width + 2 * block_pad, body.height + 2 * block_pad, ~rounded: 6000,
+                ~arrive: #'fade),
       body, block_pad, block_pad)
 
 // The control-flow graph of the program as Bril has it: the loop test, the body
@@ -173,7 +175,8 @@ def opt_pict:
              ev_code("  t: int = neg a;"),
              ev_code("  lb: int = bitand a t;"),
              ev_code("  print lb;"))
-  put(frame_box(body.width + 2 * block_pad, body.height + 2 * block_pad, ~rounded: 6000),
+  put(frame_box(body.width + 2 * block_pad, body.height + 2 * block_pad, ~rounded: 6000,
+                ~arrive: #'fade),
       body, block_pad, block_pad)
 
 // ------------------------------------------------------------------ the e-graph
@@ -220,7 +223,7 @@ def ev_nodes:
    [[#'it3], "", "000000", ev_port, 1365.0, 461.0, #'port],
    // the body, across the top on the left: the region's argument, its projections,
    // what the iteration computes from them, and the tuple it hands back
-   [[#'arg], "Γ", stateful_hex, 64.0, 860.0, 336.0, #'node],
+   [[#'arg], "Arg", stateful_hex, 96.0, 860.0, 336.0, #'node],
    [[#'p0], "[0]", stateful_hex, 64.0, 725.0, 426.0, #'node],
    [[#'p1], "[1]", "000000", 64.0, 805.0, 426.0, #'node],
    [[#'p2], "[2]", "000000", 64.0, 885.0, 426.0, #'node],
@@ -288,6 +291,13 @@ def ev_at:
 fun ev_middle(key) :: List:
   def [x, y, w, h] = ev_at[key]
   [(x :~ Real) + (w :~ Real) / 2, (y :~ Real) + (h :~ Real) / 2]
+// The point a class tube should run to so that its round end covers a wide node:
+// past the middle towards the far side, by what the node has over the tube's width.
+fun ev_reach(key, dir :: Real) :: List:
+  def [x, y, w, h] = ev_at[key]
+  def [mx, my] = ev_middle(key)
+  def tube = 64.0 + 2 * eclass_pad
+  [mx + dir * math.max(0.0, (w :~ Real) / 2 - tube / 2 + 6.0), my]
 
 // A tuple: a wide box with a parenthesis at each end, and its ports laid over it as
 // nodes of their own, so that an edge can leave from the port of the element it is.
@@ -341,7 +351,7 @@ fun slide_eval_setup():
     def box = written_shape(rounded_path(bw, bh, 14.0), ~width: bw, ~height: bh,
                             ~fill: region_fill, ~line: region_line,
                             ~line_width: 2.0, ~style: #'long_dash)
-    def cap = math_text("loop body:  Γ = (σ, lb, 2, a)", ~size: 24.0,
+    def cap = math_text("loop body:  Arg = (σ, lb, 2, a)", ~size: 24.0,
                         ~color: region_line)
     // the header in the nodes' band: two things in one band have no order between
     // them, and in the box's band the box was drawn over it
@@ -351,7 +361,7 @@ fun slide_eval_setup():
   // are the same value, which is the whole reason the loop can go, and the state
   // that comes out of the loop is the one that went in
   def equality:
-    { [#'cls]: eclass_region(ev_middle([#'g1]), ev_middle([#'and]),
+    { [#'cls]: eclass_region(ev_middle([#'g1]), ev_reach([#'and], 1.0),
                              ~dash: value_class) ++ [band_below],
       [#'cls_s]: eclass_region(ev_middle([#'g0]), ev_middle([#'s]),
                                ~dash: state_class) ++ [band_below] }

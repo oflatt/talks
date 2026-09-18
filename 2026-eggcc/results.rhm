@@ -14,6 +14,7 @@ import:
   "plots.rhm" open
   "write.rhm".write
   "write.rhm".writer
+  "write.rhm".extent_for
   pict as pc
   draw
 
@@ -44,7 +45,10 @@ fun slide_cdf():
   def said = prose_text("finish within 1ms", ~size: 40.0, ~bold: #true, ~color: cdf_dp_color)
   def said_w = writer(said)
   def ride = 0.15                   // the height on the plot the words ride at
-  def sweep_part = 0.62             // the share of the press the sweep takes
+  // the sweep takes its time, and then the words take theirs
+  def sweep_t = 1.3
+  def reading_extent = sweep_t + extent_for(said_w.total)
+  def sweep_part = sweep_t / reading_extent
   fun reading(k :: Real, w :: Real, ~alpha: alpha :: Real = 1.0) :: pc.Pict:
     def base = scene([1.0, 0.0, 0.0], ~sweep: k, ~sweep_alpha: alpha)
     def secs = sweep_secs(k)
@@ -66,11 +70,11 @@ fun slide_cdf():
         said_w.frame(going), ex + 18.0 + share.width + 16.0, ey - said.height / 2)
   // long enough to watch a curve being drawn, which is the point of drawing it
   pc.switch(scene([0.0, 0.0, 0.0]),
-            pc.animate(~extent: 1.8, fun (t): scene([t, 0.0, 0.0])),
-            pc.animate(~extent: 2.2, ~bend: fun (x): x,
+            pc.animate(~extent: 1.2, fun (t): scene([t, 0.0, 0.0])),
+            pc.animate(~extent: reading_extent, ~bend: fun (x): x,
                        fun (t): reading(smooth(clamp01(t / sweep_part)),
                                         clamp01((t - sweep_part) / (1.0 - sweep_part)))),
-            pc.animate(~extent: 1.8, fun (t): solvers(t)))
+            pc.animate(~extent: 1.2, fun (t): solvers(t)))
 
 // -------------------------------------------------------------------------------------
 // And how fast the code it picks runs. A series a press: ours grows out of the
@@ -119,9 +123,9 @@ fun slide_perf():
   // again is a press that does nothing.
   pc.switch(scene(0.0, 0.0, 0.0),
             pc.animate(~extent: 1.8, fun (t): scene(t, 0.0, 0.0)),
-            pc.animate(~extent: 1.2, ~bend: fun (x): x,
+            pc.animate(~extent: extent_for(first_w.total), ~bend: fun (x): x,
                        fun (t): noted(scene(1.0, 0.0, 0.0), t, 0.0)),
-            pc.animate(~extent: 1.2, ~bend: fun (x): x,
+            pc.animate(~extent: extent_for(last_w.total), ~bend: fun (x): x,
                        fun (t): noted(scene(1.0, 0.0, 0.0), 1.0, t)),
             pc.animate(~extent: 1.8,
                        fun (t): noted(scene(1.0, t, 0.0), 1.0 - clamp01(t / 0.35),

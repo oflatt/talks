@@ -817,6 +817,11 @@ fun slide_12():
   // the page every press draws over: the canvas, the label, and the term itself
   def page: put(as_pict(base_canvas), input_line, term_x, term_y)
 
+  // The rewrites -- a rule coming over, matching, its right-hand side becoming
+  // nodes and going in, and going back -- move at half again the pace of the rest:
+  // they are bookkeeping the room has seen before. The term's own descent into the
+  // graph, and the extraction after, keep the pace.
+  fun pace(i :: Int) :: Real: if i >= 6 && i <= 16 | 0.67 | 1.0
   magic_slide(
     page,
     build
@@ -868,7 +873,7 @@ fun slide_12():
           // and this time nothing else is reached at all, and the term is one node
           frame(~third: #true, ~merged: #true, ~picks: [#'a]),
           term_2],
-    ~wire: wire, ~edge_band: band_wires,
+    ~extent_of: pace, ~wire: wire, ~edge_band: band_wires,
     // A rule pointing at what one of its variables matched: thin, gold and dashed,
     // so it reads as something laid over the picture for a moment rather than as
     // something the e-graph contains. Under the rule box, so it leaves the box at
