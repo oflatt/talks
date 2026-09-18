@@ -247,15 +247,17 @@ fun node_middle(node, x :: Real, y :: Real) :: List:
 // own rather than as a drawing on a slide-sized layer. That is what lets the
 // equality in the rule box fly out and *become* the region: a press interpolates
 // one position per key, so the thing arriving has to have a position to arrive at.
-fun eclass_region(from :~ List, to :~ List, ~dash: dash) :: List:
-  def pad = eclass_width / 2 + 6.0
+// `~thickness` is the tube's, for a graph whose nodes are not the usual size.
+fun eclass_region(from :~ List, to :~ List, ~dash: dash,
+                  ~thickness: thickness :: Real = eclass_width) :: List:
+  def pad = thickness / 2 + 6.0
   def left = math.min(from[0], to[0]) - pad
   def top = math.min(from[1], to[1]) - pad
   def here = [from[0] - left, from[1] - top]
   def there = [to[0] - left, to[1] - top]
   [eclass_tube(pc.blank(~width: math.abs(from[0] - to[0]) + 2 * pad,
                         ~height: math.abs(from[1] - to[1]) + 2 * pad),
-               here, here, there, there, ~dash: dash,
+               here, here, there, there, ~dash: dash, ~thickness: thickness,
                ~width: math.abs(from[0] - to[0]) + 2 * pad,
                ~height: math.abs(from[1] - to[1]) + 2 * pad),
    left, top]

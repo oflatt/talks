@@ -65,20 +65,29 @@ fun update_opening() :: Map:
   // pinned by a finder does not survive that. Kept apart, the layer can fade out
   // as the move runs and the next one fade in, which is what should happen anyway.
   def blank_layer = pc.blank(~width: slide_width, ~height: slide_height)
-  // Both bubbles reach in from the right, at the height of the first line and off
-  // the box's own edge -- not off the end of the line's text, which is inside the
-  // box, and not from above, where the signature now is. The second replaces the
-  // first in place, so the eye stays on the line they are both about.
+  // Both bubbles are about the first line, and point at it: the spike lands just
+  // off the end of that line's own text, inside the box, while the body stays out
+  // past the box's edge -- so the spike reaches in over the border rather than
+  // stopping at it, which pointed at the box. Not from above, where the signature
+  // is. The line's end moves as the code moves into its state form, and the second
+  // bubble points at where it is then. It replaces the first in place, so the eye
+  // stays on the line they are both about.
   def (fx, _) = pc.Find.right(parts[#'frame]).in(plain)
-  def first_line_y = code_y + code_inset + code_row * 1.5
-  def at_first_line = pc.Find.abs(fx, first_line_y)
+  def body_x = fx + 30.0
+  // where line 0 ends on `page`, in the form named, and how far the body is from it
+  fun at_first_line(form, page :: pc.Pict):
+    def line :~ pc.Pict = ((parts[#'lines] :~ List)[0] :~ Map)[form]
+    def (x, y) = pc.Find.right(line).in(page)
+    values(pc.Find.abs(x + 8.0, y), body_x - (x + 8.0))
+  def (explain_at, explain_reach) = at_first_line(#'plain, plain)
+  def (state_at, state_reach) = at_first_line(#'states, with_states)
   def explain:
-    callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
+    callout(~on: blank_layer, ~at: explain_at, ~spike: #'w, ~reach: explain_reach,
             prose_stack([[["Write ", #'plain], ["x", #'bold], [" to address ", #'plain],
                           ["a", #'bold], [",", #'plain]],
                          [["return the previous value at ", #'plain], ["a", #'bold]]]))
   def name_state:
-    callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
+    callout(~on: blank_layer, ~at: state_at, ~spike: #'w, ~reach: state_reach,
             prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
                          [["after the update", #'plain]]]))
   // One bubble out, then the other in -- not both at once. They are two different

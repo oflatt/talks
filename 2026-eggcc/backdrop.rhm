@@ -1,0 +1,160 @@
+#lang rhombus/and_meta
+// The picture behind the title: an e-graph, abstractly. Unlabelled nodes with the
+// arrows between them, a few classes, and one state walk threading down through it
+// in blue -- drawn out of the same pieces the talk's own e-graphs are, so the first
+// slide shows the talk's picture rather than a stock one.
+//
+// It is laid out on a board one ring of cells larger than the slide and then cropped
+// to the slide. The cells line up with the slide's edges and every node keeps inside
+// its own cell, so no node is ever cut through: the ring's nodes are wholly off the
+// slide, and what crosses the edge is the arrows between them and the nodes inside
+// -- cut midway, which is what says the picture keeps going. The board rather than
+// placing off the slide's edge: `overlay` takes the union of bounding boxes, so a
+// node put at a negative coordinate would shift everything placed before it, and the
+// arrows would aim where the nodes were.
+
+import:
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  "egraph.rhm" open
+  pict as pc
+  draw
+
+export:
+  backdrop
+
+// Pseudo-random, but the same picture every run: a small congruential generator
+// with a fixed seed, so the layout is a fact of the deck and not of the build.
+class Rng(mutable state :: Int):
+  method next() :: Real:
+    state := (state * 1103515245 + 12345) mod 2147483648
+    state / 2147483648.0
+  method between(lo :: Real, hi :: Real) :: Real: lo + (hi - lo) * next()
+  method pick(xs :: List): xs[math.exact(math.floor(next() * xs.length()))]
+
+// The grid the nodes are jittered on: `rows` by `cols` cells over the slide, and a
+// ring of cells round them off it. A node sits at least `pad` inside its cell.
+def rows = 5
+def cols = 8
+def node_size = 62.0
+def row_gap = slide_height / rows
+def col_gap = slide_width / cols
+def board_w = slide_width + 2 * col_gap
+def board_h = slide_height + 2 * row_gap
+def pad_x = 24.0
+def pad_y = 30.0
+def node_line = 3.0
+def edge_line = 3.0
+def walk_line = 5.0
+def tube = node_size + 2 * eclass_pad
+// the cells, ring included, that the loops run over
+def all_rows = rows + 2
+def all_cols = cols + 2
+
+// the pale blue a walked node is filled with, as the runtime spells colours
+def walk_fill = "D9E3FF"
+def class_dash = draw.Color(120, 120, 120)
+
+fun backdrop(~alpha: alpha :: Real = 0.3, ~walk_alpha: walk_alpha :: Real = 0.62) :: pc.Pict:
+  def rng = Rng(20260918)
+  def board = pc.blank(~width: board_w, ~height: board_h)
+  // The walk first: one node a row, drifting a column at a time, so that its cells
+  // are the ones the grid is not allowed to leave empty. It keeps to the right third
+  // of the slide, which is the part the title does not reach: a walk behind the
+  // title is a walk the title is read through.
+  def walk_lo = all_cols - 3
+  def walk_hi = all_cols - 2
+  def walk_cols:
+    for values(acc :~ List = [walk_hi]) (r in 1..all_rows):
+      def c :~ Int = acc.last
+      def next = math.min(walk_hi, math.max(walk_lo, c + rng.pick([-1, 0, 1])))
+      acc ++ [next]
+  fun on_walk(r :: Int, c :: Int) :: Boolean: walk_cols[r] == c
+  // where each node sits on the board: the grid, jittered, with a few cells empty
+  def spots :~ Map:
+    for values(m :~ Map = {}):
+      each r in 0..all_rows
+      each c in 0..all_cols
+      def empty = rng.next() < 0.2
+      def x = c * col_gap + rng.between(pad_x, col_gap - pad_x - node_size)
+      def y = r * row_gap + rng.between(pad_y, row_gap - pad_y - node_size)
+      skip_when empty && !on_walk(r, c)
+      m ++ { [r, c]: [x, y] }
+  fun here(r, c): spots.has_key([r, c])
+  // a cell of the ring, off the slide
+  fun in_ring(r, c): r == 0 || c == 0 || r == all_rows - 1 || c == all_cols - 1
+  // the nodes: plain, or in the walk's blue
+  fun node(r :: Int, c :: Int) :: pc.Pict:
+    if on_walk(r, c)
+    | graph_node(~width: node_size, ~height: node_size, ~adj: "30640",
+                 ~line: stateful_hex, ~line_width: node_line + 2.0, ~fill: walk_fill)
+    | graph_node(~width: node_size, ~height: node_size, ~adj: "30640",
+                 ~line: "000000", ~line_width: node_line, ~fill: node_white)
+  def nodes :~ Map:
+    for values(m :~ Map = {}) (key in spots.keys()):
+      def [r, c] = key
+      m ++ { key: node(r, c) }
+  // Every arrow points from a node up to what it is built from, as the graphs in
+  // the talk do: one or two of the nodes in the row above, near its own column.
+  // The walk's own edges are the blue ones and are kept out of the grey.
+  def walk_pairs:
+    for List (r in 1..all_rows): [[r, walk_cols[r]], [r - 1, walk_cols[r - 1]]]
+  def grey_pairs:
+    List.append(
+      & for List (key in spots.keys()):
+          def [r, c] = key
+          skip_when r == 0
+          def above = for List (dc in [-1, 0, 1]): keep_when here(r - 1, c + dc); [r - 1, c + dc]
+          skip_when above == []
+          def first = rng.pick(above)
+          def rest = for List (a in above): skip_when a == first; a
+          def picked = if rest != [] && rng.next() < 0.45 | [first, rng.pick(rest)] | [first]
+          for List (a in picked):
+            skip_when walk_pairs.contains([key, a])
+            [key, a])
+  // A few classes: two neighbours in a row, both on the slide and neither on the
+  // walk, in one grey tube with the dashed line that says they are one value.
+  def class_pairs:
+    for List (r in 1..all_rows - 1):
+      def cands:
+        for List (c in 1..all_cols - 2):
+          keep_when here(r, c) && here(r, c + 1) && !on_walk(r, c) && !on_walk(r, c + 1)
+          [[r, c], [r, c + 1]]
+      keep_when cands != [] && rng.next() < 0.7
+      rng.pick(cands)
+  // the layers: everything is placed once, and the arrows are drawn over ghosts of
+  // the nodes so that each layer can be faded on its own
+  fun placed(keys :: List, ~ghost: ghost :: Boolean = #false) :: pc.Pict:
+    for values(q :~ pc.Pict = board) (key in keys):
+      def [x, y] = spots[key]
+      def n :~ pc.Pict = nodes[key]
+      put(q, (if ghost | n.ghost() | n), x, y)
+  def all_keys = spots.keys()
+  def walk_keys = for List (k in all_keys): keep_when on_walk(k[0], k[1]); k
+  def grey_keys = for List (k in all_keys): skip_when on_walk(k[0], k[1]); k
+  def ghosts = placed(all_keys, ~ghost: #true)
+  fun wires(pairs :: List, ~color: color, ~line_width: lw :: Real) :: pc.Pict:
+    arrows(~on: ghosts, (for List ([a, b] in pairs): [nodes[a], nodes[b]]),
+           ~color: color, ~line_width: lw, ~gap: 4)
+  def classes:
+    for values(q :~ pc.Pict = board) ([a, b] in class_pairs):
+      def [ax, ay] = spots[a]
+      def [bx, by] = spots[b]
+      def [region, x, y] = eclass_region(node_middle(nodes[a], ax, ay),
+                                         node_middle(nodes[b], bx, by),
+                                         ~dash: class_dash, ~thickness: tube)
+      put(q, region, x, y)
+  def graph:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               classes, placed(grey_keys),
+               wires(grey_pairs, ~color: "black", ~line_width: edge_line))
+  def walk:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               placed(walk_keys),
+               wires(walk_pairs, ~color: keynote_blue, ~line_width: walk_line))
+  def whole:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               graph.alpha(alpha, ~composite: #true),
+               walk.alpha(walk_alpha, ~composite: #true))
+  // the slide's window onto the board: one ring of cells in
+  crop_pict(whole, ~at: [col_gap, row_gap], ~size: [slide_width, slide_height])

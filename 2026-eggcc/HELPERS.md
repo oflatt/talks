@@ -24,7 +24,10 @@ Things the show (glide `staged.rhm`) does for you, so do not code around them:
 - **Hand-overs are cuts.** If a slide comes to rest on the picture the next slide
   opens with, glide drops the hold, cuts to the next slide, and the closing
   animation is the press that moves on. The dividers and the workflow → big-space
-  handoff work this way; nothing is declared.
+  handoff work this way; nothing is declared. "The same picture" is a pixel
+  compare (`looks_same` in glide's `staged.rhm`, colour bytes of every eighth
+  pixel, a budget of 24), so the next slide's first frame must draw the shared
+  ink *once* -- a copy laid over it, or a mark, is a difference and costs the cut.
 - **Pans** otherwise: `set_transitions(#'down)` in `talk.rhm`; a slide asks for its
   own with `p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'right })`
   (`#'left`, `#'up`, `#'down`, `#'none`).
@@ -46,6 +49,9 @@ fun slide_thing():
   where `titled` puts it.
 - `fade_in(base, extra)` adds one press that brings `extra` on the way it wants to
   arrive (section 3). `staged(canvas, [layer, ...])` chains those, a press a layer.
+  Several things in one press, one after another and overlapping -- a grid of logos
+  -- is one layer with all of them on it: `write` staggers a layer's parts in the
+  order they were put down (slide_2 in `opening.rhm`).
 - Anything from glide's runtime (`slide_canvas`, `image_pict`, `textbox`) is a Racket
   pict; `as_pict` crosses it over. `pc.animate(~extent: secs, fun (t): ...)` is a
   hand-rolled press; keep `~bend: fun (x): x` when you time things inside it.
@@ -66,7 +72,9 @@ parts in tree order, each its own way, overlapping. Three arrivals:
   and `prose_stack(rows)` set a bubble's sentence. `frame_box(w, h, ~arrive: #'fade)`.
 - Any pict can be tagged: `popped(p)`, `faded(p)`, `already(p)` (a copy laid over
   ink that is already there -- it is simply present at the end of the press, not
-  redrawn). Shapes: `written_shape(path, ~width, ~height, ~fill, ~line, ...)`,
+  redrawn), `remains(p)` (what a moving copy leaves behind -- present from the
+  press's first instant; launder it if it is built from the picts that are moving,
+  or the edges' `Find` sees them twice). Shapes: `written_shape(path, ~width, ~height, ~fill, ~line, ...)`,
   `written_stroke(path, ~pen)`; `rounded_path(w, h, r)`. Outlines are traced at a
   hand's pace -- quick along straights, slow round corners -- letters at a constant one.
 - Pace lives in `write.rhm`: `write_pace` (0.5 s per unit of weight), `unwrite_pace`
@@ -94,6 +102,9 @@ parts in tree order, each its own way, overlapping. Three arrivals:
   centres, aiming at rounded corners when the node carries `#'corner` metadata
   (`graph_node` does). `arrows(~on, [[a, b], ...])`. `arrow_morph(~on, ~t, ...)`
   draws one arrow becoming another -- a rule's pointer becoming the node's edge.
+  An edge spec in a magic frame draws itself; an arrow that is a pict of its own
+  (an annotation beside the picture) is `drawn_arrow(~on, from, to, ...)`, which
+  `write` then draws from the tail with the head at the nib.
 - Colours: `talk_blue`, `talk_light_blue`, `talk_green`, `talk_red`, `pale(c)`;
   the state parts of a graph are `keynote_blue`.
 

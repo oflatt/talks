@@ -30,6 +30,7 @@ export:
   arriving
   arrival_of
   already
+  remains
   popped
   faded
   ink_bounds
@@ -98,6 +99,13 @@ fun arrival_of(p :: Pict) :: maybe(Arrival):
 // turns it into something else cross-fades rather than rewording.
 fun already(p :: Pict) :: Pict:
   arriving(p, Arrival(fun (n): if n >= 1.0 | p | p.ghost(), 0.0, ~kind: #'still, ~lead: 0.0))
+
+// `p`, where a copy of it has just set off: there from the first instant of the
+// press rather than at its end. For what a moving copy leaves behind -- a term whose
+// glyphs are on their way into the graph -- which has to be seen the whole time the
+// copy is moving, or the copy reads as the thing itself leaving.
+fun remains(p :: Pict) :: Pict:
+  arriving(p, Arrival(fun (n): if n > 0.0 | p | p.ghost(), 0.0, ~kind: #'still, ~lead: 0.0))
 
 // Two arrivals for things that are not written. A label pops: it grows in from a
 // little smaller than itself, overshooting a touch as it fades up, the way a label

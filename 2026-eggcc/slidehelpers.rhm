@@ -29,6 +29,7 @@ export:
   arrow
   arrows
   arrow_morph
+  drawn_arrow
   fade_in
   pale
   border_width
@@ -185,16 +186,30 @@ fun reword_between(a :: Pict, b :: Pict, ~extent: extent :: Real = 1.0) :: maybe
                 def w = lerp(ra2.width, rb2.width, s)
                 def h = lerp(ra2.height, rb2.height, s)
                 def shell :~ Pict = rb2.shell_at(w, h)
-                // The same words in a shell of another size -- a box made room for
-                // something else in it -- keep their words and only the shell moves.
-                def (words, r):
+                // `words` set in the shell the way `r` sets its own content, at
+                // `alpha` -- drawn straight when whole, since a layer at full alpha
+                // is composited rather than drawn and comes out a shade off
+                fun placed(words :: Pict, r :: Reword, alpha :: Real) :: Pict:
+                  def [dx, dy] = r.place(w, h, r.content)
                   cond
-                  | same_words: values(rb2.content, rb2)
-                  | t < 0.5: values(wa.frame(1.0 - 2.0 * t), ra2)
-                  | ~else: values(wb.frame(2.0 * t - 1.0), rb2)
-                def [dx, dy] = (r :~ Reword).place(w, h, (r :~ Reword).content)
-                overlay(~horiz: #'left, ~vert: #'top, ~dx: dx, ~dy: dy, shell, words)
-                  .refocus(shell))
+                  | alpha <= 0.0: shell.ghost()
+                  | ~else:
+                      overlay(~horiz: #'left, ~vert: #'top, ~dx: dx, ~dy: dy,
+                              shell.ghost(), (if alpha >= 1.0 | words | words.alpha(alpha)))
+                def words:
+                  cond
+                  // The same words in a shell of another size, or set in it another
+                  // way -- a box made room for something else in it -- keep their
+                  // words: the one setting crosses into the other, each where its
+                  // own bubble puts it, so the press opens on exactly the first
+                  // bubble and ends on exactly the second and nothing jumps.
+                  | same_words:
+                      overlay(~horiz: #'left, ~vert: #'top,
+                              placed(ra2.content, ra2, 1.0 - s),
+                              placed(rb2.content, rb2, s))
+                  | t < 0.5: placed(wa.frame(1.0 - 2.0 * t), ra2, 1.0)
+                  | ~else: placed(wb.frame(2.0 * t - 1.0), rb2, 1.0)
+                overlay(~horiz: #'left, ~vert: #'top, shell, words).refocus(shell))
 
 // ---------------------------------------------------------------------------
 // A rounded rectangle around `child`s: pale fill, saturated border. Written, the
@@ -654,6 +669,28 @@ fun arrow(~on: on :: Pict,
 fun arrows(~on: on :: Pict, edges :: List.of(List), ~& kws) :: Pict:
   for values(p = on) ([from, to] in edges):
     arrow(~on: p, from, to, ~& kws)
+
+// An arrow that draws itself when a press brings it on: from its tail, the head
+// riding the nib, the way the edges of a graph do. `magic_between` binds
+// `current_draw` for an edge spec; this binds it for an arrow that is a pict of its
+// own -- an annotation beside a picture rather than a part of it -- so `write`
+// finds it and plays it like any other written thing. Keep `~on` no bigger than
+// the two picts it joins want: `write` looks for ink by drawing each part small, and
+// a four-pixel line on a layer the size of the slide is a thin thing to find.
+// A `~label` would only show once the line is whole; put the words beside it as a
+// pict of their own, and `write` will bring them on after the line.
+fun drawn_arrow(~on: on :: Pict, from, to, ~weight: weight :: Real = 0.6,
+                ~& kws) :: Pict:
+  fun upto(n :: Real) :: Pict:
+    parameterize { current_draw: n }:
+      arrow(~on: on, from, to, ~& kws)
+  def whole = upto(1.0)
+  arriving(whole, Arrival(fun (n):
+                            cond
+                            | n >= 1.0: whole
+                            | n <= 0.0: whole.ghost()
+                            | ~else: upto(n),
+                          weight, ~kind: #'stroke))
 
 // One arrow becoming another, `t` of the way: the line `a` would draw between its
 // two picts turns into the line `b` would draw between its two, end for end, in

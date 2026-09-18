@@ -6,6 +6,7 @@ import:
   lib("glide-pptx/runtime.rhm") open
   "slidehelpers.rhm" open
   "theme.rhm" open
+  "backdrop.rhm" open
   "write.rhm".ink_bounds
   pict as pc
 
@@ -37,10 +38,11 @@ fun slide_1():
 fun title_canvas(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
-  // unknown.png (id 88)
-  at(204.846, -334.58, ~rotate: 90.0, ~name: "unknown.png",
-     image_pict(media("image1.png"), 1510.306, 1925.056, ~crop: [0.0, 0.013, 0.514, 0.0],
-                ~opacity: 0.351)),
+  // The picture behind everything: an e-graph, abstractly, with one state walk
+  // through it in blue -- see `backdrop.rhm`. It replaces the stock network that
+  // Keynote had here (`image1.png`). A hand-drawn pict is an element like any other
+  // once it is a pict handle.
+  at(0.0, 0.0, ~name: "E-graph backdrop", backdrop().snapshot().handle),
   // Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,… (id 89)
   at(26.843, 896.485,
      ~name: "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,…",
@@ -101,9 +103,9 @@ fun title_canvas(): slide_canvas(
 // slide_2: Keynote's 10-stage build of Slide 2, as one animated pict.
 //
 // The generator gave each build stage its own slide; every object was a superset of
-// the stage before, so they collapse back into one. One `fade_in` per stage, so the
-// deck takes the same number of clicks it did -- and each stage now writes itself:
-// the logo fades up and its label is written beside it.
+// the stage before, so they collapse back into one. The eight logos are one press
+// now rather than eight: `write` staggers the pieces of a layer, so each logo fades
+// up and its label pops in while the next logo is already on its way.
 //
 // The labels were Keynote's text boxes, and are text now. Each sits where its box put
 // its ink -- `box_dx`, `box_dy` past the box's corner -- and Keynote's groups, which
@@ -151,19 +153,23 @@ fun slide_2():
                    ~crop: [0.0, 0.0, 0.1, 0.0])
   def l_wasm = logo("image16.png", 404.626, 232.136, 806.567 + 2.627, 630.163 + 68.882)
   def l_mlir = logo("image20.png", 633.867, 253.547, 1256.336, 640.14 + 58.176)
-  def stages:
-    [layer([l_float, label_over("Floating point", l_float, 236.25 - 51.323)]),
-     layer([l_numba, label_over("Python Simulations", l_numba, 236.144 - 51.217)]),
-     layer([l_intel, label_over("RTL Optimization", l_intel, 247.464 - 62.537)]),
-     layer([l_luminal, label_over("ML Kernels", l_luminal, 211.913 - 26.986),
-            label_over("Luminal", l_luminal, 211.913 + 337.154)]),
-     layer([l_sql, label_over("SQL", l_sql, 623.282 - 12.807)]),
-     layer([l_cad, label_over("CAD", l_cad, 662.932 - 52.457)]),
-     layer([l_wasm, label_over("WASM", l_wasm, 630.163 - 19.688)]),
-     layer([l_mlir, label_over("User DSL Optimizations", l_mlir, 640.14 - 29.665)]),
-     // ...and more!
-     layer([label("…and more!", 1625.216, 967.946)])]
-  staged(base_canvas, stages)
+  // One layer for the whole grid, in reading order: `write` plays a layer's parts
+  // in the order they were put down, each starting part way through the one before
+  // it, so the logos come up one after another with their labels popping in behind
+  // them, the way a word's letters do. Nine presses became two.
+  def grid:
+    layer([l_float, label_over("Floating point", l_float, 236.25 - 51.323),
+           l_numba, label_over("Python Simulations", l_numba, 236.144 - 51.217),
+           l_intel, label_over("RTL Optimization", l_intel, 247.464 - 62.537),
+           l_luminal, label_over("ML Kernels", l_luminal, 211.913 - 26.986),
+           label_over("Luminal", l_luminal, 211.913 + 337.154),
+           l_sql, label_over("SQL", l_sql, 623.282 - 12.807),
+           l_cad, label_over("CAD", l_cad, 662.932 - 52.457),
+           l_wasm, label_over("WASM", l_wasm, 630.163 - 19.688),
+           l_mlir, label_over("User DSL Optimizations", l_mlir, 640.14 - 29.665)])
+  // ...and more! -- the beat after the grid, on a press of its own
+  def more = layer([label("…and more!", 1625.216, 967.946)])
+  staged(base_canvas, [grid, more])
 
 // -------------------------------------------------------------------------------------
 // slide_20: slide_2 again, marking which of those tools need effects.

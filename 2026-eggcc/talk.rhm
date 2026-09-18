@@ -6,6 +6,7 @@
 // order. The pieces, bottom to top:
 //
 //   theme.rhm      the faces, the page, the prose, the drawing bands
+//   backdrop.rhm   the abstract e-graph behind the title
 //   term.rhm       `(a + 1) - 1`, the term the talk keeps coming back to
 //   codebox.rhm    the `update` program, as a box of code
 //   egraph.rhm     how a node, a class and an edge are drawn
