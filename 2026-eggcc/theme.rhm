@@ -60,6 +60,10 @@ export:
   small_prose
   staged
   titled
+  title_text
+  title_x
+  title_y
+  page_canvas
   with_icon
 
 def slide_width = 1920.0
@@ -171,18 +175,43 @@ fun in_prose_face(mk):
 // the talk has been through. They are built in `shots.rhm`, which the running order
 // hands over -- this file is below the slides they are cut from and cannot reach
 // them itself.
-fun divider(k :: Int, ~shots: shots :: maybe(List) = #false):
+//
+// A divider arrives from the side, where the slides within a section arrive from
+// below: turning to the outline is turning a page, and the show reads which from
+// the pict's own metadata (`transition_in`, in glide-pptx's `staged.rhm`).
+//
+// `~next` is the title of the slide that follows, which the press that puts the
+// list away writes at the title's place -- so that press is one gesture, the
+// outline going up and the next slide's title coming on, and the cut to the slide
+// then changes nothing. The slide it names has to be one built with `titled`, with
+// its title where `titled` puts it, and be the one that follows: the string is
+// its title constant, exported by the slide's own file, so the two cannot drift.
+fun divider(k :: Int, ~shots: shots :: maybe(List) = #false,
+            ~next: next :: maybe(String) = #false):
   in_prose_face(
     fun ():
+      def coming:
+        if next
+        | put(pc.blank(~width: slide_width, ~height: slide_height),
+              title_text(next), title_x, title_y)
+        | #false
       // only the first divider writes the list out; after that the list is familiar
       // and what matters is which disc is lit
-      outline_to_header(sections, ~at: k, ~canvas: section_canvas(), ~intro: k == 0,
-                        ~shots: shots))
+      def p :~ pc.Pict = outline_to_header(sections, ~at: k, ~canvas: section_canvas(),
+                                           ~intro: k == 0, ~shots: shots, ~next: coming)
+      p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'right }))
 
-fun in_section(k :: Int, mk):
+// `~cut: #true` is for the first slide of a section: the divider it follows has
+// just put the header where this slide's header is, so it arrives with a cut and
+// the bar stays put. A pan would carry the bar off the top and bring the same bar
+// back in from the bottom.
+fun in_section(k :: Int, mk, ~cut: cut :: Boolean = #false):
   in_prose_face(
     fun ():
-      section_header(sections, ~at: k, ~canvas: as_pict(mk())))
+      def p :~ pc.Pict = section_header(sections, ~at: k, ~canvas: as_pict(mk()))
+      if cut
+      | p.epoch_set_metadata(0, p.epoch_metadata(0) ++ { #'transition: #'none })
+      | p)
 
 fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
   def base = wire(as_pict(base_canvas), 0)
@@ -357,13 +386,20 @@ fun crop_pict(p :: pc.Pict, ~at: at :~ List, ~size: size :~ List) :: pc.Pict:
 // -- give or take the letter-spacing Keynote took out. `~tag` is kept for Glide,
 // which names a slide's title by it; `~nudge` is a correction to where it goes.
 def title_face = draw.Font(~name: prose_font, ~size: 85.0, ~weight: #'bold)
+def title_x = 95.0 + 4.0
+def title_y = 85.0 - 15.0
+// The title on its own, for a slide that changes its title while everything under
+// it stays: a frame key, which a press then unwrites and writes.
+fun title_text(title :: String) :: pc.Pict: written_text(title, ~font: title_face)
+// The white page every slide starts from.
+fun page_canvas() :: pc.Pict:
+  as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
+                       ~background: hex("FFFFFF")))
 fun titled(title :: String, ~tag: tag :: String,
            ~nudge: nudge :: maybe(List) = #false,
            ~box: box :: List = [95.0, 85.0]) :: pc.Pict:
   def [nx, ny] = nudge || [0.0, 0.0]
-  put(as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
-                           ~background: hex("FFFFFF"))),
-      written_text(title, ~font: title_face), box[0] + 4.0 + nx, box[1] - 15.0 + ny)
+  put(page_canvas(), title_text(title), box[0] + 4.0 + nx, box[1] - 15.0 + ny)
 
 // Keynote's little "program becomes a tree" icon in the top-right corner.
 fun with_icon(canvas :: pc.Pict) :: pc.Pict:

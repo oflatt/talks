@@ -14,10 +14,27 @@ export:
   slide_2
   slide_20
   slide_questions
+  useful_title
 
 // -------------------------------------------------------------------------------------
-// slide_1
-fun slide_1(): slide_canvas(
+// slide_1: the title, and then what its one unusual word means.
+//
+// A press points at "Effectful" in the title and says it: side-effects. The word's
+// place is measured off the rendered title -- the title is Keynote's text box, laid
+// out by the runtime rather than by this deck -- and holds as long as the title does.
+def effectful_box = [107.0, 459.0, 424.0, 83.0]
+fun slide_1():
+  def [x, y, w, h] = effectful_box
+  // under the title's left half, above the row of logos
+  def note:
+    bubble_at(pc.blank(~width: w, ~height: h), ~spot: [x, y], ~body: [180.0, 610.0],
+              ~color: talk_blue,
+              ~content: prose([["side-effects", #'bold],
+                               [" (e.g. mutating memory, I/O, etc.)", #'plain]]))
+  fade_in(as_pict(title_canvas()), note, ~horiz: #'left, ~vert: #'top)
+
+// The title slide as Keynote had it, which is also how the talk ends.
+fun title_canvas(): slide_canvas(
   ~width: slide_width, ~height: slide_height,
   ~background: hex("FFFFFF"),
   // unknown.png (id 88)
@@ -92,6 +109,10 @@ fun slide_1(): slide_canvas(
 // its ink -- `box_dx`, `box_dy` past the box's corner -- and Keynote's groups, which
 // put a logo and its label under one corner, are folded into the numbers.
 
+// The title, named once: the divider before this slide writes it as its outline
+// goes up, and reads it from here.
+def useful_title = "E-Graphs are Super Useful!"
+
 // A label of the grid, in Keynote's 48pt, and where its text box was.
 fun label(s :: String, x :: Real, y :: Real) :: List:
   [prose_text(s, ~size: 48.0), x + box_dx, y + box_dy]
@@ -114,7 +135,7 @@ fun layer(pieces :: List) :: pc.Pict:
 fun slide_2():
   // the picture before the first reveal
   def base_canvas:
-    titled("E-Graphs are Super Useful!", ~tag: "E-Graphs are Super Useful!")
+    titled(useful_title, ~tag: "E-Graphs are Super Useful!")
   // Labels sit on one line per row. Keynote left each label at its own group's top,
   // and the groups sit at different heights, so the labels stepped up and down
   // across the row and every one of them ran into its logo. These offsets put each
@@ -201,11 +222,11 @@ fun slide_20():
 // -------------------------------------------------------------------------------------
 // slide_questions: the title slide again, at the end, with the robot asking for them.
 //
-// It calls `slide_1` rather than repeating it, so the deck cannot end on a title that
-// has drifted from the one it opened with, and the whole slide is one `fade_in`: the
-// room has seen this picture already, and the only new thing on it is the question.
+// It calls `title_canvas` rather than repeating it, so the deck cannot end on a title
+// that has drifted from the one it opened with, and the whole slide is one `fade_in`:
+// the room has seen this picture already, and the only new thing on it is the question.
 fun slide_questions():
-  staged(slide_1(),
+  staged(title_canvas(),
          [put(blank_slide,
               make_bubble(~color: talk_green,
                           robot_says(#'smile, prose([["Questions?", #'bold]])))

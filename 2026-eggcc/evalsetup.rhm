@@ -7,10 +7,22 @@
 // rules put the loop's result in the same e-class as `a & -a` -- Hacker's Delight's
 // one-liner -- so extraction can take the closed form and the loop goes away.
 //
-// The Bril is `eggcc/tests/passing/small/lowbit_naive_br.bril` verbatim, and the
-// program on the right is what eggcc really emits for it: see
-// `tests/snapshots/files__lowbit_naive_br-optimize.snap`, which is `neg`, `bitand`
-// and a `print`, with the hot loop gone.
+// The Bril is `eggcc/tests/passing/small/lowbit_naive_br.bril` verbatim. The term in
+// the middle is the one eggcc's front end builds for it (`--run-mode pretty-print`):
+//
+//   Print( loop[1], loop[0] )
+//   loop = DoWhile( (σ, 1, 2, a), body )
+//
+// -- one loop, no `If` round it. eggcc later rotates the loop into an `If` wrapping
+// a `DoWhile`, which is the shape its Hacker's Delight rules are written against;
+// the slide draws the loop the way the source reads and lets the rule speak of it.
+// Two simplifications, both said here so they are not mistaken for eggcc: the body
+// really decides `a/2` and `lb·2` under an `If` inside itself, drawn here as the
+// five values it hands to the next iteration with the test first; and eggcc's
+// output guards the state on `a = 0`, where the loop would not terminate, which
+// the slide leaves out -- so the program on the right is the three lines
+// `neg`, `bitand`, `print`, which is what eggcc emits for `lowbit_br.bril` and what
+// this one emits up to that guard.
 
 import:
   lib("glide-pptx/runtime.rhm") open
@@ -25,6 +37,10 @@ import:
 
 export:
   slide_eval_setup
+  eval_title
+
+// the title, named once: the divider before this slide writes it as its outline goes up
+def eval_title = "Case Study: eggcc"
 
 // ------------------------------------------------------------------ the panels
 fun panel_title(s :: String) :: pc.Pict: prose_text(s, ~size: 38.0, ~bold: #true)
@@ -161,47 +177,58 @@ def opt_pict:
 // ------------------------------------------------------------------ the e-graph
 // The term eggcc builds, in the paper's own syntax (Figure 4a: operators `f(e, ...)`,
 // tuples `(e, ...)`, projections `e[n]`, and effectful operators drawn with a bold
-// border). Once the front end has rotated the loop into the shape the Hacker's
-// Delight rules match (Appendix H), the program is
+// border):
 //
-//   Print( e[1], e[0] )
-//   e = If( IsEven(a), (σ, 1, 2, a), DoWhile(Γ, ...), Γ )
+//   Print( loop[1], loop[0] )
+//   loop = DoWhile( (σ, 1, 2, a), ( IsEven(a), σ, lb·2, 2, a/2 ) )
 //
-// -- `[1]` is the accumulator `lb` coming out of the loop, `[0]` the state it
-// threaded through. The rule then says `e[1] ≊ Bitand(a, Neg(a))`. The loop's body
-// is a region of its own and is left inside `DoWhile`: it is the loop's *outputs*
-// the rule has something to say about. `IsEven` is the parity test the paper's
-// first rule names (`Eq(Mul(Div(a, 2), 2), a)`), drawn as one node.
+// `[1]` is the accumulator `lb` coming out of the loop, `[0]` the state it threaded
+// through. The loop's inputs are drawn as its edges to `σ`, `1`, `2` and `a`, so
+// that the state is one blue path: `σ` into the loop, out through `[0]`, into
+// `Print`. Its body is a region of its own, drawn as a box whose header names the
+// region's argument `Γ` -- the loop's inputs, one iteration on -- and inside it the
+// five values the body hands back: the test that keeps the loop going, then the
+// next `σ`, `lb`, `2` and `a`. `IsEven` is the parity test the paper's first rule
+// names (`Eq(Mul(Div(a, 2), 2), a)`), drawn as one node.
 //
-// The state is simplified: eggcc really wraps it in a guard on `a = 0`, where the
-// loop would not terminate; here the loop's state output is drawn as the state it
-// was given, so that the extracted program is the three lines on the right.
+// The rule then says `loop[1] ≊ Bitand(a, Neg(a))`, and the state that comes out of
+// the loop is the state that went in.
 //
-//   [key, what is written in it, its colour, its width, centre x, row]
-def ev_rows = [300.0, 420.0, 540.0, 650.0, 760.0, 870.0]
+//   [key, what is written in it, its colour, its width, centre x, top y, its size]
 def ev_h = 64.0
+def ev_h_small = 52.0
+fun ev_height(size) :: Real: if size == #'small | ev_h_small | ev_h
 def ev_nodes:
-  [[[#'s], "σ", stateful_hex, 64.0, 760.0, 0],
-   [[#'one], "1", "000000", 64.0, 880.0, 0],
-   [[#'two], "2", "000000", 64.0, 980.0, 0],
-   [[#'a], "a", "000000", 64.0, 1200.0, 0],
-   [[#'ins], "(σ, 1, 2, a)", "000000", 200.0, 880.0, 1],
-   [[#'even], "IsEven", "000000", 140.0, 1090.0, 1],
-   [[#'neg], "Neg", "000000", 90.0, 1320.0, 1],
-   [[#'loop], "DoWhile", stateful_hex, 160.0, 1130.0, 2],
-   [[#'if], "If", stateful_hex, 70.0, 930.0, 3],
-   [[#'g0], "[0]", stateful_hex, 64.0, 780.0, 4],
-   [[#'g1], "[1]", "000000", 64.0, 920.0, 4],
-   [[#'and], "Bitand", "000000", 140.0, 1250.0, 4],
-   [[#'print], "Print", stateful_hex, 130.0, 920.0, 5]]
+  [[[#'s], "σ", stateful_hex, 64.0, 660.0, 300.0, #'big],
+   [[#'one], "1", "000000", 64.0, 740.0, 300.0, #'big],
+   [[#'two], "2", "000000", 64.0, 820.0, 300.0, #'big],
+   [[#'a], "a", "000000", 64.0, 1330.0, 300.0, #'big],
+   [[#'loop], "DoWhile", stateful_hex, 160.0, 830.0, 400.0, #'big],
+   // the body: what one iteration hands to the next, the test first
+   [[#'pred], "IsEven(a)", "000000", 130.0, 967.0, 600.0, #'small],
+   [[#'b_s], "σ", stateful_hex, 50.0, 1073.0, 600.0, #'small],
+   [[#'b_lb], "lb·2", "000000", 80.0, 1154.0, 600.0, #'small],
+   [[#'b_two], "2", "000000", 50.0, 1235.0, 600.0, #'small],
+   [[#'b_a], "a/2", "000000", 70.0, 1311.0, 600.0, #'small],
+   [[#'neg], "Neg", "000000", 90.0, 1430.0, 470.0, #'big],
+   [[#'g0], "[0]", stateful_hex, 64.0, 780.0, 800.0, #'big],
+   [[#'g1], "[1]", "000000", 64.0, 880.0, 800.0, #'big],
+   [[#'and], "Bitand", "000000", 140.0, 1400.0, 800.0, #'big],
+   // right of its projections, clear of the bubble under the CFG
+   [[#'print], "Print", stateful_hex, 130.0, 960.0, 920.0, #'big]]
+
+// the loop's body, a region of its own: the box it lives in, and what its argument is
+def ev_region_box = [890.0, 500.0, 470.0, 220.0]
+def ev_body_keys = [[#'pred], [#'b_s], [#'b_lb], [#'b_two], [#'b_a]]
 
 // what each node is built from: `#'v` a value, `#'s` a state, blue and thick
 def ev_edges:
-  [[#'s, [#'ins], [#'s]], [#'v, [#'ins], [#'one]], [#'v, [#'ins], [#'two]], [#'v, [#'ins], [#'a]],
-   [#'v, [#'even], [#'a]],
+  [[#'s, [#'loop], [#'s]], [#'v, [#'loop], [#'one]], [#'v, [#'loop], [#'two]],
+   [#'v, [#'loop], [#'a]],
+   // the loop to its body
+   [#'v, [#'loop], [#'body]],
+   [#'s, [#'g0], [#'loop]], [#'v, [#'g1], [#'loop]],
    [#'v, [#'neg], [#'a]],
-   [#'v, [#'if], [#'even]], [#'v, [#'if], [#'ins]], [#'v, [#'if], [#'loop]],
-   [#'s, [#'g0], [#'if]], [#'v, [#'g1], [#'if]],
    [#'v, [#'and], [#'a]], [#'v, [#'and], [#'neg]],
    [#'v, [#'print], [#'g1]], [#'s, [#'print], [#'g0]]]
 // once the rules have fired, the `print` may take either member of each class, and
@@ -214,29 +241,30 @@ def ev_program_edges:
 def ev_extracted = [[#'a], [#'s], [#'neg], [#'and], [#'print]]
 
 def ev_at:
-  for values(m :~ Map = {}) ([key, _, _, w, x, row] in ev_nodes):
-    m ++ { key: [(x :~ Real) - (w :~ Real) / 2, (ev_rows :~ List)[row] :~ Real, w] }
+  for values(m :~ Map = {}) ([key, _, _, w, x, y, size] in ev_nodes):
+    m ++ { key: [(x :~ Real) - (w :~ Real) / 2, y, w, ev_height(size)] }
 fun ev_middle(key) :: List:
-  def [x, y, w] = ev_at[key]
-  [(x :~ Real) + (w :~ Real) / 2, (y :~ Real) + ev_h / 2]
+  def [x, y, w, h] = ev_at[key]
+  [(x :~ Real) + (w :~ Real) / 2, (y :~ Real) + (h :~ Real) / 2]
 
 // ------------------------------------------------------------------- the slide
 fun slide_eval_setup():
-  def page = titled("What eggcc Does to a Program", ~tag: "Eval setup title",
+  def page = titled(eval_title, ~tag: "Eval setup title",
                     ~nudge: [0.0, 0.0])
-  fun node(color :: String, w :: Real, text :: String, ~fill: fill :: String):
-    graph_node(~width: w, ~height: ev_h, ~adj: "33878",
+  fun node(color :: String, w :: Real, text :: String, size, ~fill: fill :: String):
+    graph_node(~width: w, ~height: ev_height(size), ~adj: "33878",
                ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
-               ~fill: fill, ~label: node_label(text))
+               ~fill: fill,
+               ~label: node_label(text, ~size: if size == #'small | 30.0 | 40.0))
   fun drawings(~fill: fill :: String) :: Map:
-    for values(m :~ Map = {}) ([key, text, color, w, _, _] in ev_nodes):
-      m ++ { key: node(color, w, text, ~fill: fill) }
+    for values(m :~ Map = {}) ([key, text, color, w, _, _, size] in ev_nodes):
+      m ++ { key: node(color, w, text, size, ~fill: fill) }
   def plain = drawings(~fill: node_white)
   def green = drawings(~fill: node_green)
   fun spots(keys :~ List, ~picked: picked :~ List = []) :: Map:
-    for values(m :~ Map = {}) ([key, _, _, _, _, _] in ev_nodes):
+    for values(m :~ Map = {}) ([key, _, _, _, _, _, _] in ev_nodes):
       skip_when !keys.contains(key)
-      def [x, y, _] = ev_at[key]
+      def [x, y, _, _] = ev_at[key]
       m ++ { key: [(if picked.contains(key) | green | plain)[key], x, y] }
   fun wires(keys :~ List, ~picked: picked :: Boolean) :: List:
     def es = if picked | ev_program_edges ++ ev_picked_edges | ev_edges
@@ -245,9 +273,21 @@ fun slide_eval_setup():
       e
 
   def program_keys:
-    [[#'s], [#'one], [#'two], [#'a], [#'ins], [#'even], [#'loop], [#'if], [#'g0], [#'g1],
-     [#'print]]
+    [[#'s], [#'one], [#'two], [#'a], [#'loop], [#'body], & ev_body_keys,
+     [#'g0], [#'g1], [#'print]]
   def all_keys = program_keys ++ [[#'neg], [#'and]]
+  // the body's region: a box round its five values, its argument named in the corner
+  def region:
+    def [bx, by, bw, bh] = ev_region_box
+    def box = written_shape(rounded_path(bw, bh, 14.0), ~width: bw, ~height: bh,
+                            ~fill: draw.Color(244, 244, 244), ~line: draw.Color(150, 150, 150),
+                            ~line_width: 2.0, ~style: #'long_dash)
+    def cap = math_text("body over Γ = (σ, lb, 2, a)", ~size: 26.0,
+                        ~color: draw.Color(90, 90, 90))
+    // the header in the nodes' band: two things in one band have no order between
+    // them, and in the box's band the box was drawn over it
+    { [#'body]: [box, bx, by, band_below],
+      [#'body_cap]: [cap, bx + 12.0, by + 6.0, band_nodes] }
   // the equalities the rules add: the loop's result and Hacker's Delight's one-liner
   // are the same value, which is the whole reason the loop can go, and the state
   // that comes out of the loop is the one that went in
@@ -263,27 +303,30 @@ fun slide_eval_setup():
   def says:
     def en :~ List = cfg_boxes[3]
     def target = pc.blank(~width: en[2], ~height: en[3])
-    { [#'says]: [bubble_at(target, ~spot: [en[0], en[1]], ~body: [470.0, 935.0],
+    { [#'says]: [bubble_at(target, ~spot: [en[0], en[1]], ~body: [400.0, 905.0],
                            ~color: talk_blue,
                            ~content: prose_stack([[["finds the ", #'plain],
                                                    ["lowest set bit", #'bold]],
                                                   [["of ", #'plain], ["a", #'bold_italic]]])),
                  0.0, 0.0, band_callout] }
+  // the program eggcc emits, right of the graph and clear of the one-liner's nodes
   def opt:
-    { [#'opt]: [opt_pict, 1390.0, 452.0],
-      [#'opt_cap]: caption("optimized program", 1390.0) }
+    { [#'opt]: [opt_pict, 1520.0, 452.0],
+      [#'opt_cap]: caption("optimized program", 1520.0) }
   fun frame(~says: said :: Boolean = #false,
             ~graph: graph :: Boolean = #false,
             ~rule: rule :: Boolean = #false,
-            ~picked: picked :: Boolean = #false) :: Frame:
+            ~picked: picked :: Boolean = #false,
+            ~opt: emitted :: Boolean = #false) :: Frame:
     def keys = if rule | all_keys | (if graph | program_keys | [])
     Frame(~picts: cfg
                     ++ { [#'cfg_cap]: caption("a Bril CFG", 140.0) }
                     ++ (if said | says | {})
+                    ++ (if graph | region | {})
                     ++ spots(keys, ~picked: if picked | ev_extracted | [])
                     ++ (if graph | { [#'eg_cap]: caption("its e-graph", 760.0) } | {})
                     ++ (if rule | equality | {})
-                    ++ (if picked | opt | {}),
+                    ++ (if emitted | opt | {}),
           ~edges: wires(keys, ~picked: picked))
   magic_slide(
     page,
@@ -297,9 +340,11 @@ fun slide_eval_setup():
      frame(~says: #true, ~graph: #true),
      // the rules fire: `a & -a` is the same value, so it joins that e-class
      frame(~says: #true, ~graph: #true, ~rule: #true),
-     // and extraction takes the member without a loop in it
-     frame(~says: #true, ~graph: #true, ~rule: #true, ~picked: #true)],
-    ~wire: ev_wire_specs, ~edge_band: band_wires, ~extent: 1.6)
+     // extraction takes the member without a loop in it: those nodes turn green
+     frame(~says: #true, ~graph: #true, ~rule: #true, ~picked: #true),
+     // and that term, as Bril again, is the program eggcc emits
+     frame(~says: #true, ~graph: #true, ~rule: #true, ~picked: #true, ~opt: #true)],
+    ~wire: ev_wire_specs, ~edge_band: band_wires, ~extent: 1.3)
 
 // values black and thin, the state edge blue and thick, as everywhere else
 fun ev_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:

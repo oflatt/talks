@@ -13,7 +13,9 @@ import:
   "theme.rhm" open
   "plots.rhm" open
   "write.rhm".write
+  "write.rhm".writer
   pict as pc
+  draw
 
 export:
   slide_cdf
@@ -27,12 +29,48 @@ export:
 fun slide_cdf():
   def page = titled("Extraction is Fast in Practice",
                     ~tag: "Extraction CDF title", ~nudge: [0.0, 0.0])
-  fun scene(ks :~ List) :: pc.Pict:
-    pc.overlay(~horiz: #'left, ~vert: #'top, page, cdf_chart(~draw: ks))
+  fun scene(ks :~ List, ~sweep: sweep = #false, ~sweep_alpha: sweep_alpha = 1.0) :: pc.Pict:
+    pc.overlay(~horiz: #'left, ~vert: #'top, page,
+               cdf_chart(~draw: ks, ~sweep: sweep, ~sweep_alpha: sweep_alpha))
+  // What the curve means, read off it once ours is up: a grey band sweeps out from
+  // the left edge to the millisecond mark with the share of regions inside it
+  // counting up beside its edge, and when it gets there the words for that share
+  // write themselves. The share and the words ride low on the edge, under the
+  // curve, which is up near the top by then.
+  def share_face = draw.Font(~name: prose_font, ~size: 48.0, ~weight: #'bold)
+  fun share_text(frac :: Real) :: pc.Pict:
+    def pct = math.exact(math.round(frac * 100.0))
+    pc.text(to_string(pct) +& "%", ~font: share_face).colorize(cdf_dp_color)
+  def said = prose_text("finish within 1ms", ~size: 40.0, ~bold: #true, ~color: cdf_dp_color)
+  def said_w = writer(said)
+  def ride = 0.15                   // the height on the plot the words ride at
+  def sweep_part = 0.62             // the share of the press the sweep takes
+  fun reading(k :: Real, w :: Real, ~alpha: alpha :: Real = 1.0) :: pc.Pict:
+    def base = scene([1.0, 0.0, 0.0], ~sweep: k, ~sweep_alpha: alpha)
+    def secs = sweep_secs(k)
+    def share :~ pc.Pict = share_text(sweep_frac(secs)).alpha(alpha)
+    def [ex, ey] = cdf_point(secs, ride)
+    def with_share = put(base, share, ex + 18.0, ey - share.height / 2)
+    if w <= 0.0
+    | with_share
+    | put(with_share, said_w.frame(w), ex + 18.0 + share.width + 16.0, ey - said.height / 2)
+  fun solvers(t :: Real) :: pc.Pict:
+    // the band and the words go as the solvers' curves come, over the first part
+    // of the press: they were about ours
+    def going = 1.0 - clamp01(t / 0.4)
+    def secs = sweep_secs(1.0)
+    def [ex, ey] = cdf_point(secs, ride)
+    def share :~ pc.Pict = share_text(sweep_frac(secs)).alpha(going)
+    def base = scene([1.0, t, t], ~sweep: 1.0, ~sweep_alpha: going)
+    put(put(base, share, ex + 18.0, ey - share.height / 2),
+        said_w.frame(going), ex + 18.0 + share.width + 16.0, ey - said.height / 2)
   // long enough to watch a curve being drawn, which is the point of drawing it
   pc.switch(scene([0.0, 0.0, 0.0]),
             pc.animate(~extent: 1.8, fun (t): scene([t, 0.0, 0.0])),
-            pc.animate(~extent: 1.8, fun (t): scene([1.0, t, t])))
+            pc.animate(~extent: 2.2, ~bend: fun (x): x,
+                       fun (t): reading(smooth(clamp01(t / sweep_part)),
+                                        clamp01((t - sweep_part) / (1.0 - sweep_part)))),
+            pc.animate(~extent: 1.8, fun (t): solvers(t)))
 
 // -------------------------------------------------------------------------------------
 // And how fast the code it picks runs. A series a press: ours grows out of the
@@ -56,12 +94,32 @@ fun slide_perf():
     // benchmarks where neither compiler has anything to show
     put(blank_slide, bubble, 620.0 - bubble.width / 2, 440.0 - bubble.height / 2)
   def full = scene(1.0, 1.0, 1.0)
+  // How to read our series, said on the press after it: the first dot is a program
+  // that runs as fast as LLVM's best, the last one six times slower. Both bubbles
+  // point at their dots from above, and they go as the next series comes -- they
+  // were about ours, and where they sit is where its squares land.
+  fun dot_at(i :: Int) :: List:
+    def [x, y] = perf_point(i)
+    [x - 8.0, y - 8.0]
+  def dot = pc.blank(~width: 16.0, ~height: 16.0)
+  def first_note:
+    bubble_at(dot, ~spot: dot_at(0), ~body: [400.0, 640.0], ~color: talk_green,
+              ~content: prose([["matching LLVM O3", #'bold]]))
+  def last_note:
+    bubble_at(dot, ~spot: dot_at(perf_last()), ~body: [960.0, 400.0], ~color: talk_green,
+              ~content: prose([["6x slower than LLVM O3", #'bold]]))
+  def notes = put(put(blank_slide, first_note, 0.0, 0.0), last_note, 0.0, 0.0)
+  def notes_w = writer(notes)
   // The verdict writes itself over the finished chart on the press after the last
   // series. Not `fade_in`, whose first epoch is the picture it starts from: that
   // picture is the one the series press has just ended on, and a press that shows it
   // again is a press that does nothing.
   pc.switch(scene(0.0, 0.0, 0.0),
             pc.animate(~extent: 1.8, fun (t): scene(t, 0.0, 0.0)),
-            pc.animate(~extent: 1.8, fun (t): scene(1.0, t, 0.0)),
+            pc.animate(~extent: 1.6, ~bend: fun (x): x,
+                       fun (t): put(scene(1.0, 0.0, 0.0), notes_w.frame(t), 0.0, 0.0)),
+            pc.animate(~extent: 1.8,
+                       fun (t): put(scene(1.0, t, 0.0), notes_w.frame(1.0 - clamp01(t / 0.35)),
+                                    0.0, 0.0)),
             pc.animate(~extent: 1.8, fun (t): scene(1.0, 1.0, t)),
             pc.overlay(~horiz: #'left, ~vert: #'top, full, write(verdict)).refocus(full))

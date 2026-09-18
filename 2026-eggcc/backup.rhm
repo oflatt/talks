@@ -27,7 +27,7 @@ export:
 // region count, the largest region and the solver's timeouts are the paper's
 // (Section 8, "Case study on a large program").
 fun slide_raytracer():
-  def page = titled("eggcc Scales to Big Programs", ~tag: "Raytracer title")
+  def page = titled("eggcc Scales to Big-ish Programs", ~tag: "Raytracer title")
   def shot = as_pict(image_pict(media("raytrace.png"), 560.0, 560.0))
   def framed:
     pc.overlay(pc.rectangle(~width: 560.0, ~height: 560.0, ~fill: #false,
@@ -42,8 +42,7 @@ fun slide_raytracer():
             ["4,016 terms", #'bold]]),
      prose([["compiled in ", #'plain], ["4½ minutes", #'bold],
             [", " +& whole(last[3]) +& " s of it extraction", #'plain]]),
-     prose([["the ILP solver timed out on ", #'plain], ["35", #'bold], [" of the 724", #'plain]]),
-     prose([["eggcc then LLVM -O3: as fast as ", #'plain], ["LLVM -O3", #'bold], [" alone", #'plain]])]
+     prose([["the ILP solver timed out on ", #'plain], ["35", #'bold], [" of the 724", #'plain]])]
   def x = 760.0
   staged(page,
          [put(blank_slide, framed, 120.0, 260.0),
@@ -125,7 +124,6 @@ fun slide_made():
   def lines:
     [prose([["Rhombus", #'bold], [" + ", #'plain], ["pict", #'bold],
             [": animated pictures as values", #'plain]]),
-     prose([["every word, box and arrow is a path the pen traces", #'plain]]),
      prose([["Animated Pictures for Slide Presentations", #'bold_italic],
             [", ICFP 2026", #'plain]])]
   def x = 95.0

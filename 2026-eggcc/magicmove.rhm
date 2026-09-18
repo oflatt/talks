@@ -277,7 +277,7 @@ fun pair_edges(gone :~ List, new :~ List) :: List:
   pairs
 
 fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
-                ~extent: extent :: Real = 1.2, ~& kws) :: pc.Pict:
+                ~extent: extent :: Real = 1.0, ~& kws) :: pc.Pict:
   def shared:
     for values(n :~ Int = 0) (key in a.picts.keys()):
       if b.picts.has_key(key) | n + 1 | n
@@ -323,7 +323,7 @@ fun magic_press(base :: pc.Pict, a :: Frame, b :: Frame,
 
 // A whole slide: the first frame, then a press to each of the rest.
 fun magic_slide(base :: pc.Pict, frames :~ List,
-                ~extent: extent :: Real = 1.2, ~& kws) :: pc.Pict:
+                ~extent: extent :: Real = 1.0, ~& kws) :: pc.Pict:
   pc.switch(magic_still(base, frames[0], ~& kws),
             & for List (i in 1..frames.length()):
                 magic_press(base, frames[i - 1], frames[i], ~extent: extent, ~& kws))

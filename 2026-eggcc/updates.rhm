@@ -20,6 +20,8 @@ export:
   slide_fork
   slide_rue
   slide_update
+  slide_update_story
+  update_title
 
 // -------------------------------------------------------------------------------------
 // The `update` example, as one story.
@@ -37,11 +39,20 @@ export:
 // `(v, ω) = update(...)` form: the pieces already on screen slide right to make
 // room, the parentheses and the ωs fade in around them, the first bubble goes
 // and one naming the state value arrives.
-fun slide_update():
-  def canvas = titled("Update", ~tag: "Update title", ~nudge: [0.0, 0.0])
+fun slide_update(): update_opening()[#'pict]
+
+// The pieces `slide_update` is made of, for `slide_update_story` to carry on from.
+// The title goes on the page here rather than through `titled`, so that the join
+// to the next part can take it back: it is the one thing on the slide that changes.
+// the title, named once: the divider before this slide writes it as its outline goes up
+def update_title = "Update"
+fun update_opening() :: Map:
+  def title = title_text(update_title)
+  def canvas = put(page_canvas(), title, title_x, title_y)
   def parts = code_parts()
+  def code_states = code_pict(parts, ~states: #true)
   def plain = put(canvas, code_pict(parts, ~states: #false), code_x, code_y)
-  def with_states = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  def with_states = put(canvas, code_states, code_x, code_y)
   // The bubbles are a layer of their own over the code, pinned at measured
   // points: `magic_move` rebuilds its two pictures piece by piece, and a balloon
   // pinned by a finder does not survive that. Kept apart, the layer can fade out
@@ -63,7 +74,7 @@ fun slide_update():
     callout(~on: blank_layer, ~at: at_first_line, ~spike: #'w,
             prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
                          [["after the update", #'plain]]]))
-  def extent = 1.6
+  def extent = 1.3
   // One bubble out, then the other in -- not both at once. They are two different
   // sentences in the same place, and crossing them leaves the middle of the move
   // showing the two of them printed over each other at half strength. So the first
@@ -79,18 +90,26 @@ fun slide_update():
                           fun (t): explain_w.frame(clamp01(1.0 - 2.0 * t))),
                pc.animate(~extent: extent, ~bend: fun (x): x,
                           fun (t): name_state_w.frame(clamp01(2.0 * t - 1.0))))
-  pc.switch(fade_in(plain, explain, ~horiz: #'left, ~vert: #'top), moving)
+  { #'pict: pc.switch(fade_in(plain, explain, ~horiz: #'left, ~vert: #'top), moving),
+    #'title: title, #'bubble: name_state, #'code: code_states, #'parts: parts }
 
 // -------------------------------------------------------------------------------------
 // slide_egraph: the chain of `update`s going into the e-graph, one per press, the
 // code line it comes from highlighted as it lands. Cross-fades between finished
 // pictures, since the highlight moves and a reveal could only add.
 fun slide_egraph():
-  def canvas = with_icon(titled("The Effectful E-Graph", ~tag: "Effectful E-Graph title",
-                                ~nudge: [0.0, 0.0]))
   def parts = code_parts()
-  def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  chain_slide(egraph_page(parts, "The Effectful E-Graph", ~tag: "Effectful E-Graph title"),
+              egraph_frames(parts))
 
+// The page under the graph, drawn once and never animated: the title, the icon and
+// the code.
+fun egraph_page(parts :~ Map, title :: String, ~tag: tag :: String) :: pc.Pict:
+  put(with_icon(titled(title, ~tag: tag, ~nudge: [0.0, 0.0])),
+      code_pict(parts, ~states: #true), code_x, code_y)
+
+// The presses that build the graph, one line of the program at a time.
+fun egraph_frames(parts :~ Map) :: List:
   // Each line of the program goes into the graph in two presses: the line is
   // marked, with a copy of every piece of it that means something sitting exactly
   // on top of that piece; then those copies fly right into the graph, each one
@@ -151,19 +170,17 @@ fun slide_egraph():
                                           ~sep: 6.0, ~above: #true,
                                           ~scale: 0.58)),
                     0.0, 0.0, band_callout] }
-  chain_slide(
-    page,
-    [Frame(),
-     & List.append(
-         & for List (k in 0..3):
-             def mark = { #'mark: bands[k] }
-             [Frame(~picts: chain_node_picts(chain_spots_upto(k), []) ++ mark
-                              ++ line_copies(k),
-                    ~edges: chain_edges(k)),
-              Frame(~picts: chain_node_picts(chain_spots_upto(k + 1), []) ++ mark,
-                    ~edges: chain_edges(k + 1))]),
-     Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ redundant_over,
-           ~edges: chain_edges(3))])
+  [Frame(),
+   & List.append(
+       & for List (k in 0..3):
+           def mark = { #'mark: bands[k] }
+           [Frame(~picts: chain_node_picts(chain_spots_upto(k), []) ++ mark
+                            ++ line_copies(k),
+                  ~edges: chain_edges(k)),
+            Frame(~picts: chain_node_picts(chain_spots_upto(k + 1), []) ++ mark,
+                  ~edges: chain_edges(k + 1))]),
+   Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ redundant_over,
+         ~edges: chain_edges(3))]
 
 // -------------------------------------------------------------------------------------
 // slide_rue: a rule over `update`, and the rule applied.
@@ -175,12 +192,12 @@ fun slide_egraph():
 // does the union in the e-graph.
 //
 fun slide_rue():
-  // The page under the graph, drawn once and never animated: the title, the icon
-  // and the code.
-  def canvas = with_icon(titled("Dead Store Elimination", ~tag: "Dead Store Elimination title",
-                                ~nudge: [0.0, 0.0]))
   def parts = code_parts()
-  def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  chain_slide(egraph_page(parts, "Dead Store Elimination", ~tag: "Dead Store Elimination title"),
+              rue_frames(parts))
+
+// The presses that state the rule and apply it.
+fun rue_frames(parts :~ Map) :: List:
   def rule_over = chain_rule_over(parts, ~value: #true)
 
   // Applying the rule, a movement to a press -- see the block above `rule_box` for
@@ -212,30 +229,28 @@ fun slide_rue():
   def with_rule = chain_node_picts(chain_spots, [])
   // The copies ride along, invisible against the rule's own text, until the movement
   // that is theirs; the rule is stated with all of them already made.
-  chain_slide(
-    page,
-    [// the graph the program builds
-     Frame(~picts: program, ~edges: chain_edges(3)),
-     // the rule, said beside the two lines of the program it is about
-     Frame(~picts: program ++ rule_here ++ chips_here, ~edges: chain_edges(3)),
-     // its variables light up and point at the nodes they matched
-     Frame(~picts: lit ++ rule_here ++ chips_lit,
-           ~edges: chain_edges(3) ++ chain_match_edges(chips_lit, ~only: pointed)),
-     // and the pointers slide down to the line it concludes, taking the place of the
-     // variables written there: the same bindings, now saying what the rule adds
-     Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion ++ equalities,
-           ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
-     // the words of that line become the nodes they name, standing where the words
-     // stood. The pointers stay up: they go out on the press that brings the blue
-     // arrows in, not one before it, so there is never a press with neither.
-     Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion_nodes ++ equalities,
-           ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
-     // and those nodes move out into the graph, bringing their arrows
-     Frame(~picts: with_rule ++ rule_here ++ equalities, ~edges: chain_edges(4)),
-     // last, the equalities fly out and become the regions round the classes they
-     // make
-     Frame(~picts: with_rule ++ rule_here ++ rule_classes_under,
-           ~edges: chain_edges(4))])
+  [// the graph the program builds
+   Frame(~picts: program, ~edges: chain_edges(3)),
+   // the rule, said beside the two lines of the program it is about
+   Frame(~picts: program ++ rule_here ++ chips_here, ~edges: chain_edges(3)),
+   // its variables light up and point at the nodes they matched
+   Frame(~picts: lit ++ rule_here ++ chips_lit,
+         ~edges: chain_edges(3) ++ chain_match_edges(chips_lit, ~only: pointed)),
+   // and the pointers slide down to the line it concludes, taking the place of the
+   // variables written there: the same bindings, now saying what the rule adds
+   Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion ++ equalities,
+         ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
+   // the words of that line become the nodes they name, standing where the words
+   // stood. The pointers stay up: they go out on the press that brings the blue
+   // arrows in, not one before it, so there is never a press with neither.
+   Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion_nodes ++ equalities,
+         ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
+   // and those nodes move out into the graph, bringing their arrows
+   Frame(~picts: with_rule ++ rule_here ++ equalities, ~edges: chain_edges(4)),
+   // last, the equalities fly out and become the regions round the classes they
+   // make
+   Frame(~picts: with_rule ++ rule_here ++ rule_classes_under,
+         ~edges: chain_edges(4))]
 
 // -------------------------------------------------------------------------------------
 // slide_fork: the same e-graph, a weaker rule, and the extraction that breaks.
@@ -253,10 +268,14 @@ fun slide_rue():
 // as the slide before it except the rule, so the two can be read against each
 // other.
 fun slide_fork():
+  def parts = code_parts()
   def canvas = titled("Extraction Goes Wrong", ~tag: "Extraction failure title",
                       ~nudge: [0.0, 0.0])
-  def parts = code_parts()
-  def page = put(canvas, code_pict(parts, ~states: #true), code_x, code_y)
+  chain_slide(put(canvas, code_pict(parts, ~states: #true), code_x, code_y),
+              fork_frames(parts))
+
+// The presses that walk the extraction, find it wrong, and walk it again.
+fun fork_frames(parts :~ Map) :: List:
   def rule_over = chain_rule_over(parts, ~value: #true)
 
   // Everything this slide shows is worked out from the one rule: what the walk
@@ -394,7 +413,61 @@ fun slide_fork():
                     ++ safe_ask_over(~at: answer_spots[#'ret]),
           ~edges: safe_edges)
 
-  chain_slide(
-    page,
-    chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
-      ++ [term, reddened, blamed] ++ rewalk ++ [safe_term, answer])
+  chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
+    ++ [term, reddened, blamed] ++ rewalk ++ [safe_term, answer]
+
+// -------------------------------------------------------------------------------------
+// slide_update_story: the four slides above as the one slide they are.
+//
+// The code box never moves and the graph beside it is only ever added to, so the
+// story is one slide whose title changes: "Update" while the operation is
+// explained, "The Effectful E-Graph" while the graph is built, "Dead Store
+// Elimination" for the rule and "Extraction Goes Wrong" for the walk. Each part is
+// built exactly as the slide it was, and the joins are presses rather than slide
+// changes: the old title unwrites and the new one writes while everything under
+// them stays where it is. Shown as four slides, each join panned the whole page
+// away and brought the same page back.
+fun slide_update_story():
+  def opening = update_opening()
+  def parts :~ Map = opening[#'parts]
+  def code_states :: pc.Pict = opening[#'code]
+  def title_update :: pc.Pict = opening[#'title]
+  def bubble :: pc.Pict = opening[#'bubble]
+  def title_graph = title_text("The Effectful E-Graph")
+  def title_rule = title_text("Dead Store Elimination")
+  def title_wrong = title_text("Extraction Goes Wrong")
+
+  // The join from the opening to the graph: the page and the code stay, the
+  // opening's last bubble unwrites with its title while the next title writes,
+  // and the icon comes up. It ends on exactly the page the graph presses stand on.
+  def bare = put(page_canvas(), code_states, code_x, code_y)
+  def icon = with_icon(blank_slide)
+  def old_w = writer(title_update)
+  def new_w = writer(title_graph)
+  def bubble_w = writer(bubble)
+  def join:
+    pc.animate(~extent: 1.3, ~bend: fun (x): x,
+               fun (t):
+                 def going = clamp01(1.0 - 2.0 * t)
+                 def coming = clamp01(2.0 * t - 1.0)
+                 def q1 = put(bare, old_w.frame(going), title_x, title_y)
+                 def q2 = put(q1, new_w.frame(coming), title_x, title_y)
+                 def q3 = put(q2, bubble_w.frame(going), 0.0, 0.0)
+                 put(q3, icon.alpha(smooth(t)), 0.0, 0.0))
+
+  // The graph presses, on a page with no title: the title is a key in every frame,
+  // one pict per part, so a press within a part leaves it alone and the press
+  // that crosses into the next part unwrites it and writes the new one.
+  def page = put(with_icon(page_canvas()), code_states, code_x, code_y)
+  fun entitled(frames :~ List, title :: pc.Pict) :: List:
+    for List (f :: Frame in frames):
+      Frame(~picts: f.picts ++ { #'title: [title, title_x, title_y, band_callout] },
+            ~edges: f.edges)
+  def frames:
+    entitled(egraph_frames(parts), title_graph)
+      ++ entitled(rue_frames(parts), title_rule)
+      ++ entitled(fork_frames(parts), title_wrong)
+  // no still for the first frame: the join has just drawn it
+  pc.switch(opening[#'pict], join,
+            & for List (i in 1..frames.length()):
+                chain_press(page, frames[i - 1], frames[i]))

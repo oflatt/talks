@@ -54,6 +54,7 @@ export:
   slide_egraph
   slide_rue
   slide_fork
+  slide_update_story
   slide_41
   slide_nphard
   slide_dp
@@ -71,24 +72,29 @@ export:
 glide_slides all_slides:
   [slide_1,
    // 1 -- why effects belong in an e-graph at all
-   divider(0, ~shots: section_shots),
-   in_section(0, slide_2), in_section(0, slide_40), in_section(0, slide_12),
+   // Each divider is told the title of the slide after it, and writes it as the
+   // outline goes up -- one press -- so the cut to that slide changes nothing.
+   divider(0, ~shots: section_shots, ~next: useful_title),
+   in_section(0, slide_2, ~cut: #true), in_section(0, slide_40), in_section(0, slide_12),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects
-   divider(1, ~shots: section_shots), in_section(1, slide_update), in_section(1, slide_egraph),
-   in_section(1, slide_rue), in_section(1, slide_fork), in_section(1, slide_41),
+   // the `update` example is one slide: the code stays put while the graph, the
+   // rule and the extraction happen beside it, and only the title changes
+   divider(1, ~shots: section_shots, ~next: update_title),
+   in_section(1, slide_update_story, ~cut: #true),
+   in_section(1, slide_41),
    // 3 -- what makes it hard, and the algorithm
-   divider(2, ~shots: section_shots),
-   in_section(2, slide_nphard),
+   divider(2, ~shots: section_shots, ~next: nphard_title),
+   in_section(2, slide_nphard, ~cut: #true),
    // and then what the algorithm does instead, on the example the section before
    // this one was about
    in_section(2, slide_dp),
    // 4 -- the numbers. Every plot is in this section, `slide_34` included: it is a
    // measurement rather than a step of the algorithm, and it was reading as the end
    // of the section before this one.
-   divider(3, ~shots: section_shots),
+   divider(3, ~shots: section_shots, ~next: eval_title),
    // what the evaluation runs on, walked through on one program, before the numbers
-   in_section(3, slide_eval_setup),
+   in_section(3, slide_eval_setup, ~cut: #true),
    in_section(3, slide_cdf), in_section(3, slide_perf),
    // and out the way we came in
    slide_questions,
@@ -109,12 +115,13 @@ module main:
   // The logical number in the corner, the one `--skip` counts by. Keynote's own
   // "Slide Number" fields came through empty, so this is the only number drawn.
   set_slide_numbers(#true)
+  // The pages move, as the ICFP talk's did: down from one slide to the next
+  // within a section, and sideways when a divider brings the outline back --
+  // each divider says so for itself, in `theme.rhm`.
+  set_transitions(#'down)
   show_slides(all_slides, ~width: slide_width, ~height: slide_height)
 
-// The backup PDF, without opening a window:
-//   racket -l racket/base -e '(require (submod (file "talk.rhm") pdf))'
-module pdf:
-  // An animated slide is one page per advance, which is the slides it was made
-  // from -- `deck_to_pdf` does that itself now.
-  deck_to_pdf(all_slides, "talk.pdf", ~width: slide_width, ~height: slide_height)
-  println("wrote " +& "talk.pdf")
+// The backup PDF is slideshow's own printer, one page per press -- `make`, or
+//   raco slideshow --widescreen --pdf -c -e -o talk.pdf talk.rhm
+// and `racket talk.rhm --skip 20` rehearses from slide 21 without building the
+// twenty before it.

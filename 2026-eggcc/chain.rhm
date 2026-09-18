@@ -47,6 +47,7 @@ export:
   chain_root
   chain_safe
   chain_slide
+  chain_press
   chain_spots
   chain_spots_upto
   chain_statewalks
@@ -529,6 +530,11 @@ fun chain_point_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
 // A chain slide: its frames, over a page that no press touches.
 fun chain_slide(page :: pc.Pict, frames :~ List, ~& kws) :: pc.Pict:
   magic_slide(page, frames, ~wire: chain_wire_specs, ~edge_band: band_wires,
+              ~under_wire: chain_point_specs, ~under_band: band_point, ~& kws)
+// One press of such a slide on its own, for a slide that opens some other way and
+// carries on with the graph: the presses without the opening still.
+fun chain_press(page :: pc.Pict, a :: Frame, b :: Frame, ~& kws) :: pc.Pict:
+  magic_press(page, a, b, ~wire: chain_wire_specs, ~edge_band: band_wires,
               ~under_wire: chain_point_specs, ~under_band: band_point, ~& kws)
 
 // The class the extraction starts from: `return` is what groups the value and the

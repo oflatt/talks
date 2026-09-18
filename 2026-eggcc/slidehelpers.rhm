@@ -164,7 +164,7 @@ fun same_color(a :: draw.Color, b :: draw.Color) :: Boolean:
 
 // The press from bubble `a` to bubble `b`, as one animated pict, or `#false` when
 // they are not the same kind of thing.
-fun reword_between(a :: Pict, b :: Pict, ~extent: extent :: Real = 1.2) :: maybe(Pict):
+fun reword_between(a :: Pict, b :: Pict, ~extent: extent :: Real = 1.0) :: maybe(Pict):
   def ra = reword_of(a)
   def rb = reword_of(b)
   cond
@@ -901,7 +901,13 @@ fun outline_to_header(items :: List.of(String),
                       ~color: color = talk_blue,
                       ~intro: intro :: Boolean = #false,
                       ~shots: all_shots :: maybe(List) = #false,
-                      ~extent: extent :: Real = 1.2) :: Pict:
+                      // What the next slide opens with -- its title, on a transparent
+                      // layer the size of the canvas -- to be written while the list
+                      // goes up into the header, so that the press that puts the
+                      // outline away is the press that brings the next slide's title
+                      // on, and the cut to that slide then changes nothing.
+                      ~next: next :: maybe(Pict) = #false,
+                      ~extent: extent :: Real = 1.0) :: Pict:
   def n = items.length()
   // only the sections already behind us have one to show
   def shots:
@@ -930,7 +936,7 @@ fun outline_to_header(items :: List.of(String),
     | block:
         // each row writes itself out, its disc popping in just ahead of the text
         def step = 0.62 / math.max(1.0, 1.0 * n)
-        animate(~extent: 2.6, ~bend: fun (x): x,
+        animate(~extent: 2.0, ~bend: fun (x): x,
                 fun (p):
                   if p >= 1.0
                   | full
@@ -969,7 +975,7 @@ fun outline_to_header(items :: List.of(String),
         def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
         // the marker walking down from the section just finished to this one
         def walk:
-          animate(~extent: 1.4,
+          animate(~extent: 1.1,
                   fun (p):
                     if p >= 1.0
                     | full
@@ -990,11 +996,33 @@ fun outline_to_header(items :: List.of(String),
   // `~other: #'fade` -- the picts the two layouts do *not* have in common are the
   // three labels the header drops, and `magic_move`'s default `#'switch` cuts them
   // out abruptly. Fading them lets them go with the discs they belong to.
-  def up = magic_move(full, head, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
+  def up:
+    cond
+    | !next: magic_move(full, head, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
+    | ~else:
+        // The same move, drawn over the next slide's title as it is written: the
+        // two layouts are built again over a clear canvas so the move can go on top
+        // of the title, and the page itself goes underneath. The list is up in
+        // `extent` as before and the press runs on while the title finishes.
+        def clear = blank(~width: canvas.width, ~height: canvas.height)
+        def full_t = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: clear,
+                                    ~color: color, ~label_width: lab_w, ~shots: shots)
+        def head_t = header_layout(discs, labels, ~at: at, ~canvas: clear, ~color: color)
+        def move = magic_move(full_t, head_t, ~extent: extent, ~other: #'fade)
+                     .time_pad(~after: -1)
+        def title_w = writer(next :~ Pict)
+        def whole = extent + 0.6
+        def rise = extent / whole
+        animate(~extent: whole, ~bend: fun (x): x,
+                fun (t):
+                  overlay(~horiz: #'left, ~vert: #'top,
+                          canvas,
+                          title_w.frame(clamp01((t - 0.15) / 0.85)),
+                          move.snapshot(0, clamp01(t / rise))))
   // Two presses: the list arrives -- written out the first time, flown down out of
   // the header after that, with the marker walking on -- and rests, which is the
   // moment to say where the talk has got to; then the next press puts it away in
-  // the top margin.
+  // the top margin, writing the next slide's title under it if it was given one.
   switch(opening, up)
 
 fun section_header(items :: List.of(String),

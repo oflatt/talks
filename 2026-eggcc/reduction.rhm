@@ -14,6 +14,10 @@ import:
 
 export:
   slide_nphard
+  nphard_title
+
+// the title, named once: the divider before this slide writes it as its outline goes up
+def nphard_title = "Effect-Safe Extraction is NP-Hard"
 
 // -------------------------------------------------------------------------------------
 // slide_nphard: effect-safe extraction is NP-hard, by a reduction from CNF-SAT.
@@ -213,7 +217,7 @@ def np_picked_keys:
 // chain of assignments, a clause class at a time, the root, and last the thing the
 // whole picture is for: an effect-safe extraction is a satisfying assignment.
 fun slide_nphard():
-  def page = with_icon(titled("Effect-Safe Extraction is NP-Hard",
+  def page = with_icon(titled(nphard_title,
                               ~tag: "NP-hardness title", ~nudge: [0.0, 0.0]))
   // A label, and a node with one in the middle of it.
   //

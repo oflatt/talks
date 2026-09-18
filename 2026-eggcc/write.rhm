@@ -371,9 +371,11 @@ fun words_of(p :: Pict) :: List:
 // How long a piece that only fades wants, and how far into it the next may start.
 def fade_weight = 0.5
 def fade_lead = 0.5
-// The most a whole picture spends writing itself, and the least.
-def write_cap = 2.6
-def write_floor = 0.5
+// The most a whole picture spends writing itself, and the least -- and the pace,
+// which scales what the parts add up to before those limits: under 1 is quicker.
+def write_cap = 2.0
+def write_floor = 0.4
+def write_pace = 0.75
 
 class Writer(root :: Pict, parts :: List, starts :: List, durs :: List, total :: Real):
   // The picture at progress `n`, linear in time.
@@ -418,7 +420,7 @@ fun writer(root :: Pict) :: Writer:
   Writer(root, parts, starts, durs, total)
 
 fun extent_for(total :: Real) :: Real:
-  math.min(write_cap, math.max(write_floor, total))
+  math.min(write_cap, math.max(write_floor, total * write_pace))
 
 // `p`, written out: one epoch, `p` itself at the end of it, `p`'s own bounds
 // throughout. The extent follows what there is to write unless the caller says.

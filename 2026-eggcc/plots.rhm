@@ -20,8 +20,14 @@ import:
 export:
   perf_chart
   perf_stages
+  perf_point
+  perf_last
   cdf_chart
   cdf_stages
+  cdf_point
+  cdf_dp_color
+  sweep_secs
+  sweep_frac
   compile_chart
 
 // ------------------------------------------------------------------- the ink
@@ -148,6 +154,15 @@ fun perf_chart(~ours: ours :: Real = 1.0, ~llvm: llvm :: Real = 1.0,
                       "LLVM-O0-O0", llvm_color, 6.4, llvm),
             "solvers, timed out", gone_color, 9.9, solver)
 
+// Where benchmark `i`'s eggcc dot is, in slide coordinates, for a bubble to point at.
+fun perf_point(i :: Int) :: List:
+  def rows :~ List = perf_rows
+  def row :~ List = rows[i]
+  [perf_x + (i + 0.5) * perf_w / rows.length(), perf_y + perf_yv(row[1] :~ Real)]
+
+// and the index of the last benchmark, the slowest of ours
+fun perf_last() :: Int: (perf_rows :~ List).length() - 1
+
 // The presses: the chart empty, then one series at a time.
 def perf_stages :~ List:
   [perf_chart(~ours: 0.0, ~llvm: 0.0, ~solver: 0.0),
@@ -198,7 +213,29 @@ fun cdf_curve(dc :: draw.DC, dx :: Real, dy :: Real, s :~ List, c, k :: Real):
     dc.line(draw.Point(dx + cdf_xv(cdf_timeout_secs), dy + cdf_yv(done)),
             draw.Point(dx + cdf_xv(cdf_timeout_secs), dy + cdf_yv(1.0)))
 
-fun cdf_body(ks :~ List) :: pc.Pict:
+// ------------------------------------------------------ reading the CDF aloud
+// A grey band from the left edge of the plot out to some time is the share of the
+// regions extracted within that time. The slide sweeps it out to a millisecond and
+// says the share as it goes; `t` runs the sweep from the left edge to that mark,
+// evenly in what the eye sees, which is evenly in the log.
+def sweep_to_secs = 0.001
+def sweep_grey = draw.Color(120, 120, 120, 0.16)
+def sweep_edge = draw.Color(90, 90, 90)
+def cdf_dp_color = cdf_colors[0]
+fun sweep_secs(t :: Real) :: Real:
+  math.expt(10.0, lerp(cdf_lo, math.log(sweep_to_secs) / math.log(10.0), t))
+// the share of regions Statewalk DP had finished by `secs`
+fun sweep_frac(secs :: Real) :: Real:
+  def s :~ List = cdf_series[0]
+  def times :~ List = s[1]
+  def done = for values(n = 0) (x :~ Real in times): if x <= secs | n + 1 | n
+  done / (1.0 * (s[3] :~ Int))
+// a point of the plot in slide coordinates: a time and a share
+fun cdf_point(secs :: Real, frac :: Real) :: List:
+  [cdf_x + cdf_xv(secs), cdf_y + cdf_yv(frac)]
+
+fun cdf_body(ks :~ List, ~sweep: sweep :: maybe(Real) = #false,
+             ~sweep_alpha: sweep_alpha :: Real = 1.0) :: pc.Pict:
   pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
           dc.pen := pen(plot_grid, 1.5)
           for (p in [0.25, 0.5, 0.75, 1.0]):
@@ -206,6 +243,14 @@ fun cdf_body(ks :~ List) :: pc.Pict:
           for (d in -4..3):
             def x = dx + cdf_xv(math.expt(10.0, d))
             dc.line(draw.Point(x, dy), draw.Point(x, dy + cdf_h))
+          // the band, under the curves: everything left of its edge finished in time
+          when sweep && sweep_alpha > 0.0
+          | def edge = cdf_xv(sweep_secs(sweep))
+            dc.pen := draw.Pen.none
+            dc.brush := draw.Brush(~color: sweep_grey with (alpha = 0.16 * sweep_alpha))
+            dc.rectangle(draw.Rect(draw.Point(dx, dy), draw.Size(math.max(1.0, edge), cdf_h)))
+            dc.pen := pen(sweep_edge with (alpha = sweep_alpha), 2.5)
+            dc.line(draw.Point(dx + edge, dy), draw.Point(dx + edge, dy + cdf_h))
           // the wall every solver ran into
           dc.pen := pen(gone_color, 2.0, ~dash: #'long_dash)
           def w = dx + cdf_xv(cdf_timeout_secs)
@@ -216,7 +261,9 @@ fun cdf_body(ks :~ List) :: pc.Pict:
             cdf_curve(dc, dx, dy, s, (cdf_colors :~ List)[i], k),
         ~width: cdf_w, ~height: cdf_h)
 
-fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0]) :: pc.Pict:
+fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0],
+              ~sweep: sweep :: maybe(Real) = #false,
+              ~sweep_alpha: sweep_alpha :: Real = 1.0) :: pc.Pict:
   def frame:
     pc.dc(fun (dc :: draw.DC, dx :: Real, dy :: Real):
             dc.pen := pen(plot_line, 3.0)
@@ -246,7 +293,8 @@ fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0]) :: pc.Pict:
       def [secs, frac] = (anchors :~ List)[i] :~ List
       def lab :~ pc.Pict = name_text(s[0], (cdf_colors :~ List)[i]).alpha(math.min(1.0, k * 1.6))
       put(q, lab, cdf_x + cdf_xv(secs), cdf_y + cdf_yv(frac) - lab.height / 2)
-  def with_body = put(named, cdf_body(ks), cdf_x, cdf_y)
+  def with_body = put(named, cdf_body(ks, ~sweep: sweep, ~sweep_alpha: sweep_alpha),
+                      cdf_x, cdf_y)
   def x_label :~ pc.Pict = axis_text("Extraction time per e-graph region")
   put(put(with_body, y_label, cdf_x - 196.0,
           cdf_y + cdf_h / 2 - (y_label :~ pc.Pict).height / 2),

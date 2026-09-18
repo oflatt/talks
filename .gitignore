@@ -1,7 +1,7 @@
 **/compiled
 **/__pycache__
 
-# built by `racket -l racket/base -e "(require (submod (file \"talk.rhm\") pdf))"`,
-# and rebuilt on every render -- it is an output, not a source
+# built by `make` (slideshow's own `--pdf` printer) and rebuilt on every
+# render -- it is an output, not a source
 **/talk.pdf
 **/np-hard.pdf
