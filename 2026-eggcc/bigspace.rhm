@@ -94,27 +94,26 @@ fun slide_12():
     { #'rule1: rules_line_1_at, #'rule2: rules_line_2_at, #'rule3: rules_line_3_at }
 
   // Where the seven of them sit. Inputs on top, the result underneath, so every
-  // edge points the way the data goes.
+  // edge points the way the data goes -- and a node's operands in order from left
+  // to right, since an e-node's children are ordered: `a + 1` is `a` then `1`, and
+  // `(a + 1) − 1` is the sum then the `1`. So `a` stands left of `1`, `+` left of
+  // `1`, and after the rewrite `a` left of `−`(rewritten), whose two operands are
+  // the one `1`.
   //
-  // The columns are staggered rather than square. `1` is read from three places
-  // below it and `a` from two, and every one of those edges has to reach its leaf
-  // without passing behind whatever sits under it: `−` reads `1` straight up its
-  // own column, `+_r` reads `a` straight up its own, and the two that cross the
-  // picture -- `+` to `a` and the pair from `−`(rewritten) to `1` -- are the one
-  // crossing the shape of this graph cannot be drawn without.
-  //
-  // How far apart the columns stand is set by that pair. It runs from `−`(rewritten)
-  // up to `1`, and `a` sits between them: the flatter the pair runs the higher it
-  // passes, and at 230 apart it came up under `a`'s own class and read as going
-  // behind it. `a` (with `+_r`, which shares its column) is out at 1140 and
-  // `−`(rewritten) at 1310 so that the pair passes a clear 30 below the class, and
-  // that 170 is also what the class the third rule makes needs: its tube runs down
-  // `a`'s column, 124 wide, and the row to its right has to start clear of it.
+  // The rest is what the edges and the classes need. `a` stands straight above
+  // `+_r`, because the class the third rule makes is drawn as a column up that
+  // lane, and `+` stands clear to the right of that lane so the column does not
+  // run behind it. `−` sits under `1`, which it reads straight up, and well right
+  // of `+_r`: the long edge from `+_r` up to `−`(rewritten) has to pass over the
+  // bottom row somewhere, and there it passes fifty clear above `−` instead of
+  // through it. `−`(rewritten) is far enough right of `1` that its pair of arrows
+  // up to it, spread 18 either side of the middle, come out a clear 20 apart
+  // rather than stacked on a near-vertical run.
   def spot:
-    { #'one: [780.0, row_in], #'a: [1140.0, row_in],
-      #'plus: [860.0, row_mid], #'minus_r: [1310.0, row_mid],
-      #'zero: [1480.0, row_mid],
-      #'minus: [780.0, row_out], #'plus_r: [1140.0, row_out] }
+    { #'a: [860.0, row_in], #'one: [1230.0, row_in],
+      #'plus: [1040.0, row_mid], #'minus_r: [1480.0, row_mid],
+      #'zero: [1650.0, row_mid],
+      #'plus_r: [860.0, row_out], #'minus: [1230.0, row_out] }
   fun middle(key) :: List:
     [(spot[key] :~ List)[0] + nd / 2, (spot[key] :~ List)[1] + nd / 2]
   fun spots_of(keys :~ List, picks :~ List, ~gold: matched :~ List = []) :: Map:
@@ -514,10 +513,13 @@ fun slide_12():
                   ~fill: fill, ~line: #false, ~rounded: -0.35),
      x - eclass_pad, y - eclass_pad, band_below]
   fun spot_of(key) :: List: spot[key] :~ List
+  // the box round two members of a class, whichever order they are named in
   fun region_of(from, to, ~fill: fill = eclass_grey) :: List:
-    def [x0, y0] = spot[from] :~ List
-    def [x1, y1] = spot[to] :~ List
-    region(x0, y0, x1 + nd - x0, y1 + nd - y0, ~fill: fill)
+    def [fx, fy] = spot[from] :~ List
+    def [tx, ty] = spot[to] :~ List
+    def x0 = math.min(fx, tx)
+    def y0 = math.min(fy, ty)
+    region(x0, y0, math.max(fx, tx) + nd - x0, math.max(fy, ty) + nd - y0, ~fill: fill)
   def r_one = region_of(#'one, #'one)
   def r_plus = region_of(#'plus, #'plus)
   def r_row = region_of(#'minus_r, #'zero)
@@ -556,8 +558,10 @@ fun slide_12():
     def [ax, ay] = spot_of(#'a)
     def pad = eclass_pad
     def top = (py :~ Real) + ((ay :~ Real) - (py :~ Real)) * u
-    def row = [(mx :~ Real) - pad, (my :~ Real) - pad,
-               (px :~ Real) + nd + pad - ((mx :~ Real) - pad), nd + 2 * pad]
+    // the band along the bottom row, from whichever of the two is left to the other
+    def left = math.min(mx :~ Real, px :~ Real)
+    def right = math.max(mx :~ Real, px :~ Real)
+    def row = [left - pad, (my :~ Real) - pad, right + nd + pad - (left - pad), nd + 2 * pad]
     def col = [(ax :~ Real) - pad, top - pad, nd + 2 * pad,
                (py :~ Real) + nd + pad - (top - pad)]
     def flat:
@@ -614,15 +618,14 @@ fun slide_12():
   // the region goes: the callout needs something to aim at, and a second copy of
   // the region itself would be a second thing to find.
   def task_over:
-    // two lines, as Keynote's box wrapped them: on one the bubble runs off the slide
+    // two short lines: what is left of the slide right of the bottom row's class is
+    // 400 wide, and the sentence on one line runs off it
     def content:
-      pc.stack(~horiz: #'center,
-               pc.beside(~vert: #'bottom,
-                         prose_text("extract", ~size: 48.0, ~bold: #true),
-                         prose_text(" a resulting", ~size: 48.0)),
-               prose_text("term", ~size: 48.0))
+      prose_stack([[["extract", #'bold], [" a", #'plain]],
+                   [["resulting term", #'plain]]])
     { #'task: [bubble_at(r_out[0], ~spot: [r_out[1], r_out[2]],
-                         ~body: [1400.0, 848.0], ~color: talk_blue,
+                         // right of the bottom row's class, level with it
+                         ~body: [1400.0, 860.0], ~color: talk_blue,
                          ~content: content),
                0.0, 0.0, band_above] }
 
