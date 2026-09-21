@@ -90,14 +90,25 @@ fun update_opening() :: Map:
     callout(~on: blank_layer, ~at: state_at, ~spike: #'w, ~reach: state_reach,
             prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
                          [["after the update", #'plain]]]))
+  // Why the code is about to change: an e-graph holds terms, and a program whose
+  // effects are in the order of its lines is not a term until the memory those lines
+  // act on is a value they pass along. Said in red, under the box, on a press of its
+  // own, and taken back with the first bubble as the states come in.
+  def dataflow:
+    def (bx, by) = pc.Find.center_bottom(parts[#'frame]).in(plain)
+    callout(~on: blank_layer, ~at: pc.Find.abs(bx, by), ~spike: #'n, ~color: talk_red,
+            prose([["e-graphs need terms in a ", #'plain], ["dataflow", #'bold_italic],
+                   [" IR", #'plain]]))
   // One bubble out, then the other in -- not both at once. They are two different
   // sentences in the same place, and crossing them leaves the middle of the move
   // showing the two of them printed over each other at half strength. So the first
-  // is unwritten and then the second written, each at the pace its own words ask
-  // for, while the code slides into its new form underneath over the whole press.
+  // is unwritten -- and the red one with it, at the same pace -- and then the second
+  // written, each at the pace its own words ask for, while the code slides into its
+  // new form underneath over the whole press.
   def explain_w = writer(explain)
+  def dataflow_w = writer(dataflow)
   def name_state_w = writer(name_state)
-  def out_t = unwrite_pace * extent_for(explain_w.total)
+  def out_t = unwrite_pace * extent_for(math.max(explain_w.total, dataflow_w.total))
   def in_t = extent_for(name_state_w.total)
   def extent = math.max(1.0, out_t + in_t)
   def split = out_t / extent
@@ -108,12 +119,17 @@ fun update_opening() :: Map:
                pc.animate(~extent: extent, ~bend: fun (x): x,
                           fun (t): explain_w.frame(clamp01(1.0 - t / split))),
                pc.animate(~extent: extent, ~bend: fun (x): x,
+                          fun (t): dataflow_w.frame(clamp01(1.0 - t / split))),
+               pc.animate(~extent: extent, ~bend: fun (x): x,
                           fun (t): name_state_w.frame(clamp01((t - split) / (1.0 - split)))))
-  // the page with its title; the code writes itself; the bubble explains a line;
-  // then the states move in
+  // the page with its title; the code writes itself; the bubble explains a line; the
+  // red one says why the code has to change; then the states move in
+  def explained = pc.overlay(~horiz: #'left, ~vert: #'top, plain, explain).refocus(plain)
   { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
                       pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain))
                         .refocus(plain),
+                      pc.overlay(~horiz: #'left, ~vert: #'top, explained, write(dataflow))
+                        .refocus(explained),
                       moving),
     #'title: title, #'bubble: name_state, #'code: code_states, #'parts: parts }
 
@@ -190,10 +206,16 @@ fun egraph_frames(parts :~ Map) :: List:
   // The first write stores a value that the second one throws away. That is worth
   // saying as soon as the graph is up and before any rule is stated, because it is
   // the reason there is a rule at all -- so the part that builds the graph ends on
-  // it, in place of the bubble naming the walk. It comes up from below, since the
-  // two boxes right under that write are its own results.
+  // it, in place of the bubble naming the walk. It points at the write in the graph
+  // and at the line of the program it came from -- at the end of that line, as the
+  // other bubbles about a line do, so the spike comes in from the right rather than
+  // across the line below -- and stands between the two.
   def redundant_over:
+    def first :~ pc.Pict = line_pict(0)
+    def line_end = pc.blank(~width: 16.0, ~height: 16.0)
     { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
+                              ~also: [[line_end, [line_x() + first.width + 4.0,
+                                                  line_y(0) + first.height / 2 - 8.0]]],
                               ~body: (chain_bubbles :~ Map)[#'redundant],
                               ~color: talk_blue,
                               ~content: robot_says(
@@ -239,17 +261,21 @@ fun rue_frames(parts :~ Map) :: List:
   // Applying the rule, a movement to a press -- see the block above `rule_box` for
   // what each copy is keyed by, which is what makes each press a move.
   def rule_here = chain_rule_over(parts, ~value: #true)
-  // a chip per variable, and none for the operators: see `chain_matched`
-  def chips_here:
-    chain_rule_chips(parts, ~value: #true, ~only: chain_matched)
-  def chips_lit:
-    chain_rule_chips(parts, ~value: #true, ~lit: #true, ~only: chain_matched)
-  // the variables the conclusion uses again, which are the pointers that stay
+  // The variables the conclusion uses again -- `a`, `y` and `ω`, the three the write
+  // it adds is built from. These are the ones that light up and point at what they
+  // matched: the rule binds more, but gold on every variable and every node they
+  // stand for is gold on half the graph, and what the match is *about* is these
+  // three. They are also the pointers that stay, sliding down to the conclusion.
   def reused:
     def slots :~ Map = (rule_slots(update_rule(~value: #true)) :~ Map)[#'conclusion]
     for List (role in slots.keys()):
       keep_when (chain_pos :~ Map).has_key(role) && chain_matched.contains(role)
       role
+  // a chip per one of those, and none for the rest
+  def chips_here:
+    chain_rule_chips(parts, ~value: #true, ~only: reused)
+  def chips_lit:
+    chain_rule_chips(parts, ~value: #true, ~lit: #true, ~only: reused)
   def chips_below:
     chain_rule_chips(parts, ~value: #true, ~lit: #true,
                      ~from: #'conclusion, ~only: reused)
@@ -261,7 +287,7 @@ fun rue_frames(parts :~ Map) :: List:
   def equalities = chain_eq_pieces(parts, ~value: #true)
 
   def program = chain_node_picts(chain_spots_upto(3), [])
-  def lit = chain_node_picts(chain_spots_upto(3), [], ~gold: chain_matched)
+  def lit = chain_node_picts(chain_spots_upto(3), [], ~gold: reused)
   def with_rule = chain_node_picts(chain_spots, [])
   // The copies ride along, invisible against the rule's own text, until the movement
   // that is theirs; the rule is stated with all of them already made.
@@ -501,11 +527,13 @@ fun slide_update_story():
       Frame(~picts: f.picts ++ { #'title: [title, title_x, title_y, band_callout] },
             ~edges: f.edges)
   def eg = entitled(egraph_frames(parts), title_graph)
-  def ru = entitled(rue_frames(parts), title_graph)
-  // The fork's part opens on the picture the rule's part ends with -- the graph, the
-  // rule and the classes it made -- which as its own slide was where it took over.
-  // In one story that frame is the one before it, and a press to it would show the
-  // same picture again, so it is left out.
+  // Each later part opens on the picture the part before ends with, which as its own
+  // slide was where it took over: the rule's on the graph, the fork's on the graph
+  // with the rule and its classes. In one story those frames are the ones before
+  // them, or all but -- the rule's part would spend a press taking the "redundant
+  // update" bubble away before the rule came -- so each part's opening frame is left
+  // out, and the bubble goes on the press that brings the rule.
+  def ru = entitled(rue_frames(parts).rest, title_graph)
   def fk = entitled(fork_frames(parts).rest, title_graph)
   def frames = eg ++ ru ++ fk
   // The first walk down the graph steps a row a press, but its first four rows are

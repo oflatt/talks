@@ -77,8 +77,9 @@ glide_slides all_slides:
    // outline goes up -- one press, which is also the press that moves on.
    divider(0, ~shots: section_shots, ~next: useful_title),
    in_section(0, slide_2),
-   // the workflow's last press hands its term and rules to exactly where the next
-   // slide draws them; the show sees that, and the two meet on a cut
+   // the workflow's last press is the camera going into the e-graph, and it hands
+   // the term and the rules to exactly where the next slide draws them; the show
+   // sees that, and the two meet on a cut
    in_section(0, slide_40), in_section(0, slide_12),
    in_section(0, slide_20),
    // 2 -- what makes extraction hard once there are effects

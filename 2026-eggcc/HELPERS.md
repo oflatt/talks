@@ -55,6 +55,11 @@ fun slide_thing():
 - Anything from glide's runtime (`slide_canvas`, `image_pict`, `textbox`) is a Racket
   pict; `as_pict` crosses it over. `pc.animate(~extent: secs, fun (t): ...)` is a
   hand-rolled press; keep `~bend: fun (x): x` when you time things inside it.
+- A camera move is such a press: draw the picture scaled by `s` about a point, a
+  scene point `q` landing at `(q - c) * s + c'`, and put anything that travels through
+  the same transform (`slide_40`'s way into the e-graph in `workflow.rhm`). Keep the
+  frame's box the slide's -- `put(...).refocus(page)` after each placement, `.clip()`
+  at the end -- since a thing placed part way off the slide grows the box.
 
 ## 3. How things arrive
 

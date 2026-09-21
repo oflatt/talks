@@ -315,13 +315,21 @@ fun fill_width(p :: pc.Pict, w :: Real) :: pc.Pict: p.scale(w / p.width)
 // goes -- the callout needs something to aim at, and a second copy of the node
 // itself would be a second thing to find. `~body` is where the bubble's own corner
 // lands; the spike is worked out from there.
+// `~also` is more things it points at, each as `[pict, [x, y]]`: one body, a spike
+// apiece, for a remark about two things at once -- a node and the line of code it
+// came from.
 fun bubble_at(node, ~spot: spot :~ List, ~body: body :~ List,
-              ~color: color, ~content: content :: pc.Pict) :: pc.Pict:
+              ~color: color, ~content: content :: pc.Pict,
+              ~also: also :: List = []) :: pc.Pict:
   def marker = pc.blank(~width: 1.0, ~height: 1.0)
   def target = as_pict(node).launder().ghost()
+  def others = for List ([p, at] in also): [as_pict(p).launder().ghost(), at]
   def probe:
-    put(put(blank_slide, marker, body[0], body[1]), target, spot[0], spot[1])
-  multi_callout(~on: probe, ~place: marker, ~at: [target],
+    for values(q :~ pc.Pict = put(put(blank_slide, marker, body[0], body[1]),
+                                  target, spot[0], spot[1])) ([g, at] in others):
+      put(q, g, (at :~ List)[0], (at :~ List)[1])
+  multi_callout(~on: probe, ~place: marker,
+                ~at: [target] ++ (for List ([g, _] in others): g),
                 ~color: color, ~padding: 18.0, content)
 
 // A word for a bubble that has to fit somewhere narrow.
@@ -381,17 +389,19 @@ fun robot_says(face, content :: pc.Pict, ~sep: sep :: Real = 16.0,
 // A window onto a pict: the pict drawn through a hole of its own, which is what
 // lets the outline show the corner of a section that says what it was rather than
 // the whole slide shrunk to a stamp nobody can read.
+//
+// The box is padded down to the window and the drawing clipped to the box, with the
+// pict library's own `clip`. Not a clipping region set on the dc by hand: a `Region`
+// installed that way is taken in device coordinates, so the window was right only
+// while the cropped pict was drawn at the origin -- placed inside another picture at
+// an offset and a scale, as the shots are on the outline slide, it fell elsewhere
+// and clipped away most of what was inside it.
 fun crop_pict(p :: pc.Pict, ~at: at :~ List, ~size: size :~ List) :: pc.Pict:
   def [x, y] = at
   def [w, h] = size
-  pc.dc(fun (target :: draw.DC, dx, dy):
-          target.save()
-          def win = draw.Region()
-          win.rectangle([dx, dy, w, h])
-          target.clipping_region := win
-          p.draw(target, ~dx: dx - (x :~ Real), ~dy: dy - (y :~ Real))
-          target.restore(),
-        ~width: w, ~height: h)
+  p.pad(~left: -x, ~top: -y,
+        ~right: -(p.width - x - w), ~bottom: -(p.height - y - h))
+    .clip()
 
 // A slide with the deck's title at the deck's place, and nothing else yet.
 //

@@ -223,22 +223,96 @@ fun flow_callout(page :: pc.Pict, target :~ List,
    0.0, 0.0, band_above]
 
 // -------------------------------------------------------------------------------------
-// slide_40: the workflow, a stage per press, and then the handoff -- the term and
-// the rules fly out of their boxes to the places the next slide draws them.
+// slide_40: the workflow, a stage per press, and then the way into the next slide:
+// the camera goes into the e-graph. The term and the rules leave their boxes along
+// the arrows and go in through the box's side, shrinking as they go, and the picture
+// zooms in after them -- the box growing out past the edges of the slide, the rest of
+// the workflow growing away and fading -- until they stand at full size where the
+// next slide draws them, on a page with nothing else on it. That page is the next
+// slide's first, so the show cuts.
+//
+// One `animate`, in slide coordinates. A point `q` of the workflow picture is drawn
+// at `(q - c) * s + c'`: `s` is the zoom, from 1 to what makes the box as wide as the
+// slide, `c` the box's centre, and `c'` where that centre is on its way to the middle
+// of the slide. The term and the rules are drawn where they are *in the picture* at
+// each moment, put through the same transform -- and where they are is a straight
+// run from their box to the point inside the e-graph box that the finished zoom
+// carries to their place on the next slide. So they travel the arrows and the camera
+// follows them in; nothing has to know the path to the destination.
+//
+// Two eases, one behind the other: the flight is done by seven tenths of the way,
+// the camera starts at two, so the things leave first and the camera goes after them.
 fun slide_40():
   def page = titled(flow_title, ~tag: "Pure workflow title", ~nudge: [0.0, 0.0])
   def scene = workflow_scene(~section: 0)
-  def handoff:
-    { #'program: [input_line, term_x, term_y, band_nodes],
-      #'rule_1: [rules_line_1, & rules_line_1_at, band_nodes],
-      #'rule_2: [rules_line_2, & rules_line_2_at, band_nodes] }
+  def steps = (flow_steps :~ List).length()
   // It opens empty, so that the first stage is written on a press like the rest.
-  magic_slide(page,
-              [Frame(),
-               & for List (k in 1..(flow_steps :~ List).length() + 1):
-                   workflow_frame(scene, flow_keys(~upto: k)),
-               Frame(~picts: handoff)],
-              ~wire: workflow_wire)
+  def stages = [Frame(), & for List (k in 1..steps + 1): workflow_frame(scene, flow_keys(~upto: k))]
+
+  // what goes in: each as [the pict, its scale in its box, where it starts, where it lands]
+  fun flyer(key, pict :: pc.Pict, k0 :: Real, target :~ List) :: List:
+    def [_, x0, y0, _] = scene[key] :~ List
+    [pict, k0, [x0, y0], target]
+  def flyers:
+    [flyer(#'program, input_line, 1.0, [term_x, term_y]),
+     flyer(#'rule_1, rules_line_1, flow_rules_scale, rules_line_1_at),
+     flyer(#'rule_2, rules_line_2, flow_rules_scale, rules_line_2_at)]
+  // and the rest of the picture, still, on a layer of its own
+  def staying = for List (k in flow_all): skip_when [#'program, #'rule_1, #'rule_2].contains(k); k
+  def world = magic_still(blank_slide, workflow_frame(scene, staying), ~wire: workflow_wire)
+  // the box the camera goes into
+  def [bx, by] = flow_egraph_at
+  def [bw, bh] = flow_egraph_size
+  def c = [bx + bw / 2, by + bh / 2]
+  def mid = [slide_width / 2, slide_height / 2]
+  def zoom = slide_width / bw
+  // where it all ends: the next slide's opening picture, drawn the way that slide
+  // draws it, so the two are the same to the pixel and the show cuts
+  def landed:
+    magic_still(page,
+                Frame(~picts: { #'program: [input_line, term_x, term_y, band_nodes],
+                                #'rule_1: [rules_line_1, & rules_line_1_at, band_nodes],
+                                #'rule_2: [rules_line_2, & rules_line_2_at, band_nodes] }),
+                ~wire: workflow_wire)
+  // a pict on the page, and the page's box kept: a thing placed part way off the
+  // slide would otherwise grow the box, and the next thing placed would be off by
+  // the growth
+  fun place(q :: pc.Pict, p :: pc.Pict, x :: Real, y :: Real) :: pc.Pict:
+    put(q, p, x, y).refocus(page)
+  fun going_in(t :: Real) :: pc.Pict:
+    cond
+    | t >= 1.0: landed
+    | ~else:
+        def flight = smooth(clamp01(t / 0.7))
+        def camera = smooth(clamp01((t - 0.2) / 0.8))
+        def s = math.expt(zoom, camera)
+        def cx = lerp(c[0], mid[0], camera)
+        def cy = lerp(c[1], mid[1], camera)
+        fun on_screen(q :~ List) :: List: [(q[0] - c[0]) * s + cx, (q[1] - c[1]) * s + cy]
+        // the workflow, growing away and fading once the camera is well in -- early
+        // enough that the box's own name, grown huge, does not sweep through the
+        // title at full strength
+        def gone = smooth(clamp01((camera - 0.3) / 0.7))
+        def base:
+          if gone >= 1.0
+          | page
+          | block:
+              def [ox, oy] = on_screen([0.0, 0.0])
+              def big = if s == 1.0 | world | world.scale(s)
+              place(page, (if gone > 0.0 | big.alpha(1.0 - gone) | big), ox, oy)
+        def flown:
+          for values(q :~ pc.Pict = base) ([pict, k0, from, to] in flyers):
+            // the point of the box the finished zoom carries to where this lands
+            def door = [c[0] + ((to :~ List)[0] - mid[0]) / zoom,
+                        c[1] + ((to :~ List)[1] - mid[1]) / zoom]
+            def [x, y] = on_screen([lerp((from :~ List)[0], door[0], flight),
+                                    lerp((from :~ List)[1], door[1], flight)])
+            // in at its size in the box, shrinking as it goes in, growing with the camera
+            def k = math.expt(k0, 1.0 - flight) * math.expt(zoom, camera - flight)
+            place(q, (if k == 1.0 | pict | (pict :~ pc.Pict).scale(k)), x, y)
+        flown.clip()
+  pc.switch(magic_slide(page, stages, ~wire: workflow_wire),
+            pc.animate(~extent: 2.0, ~bend: fun (x): x, going_in))
 
 // -------------------------------------------------------------------------------------
 // slide_41: the same workflow, once the program has effects.

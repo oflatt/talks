@@ -384,9 +384,11 @@ fun callout(~on: on :: Pict,
 // Every target is met from whichever edge of the body faces it, worked out from
 // where things ended up rather than chosen by the caller: the ray from the body's
 // centre towards a target leaves the body by one of its four sides, and that is the
-// side its spike grows from. The tip is where that same ray, travelling back,
-// leaves the target -- so a spike lands on the target's near edge rather than
-// aiming at its middle, which is what keeps it clear of whatever sits between.
+// side its spike grows from. The tip is where the line from the spike's own base to
+// the target's centre leaves the target -- so a spike lands on the target's near
+// edge, pointing straight at its middle. Aimed from the body's centre instead, a
+// spike whose base sits under its target leaned towards wherever the body happened
+// to be, and on a wide target landed well off to one side.
 //
 // Spikes on an edge are spread along it in their targets' own order and never
 // closer than `~base` allows, and the body grows if an edge is asked for more
@@ -486,19 +488,28 @@ fun multi_callout(~on: on :: Pict,
         acc ++ [math.min(v, ceiling)]
     down.reverse()
 
-  // the tip, in the body's coordinates
-  fun tip_of(t :~ List) :: List:
+  // the tip, in the body's coordinates: on the target's near edge, on the line from
+  // the spike's base (`fx`, `fy`, on `on`) to the target's centre
+  fun tip_of(t :~ List, fx :: Real, fy :: Real) :: List:
     def tg :~ Pict = t[0]
     def tx :~ Real = t[1]
     def ty :~ Real = t[2]
-    def s = exit_scale(tg.width / 2, tg.height / 2, cx - tx, cy - ty)
-    [tx + (cx - tx) * s - bx, ty + (cy - ty) * s - by]
+    def s = exit_scale(tg.width / 2, tg.height / 2, fx - tx, fy - ty)
+    [tx + (fx - tx) * s - bx, ty + (fy - ty) * s - by]
+  // where a spike's base sits on `on`, given the side it leaves and how far along it
+  fun base_at(side, b :: Real) :: List:
+    match side
+    | #'top: [bx + b, by]
+    | #'bottom: [bx + b, by + h]
+    | #'left: [bx, by + b]
+    | ~else: [bx + w, by + b]
 
   fun spikes_for(items :: List, side, along :: Int, lo :: Real, hi :: Real) :: List:
     def wants = for List (t :~ List in items): (t[along] :~ Real) - (if along == 1 | bx | by)
     def bases = spread(wants, lo, hi)
     for List (t :~ List in items, b :~ Real in bases):
-      def [tipx, tipy] = tip_of(t)
+      def [fx, fy] = base_at(side, b)
+      def [tipx, tipy] = tip_of(t, fx, fy)
       Spike(side, b, tipx, tipy)
   def spikes:
     spikes_for(tops, #'top, 1, end_room, w - end_room)

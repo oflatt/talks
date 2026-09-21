@@ -338,7 +338,8 @@ fun chain_dp_sets(rows :~ List) :: Map:
     if had.contains(i) | m | m ++ { c: had ++ [i] }
 
 // and the same thing per node, which is what draws it: every member of a class is
-// filled by what the class holds
+// filled by what the class holds -- an extractable set is a set of *classes*, and a
+// class within reach is within reach whichever of its members a walk built.
 fun chain_dp_fills(rows :~ List) :: Map:
   def sets :~ Map = chain_dp_sets(rows)
   for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
@@ -377,11 +378,12 @@ def chain_bubbles:
     // sentence long enough that beside the return it would run into the graph
     #'statewalk: [1010.0, 935.0],
     #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
-    // "Redundant update", below the write it names, where the spike comes up at it.
-    // The face goes over the words rather than beside them -- what is left of the
-    // slide here is a tall gap, not a wide one -- and the bubble is as low as it can
-    // be without reaching `v2`.
-    #'redundant: [1645.0, 530.0] }
+    // "Redundant update", between the code and the graph: it points both at the
+    // write it names and at the line of the program that write came from, so it
+    // stands in the gap between the two, under the graph's top row and clear of
+    // the edges that come down from it. The face goes over the words rather than
+    // beside them, since the gap is taller than it is wide.
+    #'redundant: [920.0, 410.0] }
 
 fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
 def chain_layers = (chain_rows :~ List).length()

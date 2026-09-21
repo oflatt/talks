@@ -12,6 +12,8 @@ import:
   "slidehelpers.rhm" open
   "theme.rhm" open
   "plots.rhm" open
+  "plotdata.rhm".cdf_series
+  "plotdata.rhm".cdf_timeout_secs
   "write.rhm".write
   "write.rhm".writer
   "write.rhm".extent_for
@@ -68,13 +70,30 @@ fun slide_cdf():
     def base = scene([1.0, t, t], ~sweep: 1.0, ~sweep_alpha: going)
     put(put(base, share, ex + 18.0, ey - share.height / 2),
         said_w.frame(going), ex + 18.0 + share.width + 16.0, ey - said.height / 2)
+  // How many regions the better of the two solvers never finished: the gap its
+  // curve leaves under the top, at the wall the clock ran out at. Said in red, on a
+  // press of its own once the solvers' curves are up, pointing at the shelf where
+  // Gurobi's stops. The numbers are the data's, not typed in.
+  def gurobi :~ List = cdf_series[1]
+  def gave_up :~ Int = gurobi[2]
+  def total :~ Int = gurobi[3]
+  def finished = (gurobi[1] :~ List).length() / (1.0 * total)
+  def timeouts:
+    def [px, py] = cdf_point(cdf_timeout_secs, finished)
+    def shelf = pc.blank(~width: 16.0, ~height: 16.0)
+    bubble_at(shelf, ~spot: [px - 8.0, py - 8.0], ~body: [1510.0, 360.0], ~color: talk_red,
+              ~content: prose_stack([[[to_string(gave_up), #'bold],
+                                      [" of " +& total +& " cases", #'plain]],
+                                     [["time out", #'bold], [" for Gurobi!", #'plain]]]))
+  def full = scene([1.0, 1.0, 1.0])
   // long enough to watch a curve being drawn, which is the point of drawing it
   pc.switch(scene([0.0, 0.0, 0.0]),
             pc.animate(~extent: 1.2, fun (t): scene([t, 0.0, 0.0])),
             pc.animate(~extent: reading_extent, ~bend: fun (x): x,
                        fun (t): reading(smooth(clamp01(t / sweep_part)),
                                         clamp01((t - sweep_part) / (1.0 - sweep_part)))),
-            pc.animate(~extent: 1.2, fun (t): solvers(t)))
+            pc.animate(~extent: 1.2, fun (t): solvers(t)),
+            pc.overlay(~horiz: #'left, ~vert: #'top, full, write(timeouts)).refocus(full))
 
 // -------------------------------------------------------------------------------------
 // And how fast the code it picks runs. A series a press: ours grows out of the

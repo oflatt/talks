@@ -144,6 +144,25 @@ fun slide_12():
   //
   // The long diagonals thread the gap between the two middle nodes, which is why
   // the columns sit where they do.
+  // Where one line of a pair leaves and arrives: it comes up from the right, so
+  // the two heads are spread down `1`'s side rather than under it, where the arrow
+  // from `−` arrives.
+  fun pair_from(from, off :: Real) :: pc.Find:
+    pc.Find.left(as_pict(from), ~dx: -4, ~dy: off)
+  fun pair_to(to, off :: Real) :: pc.Find:
+    pc.Find.right(as_pict(to), ~dx: 4, ~dy: off)
+  def pair_offsets = [-18.0, 18.0]
+  // Where an edge of a kind with ends of its own leaves and arrives -- one line of a
+  // pair, or an arrow stepping aside for a class line (see the wire) -- and
+  // `#false` for an edge drawn border to border. The wire draws with these, and a
+  // pointer becoming such an edge ends where it will run.
+  fun edge_ends(e :~ List, from, to):
+    match e[0]
+    | #'op_half: values(pair_from(from, e[3]), pair_to(to, e[3]))
+    | #'op_aside:
+        values(pc.Find.top(as_pict(from), ~dx: -24, ~dy: -4),
+               pc.Find.bottom(as_pict(to), ~dx: -24, ~dy: 4))
+    | ~else: values(#false, #false)
   fun wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     fun eq(q, x, y, col):
       arrow(~on: q, x, y, ~style: #'line, ~line_style: #'short_dash,
@@ -154,12 +173,16 @@ fun slide_12():
     fun morph(q, e :~ List):
       def [_, chip, node] = e[1] :~ List
       def new :~ List = e[2]
+      // it ends where the edge it becomes will run: one line of a pair, or an
+      // arrow standing aside, not the middle either is measured from
+      def (from_b, to_b) = edge_ends(new, at[new[1]], at[new[2]])
       arrow_morph(~on: q, ~t: e[3],
                   ~from_a: at[chip], ~to_a: at[node],
                   ~from_b: at[new[1]], ~to_b: at[new[2]],
                   ~color_a: chip_line_color, ~color_b: keynote_blue,
                   ~line_width_a: 3, ~line_width_b: 4, ~gap_a: 4, ~gap_b: 4,
-                  ~from_at_a: pc.Find.bottom(as_pict(at[chip]), ~dy: 4))
+                  ~from_at_a: pc.Find.bottom(as_pict(at[chip]), ~dy: 4),
+                  ~from_at_b: from_b, ~to_at_b: to_b)
     fun edge(q, e :~ List):
       // `at` is this frame's own nodes, which is what the layer has ghosts of
       def from = at[e[1]]
@@ -167,17 +190,16 @@ fun slide_12():
       match e[0]
       | #'op: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4)
       | #'op_blue: arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue)
-      // `1 - 1` takes the same node for both of its operands, so it needs two
-      // arrows: one arrow would say the operator takes one thing. The two run side
-      // by side, pinned 18 either side of the border's middle -- the two boxes are
-      // in one column, so this is a pair of parallel lines.
-      | #'op_pair:
-          // it comes up from the right, so the two heads are spread down `1`'s side
-          // rather than under it, where the arrow from `−` arrives
-          for values(p :~ pc.Pict = q) (off in [-18.0, 18.0]):
-            arrow(~on: p, from, to, ~line_width: 4, ~color: keynote_blue,
-                  ~from_at: pc.Find.left(as_pict(from), ~dx: -4, ~dy: off),
-                  ~to_at: pc.Find.right(as_pict(to), ~dx: 4, ~dy: off))
+      // `1 − 1` takes the same node for both of its operands, so it needs two
+      // arrows: one arrow would say the operator takes one thing. Each is a spec
+      // of its own -- `[#'op_half, from, to, offset]` -- so that the pair exists
+      // from the press that brings the node on and each of the rule's two pointers
+      // has a line of its own to become. They run side by side, pinned `offset`
+      // either side of the border's middle.
+      | #'op_half:
+          def (from_at, to_at) = edge_ends(e, from, to)
+          arrow(~on: q, from, to, ~line_width: 4, ~color: keynote_blue,
+                ~from_at: from_at, ~to_at: to_at)
       // the pointers are drawn by the layer under the rule, not this one
       | #'point: q
       | #'eq_blue: eq(q, from, to, keynote_blue)
@@ -193,9 +215,9 @@ fun slide_12():
       // 40: a node is 100 wide with its corners rounded by 30, so an end further out
       // than that lands where the box has no edge.
       | #'op_aside:
+          def (from_at, to_at) = edge_ends(e, from, to)
           arrow(~on: q, from, to, ~line_width: 4, ~color: keynote_blue,
-                ~from_at: pc.Find.top(as_pict(from), ~dx: -24, ~dy: -4),
-                ~to_at: pc.Find.bottom(as_pict(to), ~dx: -24, ~dy: 4))
+                ~from_at: from_at, ~to_at: to_at)
     for values(q :~ pc.Pict = layer) (e :~ List in es):
       // not an edge: how far the class the third rule makes has grown, which the
       // press draws for itself. Skipped before the lookups below, which would read
@@ -206,14 +228,6 @@ fun slide_12():
   def es_plus: [[#'op, #'plus, #'a], [#'op, #'plus, #'one]]
   def es_minus: [[#'op, #'minus, #'plus], [#'op, #'minus, #'one]]
   def es_term = es_plus ++ es_minus
-  def es_rewrite:
-    [[#'op_blue, #'plus_r, #'minus_r], [#'op_pair, #'minus_r, #'one],
-     [#'op_aside, #'plus_r, #'a]]
-  // what the first rule made equal, until the third rule makes a bigger class of
-  // it and the tube says so instead
-  // The operand arrows. The equalities are not here: each one is the dashed line a
-  // rule's `→` turned into, laid by `eq_of` as a pict of its own.
-  def es_graph = es_term ++ es_rewrite
   // the dashed line a rule concluded, once it has fired
   fun eq_of(key) :: Map: rule_arrow(key, ~as_line: #true)
 
@@ -433,6 +447,11 @@ fun slide_12():
   // operand that is a variable is the node that variable matched, where it already
   // stands -- so the arrow is drawn to the graph from the first press, and the press
   // that sends the term home moves only the end that is moving.
+  //
+  // Two operands that are one node -- `1 − 1` -- are the pair of lines the graph
+  // draws for them, one spec per line, from the first press: drawn as two edges to
+  // the one node they would lie on top of each other and read as one, and the
+  // pair would turn up later, when the graph's own edges took over.
   fun rule_term_edges(key) :: List:
     def rule :~ Map = rule_of[key]
     def adds :~ List = rule[#'adds]
@@ -440,7 +459,34 @@ fun slide_12():
     fun node(name): if adds.contains(name) | name | binds[name]
     List.append(
       & for List ([parent, kids] in rule[#'builds] :~ List):
-          for List (kid in kids :~ List): [#'op_blue, node(parent), node(kid)])
+          def from = node(parent)
+          def targets = for List (kid in kids :~ List): node(kid)
+          List.append(
+            & for List (kid in kids :~ List, i in 0..):
+                def to = node(kid)
+                def twins = for List (t in targets): keep_when t == to; t
+                if twins.length() > 1
+                | // its place among the operands that share the node picks its line
+                  def rank = (for List (k in (kids :~ List).take(i)): keep_when node(k) == to; k).length()
+                  [[#'op_half, from, to, pair_offsets[rank]]]
+                | [[#'op_blue, from, to]]))
+  // The operand arrows of the graph once the first rule has fired *are* that rule's
+  // term's, so that nothing is redrawn when the graph's own edges take over from the
+  // rule's. The equalities are not here: each one is the dashed line a rule's `→`
+  // turned into, laid by `eq_of` as a pict of its own.
+  def es_rewrite = rule_term_edges(#'rule1)
+  def es_graph = es_term ++ es_rewrite
+  // Once the third rule has fired, `a` is in the sum's class and the dashed line
+  // that says so runs down the lane between the two -- the lane the operand arrow
+  // from the sum to `a` runs down. So on that press the arrow steps aside
+  // (`#'op_aside`), and not before: until then it is an arrow like the others.
+  fun es_graph_when(merged :: Boolean) :: List:
+    if merged
+    | for List (e :~ List in es_graph):
+        if e[0] == #'op_blue && e[1] == #'plus_r && e[2] == #'a
+        | [#'op_aside, #'plus_r, #'a]
+        | e
+    | es_graph
 
   fun rule_flight(key) :: Map:
     def rule :~ Map = rule_of[key]
@@ -592,13 +638,14 @@ fun slide_12():
   // everything already on the slide exactly as it was.
   // ---------------------------------------------------------------- the input term
   //
-  // The term goes into the graph the way a rule does: a copy of it comes over to
-  // the place above the graph where the rules will stand to fire, and then its
-  // operators become nodes and go in -- `+` with the two it is built from, and then
-  // `−` -- each glyph travelling to where its node goes and turning into it on the
-  // way, which is what says that this box in the picture is that piece of the term.
-  // What is left of the copy -- brackets, and a `1` that is a node already -- fades
-  // where it stands. Nothing is matched, so nothing lights up.
+  // The term goes into the graph the way a rule's right-hand side does: a copy of it
+  // comes over to the place above the graph where the rules will stand to fire, and
+  // then, two beats apiece, its operators become nodes where they are written and go
+  // in -- `+` with the two it is built from and the arrows between them, and then
+  // `−`, born with its two arrows down into the graph. The boxes are wider than the
+  // words, so the words spread as they become boxes and the rest of the line steps
+  // right to make room. What is left of the copy -- brackets, and a `1` that is a
+  // node already -- fades where it stands. Nothing is matched, so nothing lights up.
   //
   // The copy is one pict per glyph, keyed by the node each becomes; the brackets
   // are keyed to themselves so they can fade, and the second `1` by a name of its
@@ -606,24 +653,44 @@ fun slide_12():
   def term_stage = rule_stage
   def term_pieces:
     [[#'open, 0], [#'a, 1], [#'plus, 3], [#'one, 5], [#'close, 6], [#'minus, 8], [#'one2, 10]]
-  fun term_copy(x :: Real, y :: Real, ~only: only :: maybe(List) = #false) :: Map:
+  // `~shift` moves named glyphs along the line, for the ones that step aside
+  fun term_copy(x :: Real, y :: Real, ~only: only :: maybe(List) = #false,
+                ~shift: shift :~ Map = {}) :: Map:
     for values(m :~ Map = {}) ([key, i] in term_pieces):
       skip_when only && !(only :~ List).contains(key)
-      m ++ { key: [term_glyphs[i], x + term_offs[i], y, band_flight] }
+      def dx = if shift.has_key(key) | shift[key] | 0.0
+      m ++ { key: [term_glyphs[i], x + term_offs[i] + dx, y, band_flight] }
+  fun piece_index(key) :: Int:
+    for values(found = 0) ([k, j] in term_pieces): if k == key | j | found
+  fun glyph_centre(i :: Int) :: Real:
+    term_offs[i] + (term_glyphs[i] :~ pc.Pict).width / 2
   // A glyph of the copy become the node it names, where it is written: the box
   // grows around the glyph, at the glyph's own height, the way `rule_term` grows a
   // rule's operators into nodes under the rule -- so the node is born where the
-  // word was, with its arrows already reaching into the graph, and the press after
-  // sends it home with the arrows following.
-  fun term_node_in_place(key) :: Map:
-    def i = for values(found = 0) ([k, j] in term_pieces): if k == key | j | found
+  // word was, with its arrows already there, and the press after sends it home with
+  // the arrows following. `~dx` moves it along the line.
+  fun term_node_in_place(key, ~dx: dx :: Real = 0.0) :: Map:
+    def i = piece_index(key)
     def glyph :~ pc.Pict = term_glyphs[i]
     def whole :~ pc.Pict = as_pict(plain[key])
     def shrunk = whole.scale(glyph.height / whole.height)
     { key: [shrunk,
-            term_stage[0] + term_offs[i] - (shrunk.width - glyph.width) / 2,
+            term_stage[0] + term_offs[i] + dx - (shrunk.width - glyph.width) / 2,
             term_stage[1] - (shrunk.height - glyph.height) / 2,
             band_flight] }
+  // How the line spreads when `a`, `+` and `1` become boxes: the boxes stand
+  // `node_pitch` apart, centred on the `+`, far enough for the sum's two arrows to
+  // be seen between them, and the `−` and its `1` step right to clear the last box.
+  def node_pitch = 90.0
+  def box_w = (term_glyphs[3] :~ pc.Pict).height       // a box is as wide as it is tall
+  def sum_centre = glyph_centre(3)
+  def spread:
+    def right_edge = sum_centre + node_pitch + box_w / 2 + 24.0
+    { #'a: sum_centre - node_pitch - glyph_centre(1),
+      #'plus: 0.0,
+      #'one: sum_centre + node_pitch - glyph_centre(5),
+      #'minus: right_edge - term_offs[8],
+      #'one2: right_edge - term_offs[8] }
 
   def build:
     // The rules are on the slide from the start, because the press that leaves the
@@ -636,19 +703,28 @@ fun slide_12():
      Frame(~picts: rule_over(#'rule1) ++ rule_over(#'rule2) ++ term_copy(term_x, term_y)),
      // a copy of the term comes over to where the rules will stand
      Frame(~picts: rules_over ++ term_copy(term_stage[0], term_stage[1])),
-     // `+` becomes a node and goes in, with the `a` and the `1` it is built from and
-     // the arrows between them, while the brackets round them go and the data-flow
-     // arrow draws down beside the graph
+     // `a`, `+` and `1` become nodes where they are written, with the sum's two
+     // arrows between them; the boxes spread to make room for the arrows, the rest
+     // of the line steps right, and the brackets go
+     Frame(~picts: rules_over
+                     ++ term_copy(term_stage[0], term_stage[1],
+                                  ~only: [#'minus, #'one2], ~shift: spread)
+                     ++ term_node_in_place(#'a, ~dx: spread[#'a])
+                     ++ term_node_in_place(#'plus)
+                     ++ term_node_in_place(#'one, ~dx: spread[#'one]),
+           ~edges: es_plus),
+     // and go in, the arrows following, as the data-flow arrow draws down beside
+     // the graph
      Frame(~picts: rules_over ++ flow_over
-                     ++ term_copy(term_stage[0], term_stage[1], ~only: [#'minus, #'one2])
+                     ++ term_copy(term_stage[0], term_stage[1],
+                                  ~only: [#'minus, #'one2], ~shift: spread)
                      ++ spots_of([#'a, #'one, #'plus], []),
            ~edges: es_plus),
-     // then `−`, in the two beats a rule's right-hand side takes: it becomes a node
-     // where it is written, born with its two arrows down into the graph -- to the
-     // `+` and the `1` that are nodes already, which is why its own `1` fades here:
-     // the arrow says what the glyph said -- and then goes in, the arrows following.
+     // then `−` the same way: a node where it is written, born with its two arrows
+     // down into the graph -- to the `+` and the `1` that are nodes already, which
+     // is why its own `1` fades here: the arrow says what the glyph said
      Frame(~picts: rules_over ++ flow_over
-                     ++ term_node_in_place(#'minus)
+                     ++ term_node_in_place(#'minus, ~dx: spread[#'minus])
                      ++ spots_of([#'a, #'one, #'plus], []),
            ~edges: es_term),
      // The `→` of the first rule is already on the slide, where the rule stands in
@@ -806,7 +882,7 @@ fun slide_12():
                     ++ rules_over ++ flow_over
                     ++ third_picts()
                     ++ (if task | task_over | {}),
-          ~edges: es_graph
+          ~edges: es_graph_when(merged)
                     ++ (if merged | merged_marks(1.0) | [])
                     ++ (if matching == #false
                         | []
@@ -832,14 +908,15 @@ fun slide_12():
   //
   // `a + 0`, as a term: the `+` under the two it is built from, which is the way
   // round this slide draws everything else. Its edge to `a` is written the way the
-  // graph writes it, so that it is the same edge in both and travels with its ends
-  // instead of being swapped for another; its edge to `0` is new, since in the
-  // graph that operand is the class `0` is the cheapest node of.
+  // graph writes it at this point -- before the third rule, so not yet aside -- so
+  // that it is the same edge in both and travels with its ends instead of being
+  // swapped for another; its edge to `0` is new, since in the graph that operand is
+  // the class `0` is the cheapest node of.
   def term_1:
     Frame(~picts: { #'a: [green[#'a], 1020.0, 520.0],
                     #'zero: [green[#'zero], 1260.0, 520.0],
                     #'plus_r: [green[#'plus_r], 1140.0, 730.0] } ++ rules_over,
-          ~edges: [[#'op_aside, #'plus_r, #'a], [#'op_blue, #'plus_r, #'zero]])
+          ~edges: [[#'op_blue, #'plus_r, #'a], [#'op_blue, #'plus_r, #'zero]])
   // and then just `a`
   def term_2:
     Frame(~picts: { #'a: [green[#'a], 1140.0, 620.0] } ++ rules_over ++ third_over)
@@ -852,7 +929,7 @@ fun slide_12():
   // nodes and going in, and going back -- move at half again the pace of the rest:
   // they are bookkeeping the room has seen before. The term's own descent into the
   // graph, and the extraction after, keep the pace.
-  fun pace(i :: Int) :: Real: if i >= 5 && i <= 15 | 0.67 | 1.0
+  fun pace(i :: Int) :: Real: if i >= 6 && i <= 16 | 0.67 | 1.0
   // A rule pointing at what one of its variables matched: thin, gold and dashed,
   // so it reads as something laid over the picture for a moment rather than as
   // something the e-graph contains. Under the rule box, so it leaves the box at

@@ -286,7 +286,9 @@ fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0],
   // each curve named in the clear air beside it rather than in a key in the corner,
   // so the eye never has to travel to find out which line it is looking at
   def named:
-    def anchors = [[0.00072, 0.945], [14.0, 0.84], [0.5, 0.40]]
+    // ours right of its own rise and under the top, Gurobi's clear to the left of the
+    // green curve's rise, CBC's just under its curve
+    def anchors = [[0.0015, 0.92], [0.008, 0.84], [0.5, 0.49]]
     for values(q :~ pc.Pict = with_x) (s :~ List in cdf_series :~ List, i in 0..):
       def k = (ks :~ List)[i] :~ Real
       skip_when k <= 0.0
