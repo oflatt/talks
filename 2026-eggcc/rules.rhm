@@ -145,9 +145,12 @@ def rules_line_3_at:
    (rules_line_2_at :~ List)[1] + rules_line_2.height + 13.0]
 
 fun update_rule(~value: value :: Boolean = #true) :: Map:
-  // Dead store elimination, over the two lines of the program: the first write is
-  // overwritten, so the memory after both is the memory after the second alone, and
-  // what the first write returned is what that single write returns.
+  // A redundant update, in general: a write to `a` followed by another write to `a`
+  // is one write of the second value, since the memory after both is the memory
+  // after the second alone, and what the first write returned -- the value at `a`
+  // before either -- is what that single write returns. The values written are
+  // variables, `x` and `y`: the rule does not care what they are, only that the
+  // second overwrites the first. In the program `y` matches `x+1`.
   //
   // Premises above the line, and what the rule concludes below it -- including the
   // write it adds, which is the whole reason extraction has a choice to get wrong.
@@ -182,7 +185,7 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
      [#false, [rule_code("(")]],
      [#'a, [rule_code("a")]],
      [#false, [rule_code(", ")]],
-     [#'xp, [rule_code("x+1")]],
+     [#'xp, [rule_code("y")]],
      [#false, [rule_code(", ")]],
      [#'s1, [rule_greek("ω"), rule_sub("1")]],
      [#false, [rule_code(")")]]]
@@ -199,7 +202,7 @@ fun update_rule(~value: value :: Boolean = #true) :: Map:
      [#false, [rule_code("(")]],
      [#'a, [rule_code("a")]],
      [#false, [rule_code(", ")]],
-     [#'xp, [rule_code("x+1")]],
+     [#'xp, [rule_code("y")]],
      [#false, [rule_code(", ")]],
      [#'s0, [rule_greek("ω")]],
      [#false, [rule_code(")")]]]

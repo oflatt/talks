@@ -373,6 +373,9 @@ def chain_pos:
 // know about these, so they are the one thing to re-check by looking.
 def chain_bubbles:
   { #'ask: [1150.0, 850.0],           // "extract", below the return
+    // "blue nodes form a state walk", pointing at the return from below it: a
+    // sentence long enough that beside the return it would run into the graph
+    #'statewalk: [1010.0, 935.0],
     #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
     // "Redundant update", below the write it names, where the spike comes up at it.
     // The face goes over the words rather than beside them -- what is left of the

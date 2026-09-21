@@ -610,6 +610,20 @@ fun slide_12():
     for values(m :~ Map = {}) ([key, i] in term_pieces):
       skip_when only && !(only :~ List).contains(key)
       m ++ { key: [term_glyphs[i], x + term_offs[i], y, band_flight] }
+  // A glyph of the copy become the node it names, where it is written: the box
+  // grows around the glyph, at the glyph's own height, the way `rule_term` grows a
+  // rule's operators into nodes under the rule -- so the node is born where the
+  // word was, with its arrows already reaching into the graph, and the press after
+  // sends it home with the arrows following.
+  fun term_node_in_place(key) :: Map:
+    def i = for values(found = 0) ([k, j] in term_pieces): if k == key | j | found
+    def glyph :~ pc.Pict = term_glyphs[i]
+    def whole :~ pc.Pict = as_pict(plain[key])
+    def shrunk = whole.scale(glyph.height / whole.height)
+    { key: [shrunk,
+            term_stage[0] + term_offs[i] - (shrunk.width - glyph.width) / 2,
+            term_stage[1] - (shrunk.height - glyph.height) / 2,
+            band_flight] }
 
   def build:
     // The rules are on the slide from the start, because the press that leaves the
@@ -629,10 +643,18 @@ fun slide_12():
                      ++ term_copy(term_stage[0], term_stage[1], ~only: [#'minus, #'one2])
                      ++ spots_of([#'a, #'one, #'plus], []),
            ~edges: es_plus),
-     // then `−`, with its two arrows; its `1` is a node already and fades. The `→`
-     // of the first rule is already on the slide, where the rule stands in the list:
-     // it is a pict of its own because it becomes the dashed line later, and put on
-     // the press that brings the rule over it would fade in while the rule moved.
+     // then `−`, in the two beats a rule's right-hand side takes: it becomes a node
+     // where it is written, born with its two arrows down into the graph -- to the
+     // `+` and the `1` that are nodes already, which is why its own `1` fades here:
+     // the arrow says what the glyph said -- and then goes in, the arrows following.
+     Frame(~picts: rules_over ++ flow_over
+                     ++ term_node_in_place(#'minus)
+                     ++ spots_of([#'a, #'one, #'plus], []),
+           ~edges: es_term),
+     // The `→` of the first rule is already on the slide, where the rule stands in
+     // the list: it is a pict of its own because it becomes the dashed line later,
+     // and put on the press that brings the rule over it would fade in while the
+     // rule moved.
      Frame(~picts: rules_over ++ flow_over ++ spots_of(keys_term, [])
                      ++ rule_arrow(#'rule1, ~staged: #false),
            ~edges: es_term),
@@ -746,8 +768,12 @@ fun slide_12():
       cond
       | !third: {}
       | term == #'home: third_over ++ rule_term(#'rule3, ~home: #true)
+      // Before the rule fires, an invisible copy of its `→` waits at its home so the
+      // key exists on both sides of the press that brings the rule over. Once it
+      // has fired, that `→` *is* the dashed line in the graph -- the same key -- and
+      // putting the ghost back here would send the line home with it and lose it.
       | matching == #false && term == #false:
-          third_over ++ rule_arrow(#'rule3, ~staged: #false, ~ghost: #true)
+          third_over ++ (if merged | {} | rule_arrow(#'rule3, ~staged: #false, ~ghost: #true))
       | ~else:
           rule_over(#'rule3, ~staged: #true)
             ++ (if matching == #false
@@ -826,9 +852,36 @@ fun slide_12():
   // nodes and going in, and going back -- move at half again the pace of the rest:
   // they are bookkeeping the room has seen before. The term's own descent into the
   // graph, and the extraction after, keep the pace.
-  fun pace(i :: Int) :: Real: if i >= 4 && i <= 14 | 0.67 | 1.0
-  magic_slide(
-    page,
+  fun pace(i :: Int) :: Real: if i >= 5 && i <= 15 | 0.67 | 1.0
+  // A rule pointing at what one of its variables matched: thin, gold and dashed,
+  // so it reads as something laid over the picture for a moment rather than as
+  // something the e-graph contains. Under the rule box, so it leaves the box at
+  // its edge rather than crossing what is written in it.
+  //
+  // It leaves the bottom of the chip rather than whichever side the node it names
+  // happens to lie on. A chip is one glyph wide and its neighbours are up against
+  // it, so a line leaving its left edge starts against the glyph next door and
+  // reads as coming out of that one -- which is what `γ`'s pointer looked like it
+  // was doing, leaving the `−` beside it.
+  fun under_wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+    for values(q :~ pc.Pict = layer) (e :~ List in es):
+      skip_when e[0] != #'point
+      arrow(~on: q, at[e[1]], at[e[2]], ~line_width: 3,
+            ~color: chip_line_color, ~gap: 4, ~line_style: #'short_dash,
+            ~from_at: pc.Find.bottom(as_pict(at[e[1]]), ~dy: 4))
+  // one press between two frames, with everything a press on this slide needs
+  fun press(a :: Frame, b :: Frame, ~extent: extent :: Real) :: pc.Pict:
+    magic_press(page, a, b, ~extent: extent,
+                ~wire: wire, ~edge_band: band_wires,
+                ~under_wire: under_wire, ~under_band: band_point,
+                // the class the third rule makes, drawn as far grown as the press has got
+                ~stage: merged_stage, ~stage_band: band_below)
+  // a press to each frame in turn, from the frame before the first
+  fun presses(frames :~ List, ~from: from :: Frame, ~extent_of: extent_of) :: List:
+    for List (i in 0..frames.length()):
+      press(if i == 0 | from | frames[i - 1], frames[i], ~extent: extent_of(i))
+
+  def story:
     build
       ++ [// the classes, and then the job, each on its own press
           frame(),
@@ -864,37 +917,26 @@ fun slide_12():
           // and it fires. This rule adds no operator, so there is no term to send
           // home -- all that happens is that the `→` becomes the dashed line down
           // the middle of the class, and the two regions are one.
-          frame(~third: #true, ~merged: #true, ~term: #'home),
-          // the same walk again, down the same rows
-          walking(~third: #true, ~merged: #true, ~point: row_in),
-          walking(~third: #true, ~merged: #true, ~point: row_in, ~picks: [#'a, #'one]),
-          walking(~third: #true, ~merged: #true, ~point: row_mid, ~picks: [#'a, #'one]),
-          walking(~third: #true, ~merged: #true, ~point: row_mid,
-                  ~picks: [#'a, #'one, #'plus, #'zero]),
-          // the root class holds `a` itself now, so its own cheapest node is one we
-          // already have and this press adds no pick, only the pointer
-          walking(~third: #true, ~merged: #true, ~point: row_out,
-                  ~picks: [#'a, #'one, #'plus, #'zero]),
-          // and this time nothing else is reached at all, and the term is one node
-          frame(~third: #true, ~merged: #true, ~picks: [#'a]),
-          term_2],
-    ~extent_of: pace, ~wire: wire, ~edge_band: band_wires,
-    // A rule pointing at what one of its variables matched: thin, gold and dashed,
-    // so it reads as something laid over the picture for a moment rather than as
-    // something the e-graph contains. Under the rule box, so it leaves the box at
-    // its edge rather than crossing what is written in it.
-    //
-    // It leaves the bottom of the chip rather than whichever side the node it names
-    // happens to lie on. A chip is one glyph wide and its neighbours are up against
-    // it, so a line leaving its left edge starts against the glyph next door and
-    // reads as coming out of that one -- which is what `γ`'s pointer looked like it
-    // was doing, leaving the `−` beside it.
-    ~under_wire: fun (layer :: pc.Pict, es :~ List, at :~ Map):
-                   for values(q :~ pc.Pict = layer) (e :~ List in es):
-                     skip_when e[0] != #'point
-                     arrow(~on: q, at[e[1]], at[e[2]], ~line_width: 3,
-                           ~color: chip_line_color, ~gap: 4, ~line_style: #'short_dash,
-                           ~from_at: pc.Find.bottom(as_pict(at[e[1]]), ~dy: 4)),
-    ~under_band: band_point,
-    // the class the third rule makes, drawn as far grown as the press has got
-    ~stage: merged_stage, ~stage_band: band_below)
+          frame(~third: #true, ~merged: #true, ~term: #'home)]
+  // The same walk again, down the same rows -- but the room has seen this walk, so
+  // it is one press: the same frames, each at half the pace, spliced into one go.
+  // The root class holds `a` itself now, so its own cheapest node is one we already
+  // have and the last row adds no pick, only the pointer.
+  def second_walk:
+    [walking(~third: #true, ~merged: #true, ~point: row_in),
+     walking(~third: #true, ~merged: #true, ~point: row_in, ~picks: [#'a, #'one]),
+     walking(~third: #true, ~merged: #true, ~point: row_mid, ~picks: [#'a, #'one]),
+     walking(~third: #true, ~merged: #true, ~point: row_mid,
+             ~picks: [#'a, #'one, #'plus, #'zero]),
+     walking(~third: #true, ~merged: #true, ~point: row_out,
+             ~picks: [#'a, #'one, #'plus, #'zero])]
+  // and this time nothing else is reached at all, and the term is one node
+  def ending = [frame(~third: #true, ~merged: #true, ~picks: [#'a]), term_2]
+
+  pc.switch(magic_still(page, story[0], ~wire: wire, ~edge_band: band_wires,
+                        ~under_wire: under_wire, ~under_band: band_point,
+                        ~stage: merged_stage, ~stage_band: band_below),
+            & presses(story.rest, ~from: story[0], ~extent_of: fun (i): pace(i + 1)),
+            pc.switch(& presses(second_walk, ~from: story.last, ~extent_of: fun (i): 0.5),
+                      ~join: #'splice),
+            & presses(ending, ~from: second_walk.last, ~extent_of: fun (i): 1.0))

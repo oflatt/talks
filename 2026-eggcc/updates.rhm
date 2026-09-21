@@ -176,11 +176,22 @@ fun egraph_frames(parts :~ Map) :: List:
       skip_when !targets.has_key(role)
       m ++ { targets[role]: [already(piece), line_x() + dx, line_y(k), band_flight] }
 
+  // The blue down the graph is the first thing to name once the graph is up: the
+  // state values and the writes that thread them are one walk through the graph,
+  // and "state walk" is the word the rest of the talk turns on. The bubble points
+  // at the `return`, where the walk ends, from below it.
+  def statewalk_over:
+    { #'statewalk: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
+                              ~body: (chain_bubbles :~ Map)[#'statewalk],
+                              ~color: talk_blue,
+                              ~content: prose([["blue nodes form a ", #'plain],
+                                               ["state walk", #'bold]])),
+                    0.0, 0.0, band_callout] }
   // The first write stores a value that the second one throws away. That is worth
   // saying as soon as the graph is up and before any rule is stated, because it is
-  // the reason there is a rule at all -- so the slide that builds the graph ends on
-  // it. It comes up from below, since the two boxes right under that write are its
-  // own results.
+  // the reason there is a rule at all -- so the part that builds the graph ends on
+  // it, in place of the bubble naming the walk. It comes up from below, since the
+  // two boxes right under that write are its own results.
   def redundant_over:
     { #'redundant: [bubble_at(chain_plain[#'u1], ~spot: chain_spots[#'u1],
                               ~body: (chain_bubbles :~ Map)[#'redundant],
@@ -202,6 +213,8 @@ fun egraph_frames(parts :~ Map) :: List:
                   ~edges: chain_edges(k)),
             Frame(~picts: chain_node_picts(chain_spots_upto(k + 1), []) ++ mark,
                   ~edges: chain_edges(k + 1))]),
+   Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ statewalk_over,
+         ~edges: chain_edges(3)),
    Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ redundant_over,
          ~edges: chain_edges(3))]
 
@@ -443,13 +456,13 @@ fun fork_frames(parts :~ Map) :: List:
 // slide_update_story: the four slides above as the one slide they are.
 //
 // The code box never moves and the graph beside it is only ever added to, so the
-// story is one slide whose title changes: "Update" while the operation is
-// explained, "The Effectful E-Graph" while the graph is built, "Dead Store
-// Elimination" for the rule and "Extraction Goes Wrong" for the walk. Each part is
+// story is one slide. Its title changes once: "Update" while the operation is
+// explained, and "The Effectful E-Graph" from the moment the graph starts, through
+// the rule and the walk -- a title that changed for each part was read as a new
+// slide, and a distraction from the picture that had not changed. Each part is
 // built exactly as the slide it was, and the joins are presses rather than slide
-// changes: the old title unwrites and the new one writes while everything under
-// them stays where it is. Shown as four slides, each join panned the whole page
-// away and brought the same page back.
+// changes. Shown as four slides, each join panned the whole page away and brought
+// the same page back.
 fun slide_update_story():
   def opening = update_opening()
   def parts :~ Map = opening[#'parts]
@@ -457,8 +470,6 @@ fun slide_update_story():
   def title_update :: pc.Pict = opening[#'title]
   def bubble :: pc.Pict = opening[#'bubble]
   def title_graph = title_text("The Effectful E-Graph")
-  def title_rule = title_text("Dead Store Elimination")
-  def title_wrong = title_text("Extraction Goes Wrong")
 
   // The join from the opening to the graph: the page and the code stay, and the
   // opening's last bubble goes with its title while the next title comes. It ends
@@ -483,23 +494,26 @@ fun slide_update_story():
                  put(q2, bubble_w.frame(going), 0.0, 0.0))
 
   // The graph presses, on a page with no title: the title is a key in every frame,
-  // one pict per part, so a press within a part leaves it alone and the press
-  // that crosses into the next part unwrites it and writes the new one.
+  // the one pict throughout, so no press has anything to do to it.
   def page = put(page_canvas(), code_states, code_x, code_y)
   fun entitled(frames :~ List, title :: pc.Pict) :: List:
     for List (f :: Frame in frames):
       Frame(~picts: f.picts ++ { #'title: [title, title_x, title_y, band_callout] },
             ~edges: f.edges)
   def eg = entitled(egraph_frames(parts), title_graph)
-  def ru = entitled(rue_frames(parts), title_rule)
-  def fk = entitled(fork_frames(parts), title_wrong)
+  def ru = entitled(rue_frames(parts), title_graph)
+  // The fork's part opens on the picture the rule's part ends with -- the graph, the
+  // rule and the classes it made -- which as its own slide was where it took over.
+  // In one story that frame is the one before it, and a press to it would show the
+  // same picture again, so it is left out.
+  def fk = entitled(fork_frames(parts).rest, title_graph)
   def frames = eg ++ ru ++ fk
   // The first walk down the graph steps a row a press, but its first four rows are
   // classes of one node each -- there is nothing to choose in them -- so those four
   // presses are one: the pointer runs down the rows and the picks land as it
   // passes, in one quicker go. `chain_walk_frames` puts the row the pointer first
-  // lands on two frames into the fork's part.
-  def walk_start = eg.length() + ru.length() + 2
+  // lands on two frames into the fork's part, one with its opening frame gone.
+  def walk_start = eg.length() + ru.length() + 1
   def quick = for List (k in 0..4): walk_start + k
   def presses:
     for List (i in 1..frames.length()):
