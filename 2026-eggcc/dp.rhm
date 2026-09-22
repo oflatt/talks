@@ -24,9 +24,12 @@ export:
 def branch_a_fill = "BFE4E0"                  // through the write the rule added
 def branch_b_fill = "9C82C8"                  // through both of the program's writes
 def branch_seed_fill = "DCDCE4"               // and the walk that is only the state
-def blob_a = "D7EEEB"
-def blob_b = "CFC2E8"
-def blob_seed = "EAEAF0"
+// A walk's extractable set is laid in the walk's own colour at half strength, each
+// set one flat layer: where two sets overlap the two colours mix, and where only one
+// reaches, its colour shows alone -- so which set is drawn first does not matter,
+// and a press that grows one under the other lands on the picture the frame after
+// it draws.
+def blob_alpha = 0.5
 // and the walk itself, which is a line laid over its own mass and so has to be the
 // strong end of the same hue rather than the pale one
 def walk_a_line = "17786E"
@@ -112,11 +115,7 @@ fun slide_dp():
     | #'a: branch_a_fill
     | #'b: branch_b_fill
     | ~else: branch_seed_fill
-  fun branch_blob(b) :: String:
-    match b
-    | #'a: blob_a
-    | #'b: blob_b
-    | ~else: blob_seed
+  fun branch_blob(b) :: String: branch_fill(b)
   fun branch_line(b) :: String:
     match b
     | #'a: walk_a_line
@@ -189,9 +188,9 @@ fun slide_dp():
         | acc ++ [[k1, k2]]
         | acc
   // A mass carries its own colour, so that one press can show two of them: the set
-  // the table already had and the set the walk that just arrived reaches. Listed
-  // later is drawn later, and the two are nested, so putting the smaller one last
-  // leaves the bigger one showing exactly where it is bigger -- which is the whole
+  // the table already had and the set the walk that just arrived reaches. The two
+  // are nested, and each is laid at half strength, so where both reach the colours
+  // mix and where only the bigger does its own colour shows -- which is the whole
   // difference between the two entries, and the reason both are kept.
   fun blob_marks(row :~ List) :: List:
     def hue = branch_blob(branch(row[2] :~ List))
@@ -238,12 +237,16 @@ fun slide_dp():
         m ++ { item: f }
     fun at(hue, key) :: Real:
       if size.has_key([hue, key]) | (size[[hue, key]] :~ Real) | 0.0
+    // the frame this press lands on says the order, so the press ends on the picture
+    // the still after it draws; a set on its way out goes after them
     def order :~ List:
-      for values(acc :~ List = hues_of(a)) (h in hues_of(b)):
+      for values(acc :~ List = hues_of(b)) (h in hues_of(a)):
         if acc.contains(h) | acc | acc ++ [h]
-    pc.dc(fun (target :: draw.DC, dx, dy):
-            target.save()
-            for (hue in order):
+    // one set, as a flat mass in its own colour: its pieces drawn opaque, so that
+    // where they overlap each other is no darker, and the whole faded once
+    fun mass_of(hue) :: pc.Pict:
+      pc.dc(fun (target :: draw.DC, dx, dy):
+              target.save()
               target.brush := draw.Brush(~color: hex_color(hue))
               // the necks first, so a node's own blob is drawn over where they meet
               target.pen := draw.Pen(~color: hex_color(hue),
@@ -274,8 +277,10 @@ fun slide_dp():
                 path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
                                        math.min(bw, bh) * 0.45)
                 target.path(path)
-            target.restore(),
-          ~width: slide_width, ~height: slide_height)
+              target.restore(),
+            ~width: slide_width, ~height: slide_height)
+    for values(q :~ pc.Pict = layer) (hue in order):
+      put(q, mass_of(hue).alpha(blob_alpha, ~composite: #true), 0.0, 0.0)
 
   // ------------------------------------------------------------------- the words
   // What the whole slide is an instance of, said first: in the margin left of the
