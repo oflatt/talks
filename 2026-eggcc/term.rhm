@@ -14,6 +14,7 @@ export:
   term_glyphs
   term_offs
   term_run
+  term_size
   term_strs
   term_x
   term_y
@@ -35,15 +36,20 @@ export:
 // so they carry one title, and the click changes only what it has to.
 def flow_title = "E-Graphs Explore a Big Space"
 
-def term_font = draw.Font(~name: prose_font, ~size: 45.0)
+// The size it is set at: the same as the rules under it, and big enough that the
+// column they make reads from the back of the room. The kerning was measured at 45
+// and scales with it.
+def term_size = 58.0
+def term_font = draw.Font(~name: prose_font, ~size: term_size)
 // the minus is the minus sign the rules and the node labels are set with, not a
 // hyphen: a glyph and the node it becomes have to say the same word for the press
 // between them to cross-fade rather than unwrite one and write the other
 def term_strs = ["(", "a", " ", "+", " ", "1", ")", " ", "−", " ", "1"]
-def term_glyphs = for List (s in term_strs): prose_text(s, ~size: 45.0)
+def term_glyphs = for List (s in term_strs): prose_text(s, ~size: term_size)
+def term_kern = 1.5 * term_size / 45.0
 def values(term_offs, term_w):
   for values(acc :~ List = [], dx :~ Real = 0.0) (g :~ pc.Pict in term_glyphs, i in 0..):
-    values(acc ++ [dx - 1.5 * i], dx + g.width)
+    values(acc ++ [dx - term_kern * i], dx + g.width)
 fun term_run(i :: Int, j :: Int) :: pc.Pict:
   for values(q :~ pc.Pict = pc.blank(~width: 0.0, ~height: 0.0)) (k in i..j):
     pc.overlay(~horiz: #'left, ~vert: #'top, ~dx: term_offs[k] - term_offs[i], ~dy: 0.0,
@@ -52,5 +58,5 @@ fun term_run(i :: Int, j :: Int) :: pc.Pict:
 // handed it over out of a box that says what it is, and the rules under it are the
 // only thing on the slide that has to be named.
 def term_x = 129.0
-def term_y = 252.0
+def term_y = 230.0
 def input_line = term_run(0, term_strs.length())

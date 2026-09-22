@@ -88,11 +88,10 @@ glide_slides all_slides:
    divider(1, ~shots: section_shots, ~next: update_title),
    in_section(1, slide_update_story),
    in_section(1, slide_41),
-   // 3 -- what makes it hard, and the algorithm
-   divider(2, ~shots: section_shots, ~next: nphard_title),
-   in_section(2, slide_nphard),
-   // and then what the algorithm does instead, on the example the section before
-   // this one was about
+   // 3 -- the algorithm, on the example the section before this one was about. The
+   // NP-hardness proof is among the backups: the workflow slide before this ends on
+   // the bad news, and the proof is for whoever asks.
+   divider(2, ~shots: section_shots, ~next: dp_title),
    in_section(2, slide_dp),
    // 4 -- the numbers. Every plot is in this section, `slide_34` included: it is a
    // measurement rather than a step of the algorithm, and it was reading as the end
@@ -104,7 +103,7 @@ glide_slides all_slides:
    // and out the way we came in
    slide_questions,
    // the backup slides, for the questions that ask for them
-   slide_raytracer, slide_compile_times, slide_made]
+   slide_nphard, slide_raytracer, slide_compile_times, slide_made]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the

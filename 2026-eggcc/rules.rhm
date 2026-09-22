@@ -19,6 +19,7 @@ export:
   rule_ident
   rule_zero
   rules_line_1
+  rule_size
   rules_line_1_at
   rules_line_2
   rules_line_2_at
@@ -46,7 +47,7 @@ fun rule_line(& pieces) :: pc.Pict: pc.beside(~vert: #'bottom, & pieces)
 // They are written at the size the term is, because they sit under it in the same
 // column rather than across the slide from it: two sizes in one column reads as one
 // of them mattering more, and neither does.
-def rule_size = 45.0
+def rule_size = 58.0
 
 // A rule is built out of pieces rather than set as one string, so that a copy of any
 // one piece can be lifted off it: what a rule matched is shown by lighting up its
@@ -67,7 +68,7 @@ fun rw(s :: String, color) :: pc.Pict:
 // The gaps are blanks of a stated width rather than spaces: a rule laid out one
 // piece at a time carries the font's side bearings once per piece, which came to
 // 25% more width than the same string set as one run.
-def rw_gap = 12.0
+def rw_gap = 12.0 * rule_size / 45.0
 fun rw_sp() :: pc.Pict: pc.blank(~width: rw_gap, ~height: 0.0)
 fun rw_rule(~lhs: lhs :~ List, ~rhs: rhs :~ List,
             ~binds: binds :~ Map, ~adds: adds :~ List, ~color: color,
@@ -138,11 +139,10 @@ def rules_line_2 = rule_zero[#'pict] :~ pc.Pict
 // Where the three of them sit: under the term, left-aligned with it. They carry no
 // heading -- a list of rewrites under a program is a list of rewrites, and a word
 // saying so is a line of the slide spent on nothing.
-def rules_line_1_at = [129.0, 340.0]
-def rules_line_2_at = [129.0, 420.0]
-def rules_line_3_at:
-  [(rules_line_2_at :~ List)[0],
-   (rules_line_2_at :~ List)[1] + rules_line_2.height + 13.0]
+def rules_pitch = 90.0
+def rules_line_1_at = [129.0, 350.0]
+def rules_line_2_at = [129.0, 350.0 + rules_pitch]
+def rules_line_3_at = [129.0, 350.0 + 2 * rules_pitch]
 
 fun update_rule(~value: value :: Boolean = #true) :: Map:
   // A redundant update, in general: a write to `a` followed by another write to `a`

@@ -259,17 +259,27 @@ fun magic_still(base :: pc.Pict, f :: Frame, ~& kws) :: pc.Pict:
 // picture fades: that is worth saying out loud, since it looks exactly like an
 // ordinary cross-fade and so passes unnoticed.
 // The edges this press takes away that become edges it brings on: a pointer
-// (`#'point`, `#'m`) at a node, and an edge arriving at that same node. Each is
-// paired once, in order.
+// (`#'point`, `#'m`) at a node, and an edge arriving at that same node; and an
+// edge of one kind between two keys with a number after them, and an edge of the
+// same kind between the same two keys with another number -- an arrow and the same
+// arrow slid aside -- which is one edge changing, not one going and one coming.
+// Only a number: a spec whose tail is a colour has been restyled, not moved, and
+// the slide's own layers draw those. Each is paired once, in order.
 fun pair_edges(gone :~ List, new :~ List) :: List:
+  fun pointer_into(g :~ List, n :~ List) :: Boolean:
+    (g[0] == #'point || g[0] == #'m)
+      && !(n[0] == #'point || n[0] == #'m || n[0] == #'grow)
+      && n.length() >= 3 && n[2] == g[2]
+  fun same_edge(g :~ List, n :~ List) :: Boolean:
+    g.length() >= 4 && n.length() >= 4 && g[0] == n[0] && g[1] == n[1] && g[2] == n[2]
+      && g[3] is_a Real && n[3] is_a Real
   def (pairs, _):
     for values(acc :~ List = [], left :~ List = new) (g :~ List in gone):
-      skip_when !(g[0] == #'point || g[0] == #'m)
+      skip_when g[0] == #'grow
       def hit:
         for values(found = #false) (n :~ List in left):
           skip_when found
-          skip_when n[0] == #'point || n[0] == #'m || n[0] == #'grow
-          skip_when n.length() < 3 || n[2] != g[2]
+          skip_when !(pointer_into(g, n) || same_edge(g, n))
           n
       if hit
       | values(acc ++ [[g, hit]], left.remove(hit))

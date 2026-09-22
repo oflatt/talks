@@ -15,6 +15,7 @@ export:
   code_inset
   code_parts
   code_pict
+  code_piece_at
   code_row
   code_updates
   code_x
@@ -85,9 +86,13 @@ fun code_parts() :: Map:
   // code is read as lines, not followed letter by letter, and a block of it should
   // be there in well under a second. The pieces inside are still the picts the
   // moves and the copies match on.
+  // the state the program is handed, as a piece of its own: it is what the first
+  // `update` reads, and the arrows that say who reads what need to find it
+  def sig_omega = greek("ω")
   def header:
     {#'plain: popped(pc.beside(~vert: #'bottom, sig_head, sig_close)),
-     #'states: popped(pc.beside(~vert: #'bottom, sig_head, code(", "), greek("ω"), sig_close))}
+     #'states: popped(pc.beside(~vert: #'bottom, sig_head, code(", "), sig_omega, sig_close)),
+     #'omega: sig_omega}
   // Two writes to one address: the first stores `x`, the second overwrites it with
   // `x + 1`. The program still needs what `a` held before, and it needs the memory
   // it ends with, so it returns both.
@@ -164,10 +169,34 @@ fun code_parts() :: Map:
 // something else -- the workflow picture hands the two `update` lines over as a
 // pict of their own, and the box they land in must not have a second copy of them
 // waiting underneath.
+// `~holes` names pieces to leave out, as `[line, role]` pairs counting the lines
+// from 0 under the signature: a blank of the piece's size stands in its place, so
+// the line lays out as it would with the piece there, and whoever draws the box
+// draws the piece itself -- as a thing of its own that a press can change. With a
+// third element, `[line, role, pict]`, that pict is set into the hole instead,
+// centred and on the line's baseline: the same line with one piece rewritten,
+// drawn as one thing.
 fun code_body(parts :~ Map, ~states: states :: Boolean,
-              ~only: only :: maybe(List) = #false) :: pc.Pict:
+              ~only: only :: maybe(List) = #false,
+              ~holes: holes :: List = []) :: pc.Pict:
   fun pick(m :~ Map) :~ pc.Pict: if states | m[#'states] | m[#'plain]
-  def rows :~ List = [pick(parts[#'header]), & for List (l in parts[#'lines]): pick(l)]
+  fun holed(l :~ Map, k :: Int) :~ pc.Pict:
+    def roles = for List (h :~ List in holes): keep_when h[0] == k; h[1]
+    if roles == [] || !states
+    | pick(l)
+    | popped(segs_pict(for List ([role, ps] in l[#'segs] :~ List):
+                         if roles.contains(role)
+                         | def p = pc.beside(~vert: #'bottom, & ps)
+                           def room = pc.blank(~width: p.width, ~height: p.height)
+                           def set_in:
+                             for values(found = #false) (h :~ List in holes):
+                               if !found && h[0] == k && h[1] == role && h.length() > 2 | h[2] | found
+                           [role, [(if set_in
+                                    | pc.overlay(~horiz: #'center, ~vert: #'bottom, room, set_in)
+                                    | room)]]
+                         | [role, ps]))
+  def rows :~ List:
+    [pick(parts[#'header]), & for List (l in parts[#'lines], k in 0..): holed(l, k)]
   def frame :~ pc.Pict = parts[#'frame]
   def board = pc.blank(~width: frame.width, ~height: frame.height)
   for values(p :~ pc.Pict = board) (q :~ pc.Pict in rows, k in 0..):
@@ -196,9 +225,31 @@ def code_updates_at:
 // The lines over the frame. They are drawn apart so that the workflow picture can
 // hold a copy of the code without a second border round it, and so that the press
 // that leaves that picture can send the code on its own into this box.
-fun code_pict(parts :~ Map, ~states: states :: Boolean) :: pc.Pict:
+fun code_pict(parts :~ Map, ~states: states :: Boolean, ~holes: holes :: List = []) :: pc.Pict:
   pc.overlay(~horiz: #'left, ~vert: #'top,
-             parts[#'frame], code_body(parts, ~states: states))
+             parts[#'frame], code_body(parts, ~states: states, ~holes: holes))
+
+// Where a named piece of line `k` is drawn on a slide that puts the box at
+// `code_x`, `code_y`: `[pict, x, y]`, the piece bottom-aligned in its line as the
+// line draws it. `k` counts the lines from 0 under the signature; `#'sig` with the
+// role `#'omega` is the state the signature takes.
+fun code_piece_at(parts :~ Map, k, role) :: List:
+  cond
+  | k == #'sig:
+      def header :~ pc.Pict = (parts[#'header] :~ Map)[#'states]
+      def omega :~ pc.Pict = (parts[#'header] :~ Map)[#'omega]
+      def (ox, oy) = pc.Find.left_top(omega).in(header)
+      [omega, code_x + code_inset + ox,
+       code_y + code_inset + (code_row - header.height) / 2 + oy]
+  | ~else:
+      def line :~ Map = (parts[#'lines] :~ List)[k]
+      def whole :~ pc.Pict = line[#'states]
+      def line_y = code_y + code_inset + code_row * (k + 1) + (code_row - whole.height) / 2
+      def hit:
+        for values(found = #false) ([r, piece, dx] in segs_pieces(line[#'segs])):
+          if !found && r == role | [piece, dx] | found
+      def [piece :: pc.Pict, dx] = hit
+      [piece, code_x + code_inset + code_indent + dx, line_y + whole.height - piece.height]
 
 // The line of the code box naming the `update` just put into the e-graph, marked
 // as with a highlighter: a translucent band over it. `k` counts the `update`

@@ -47,6 +47,7 @@ export:
   crop_pict
   robot
   robot_says
+  wand
   node_font
   prose
   prose_face
@@ -154,8 +155,8 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // The header's discs sit around y 18..50 and the deck's slide titles start at
 // y 64, which is what the disc and text scales in `header_layout` are chosen
 // against. Retitle a slide higher than that and the two will meet.
-def sections = ["Motivate Effectful E-Graphs", "Example Effectful E-Graph",
-                "Effect-Safe Extraction", "It Works!"]
+def sections = ["Motivation", "An NP-Hard Problem",
+                "Fast Extraction Anyways", "Eggcc, A New Compiler"]
 
 fun section_canvas():
   as_pict(slide_canvas(~width: slide_width, ~height: slide_height,
@@ -385,6 +386,38 @@ fun robot_says(face, content :: pc.Pict, ~sep: sep :: Real = 16.0,
   if above
   | pc.stack(~sep: sep, ~horiz: #'center, r, content)
   | pc.beside(~sep: sep, ~vert: #'center, r, content)
+
+// A magic wand, for the one bubble that says a hard problem has a practical way
+// round it. Drawn from paths like everything else, so it writes: a rod with round
+// ends, a four-pointed star at its tip and two sparkles off it, in the gold the
+// rule chips are drawn in.
+def wand_gold = draw.Color(245, 197, 24)
+def wand_gold_line = draw.Color(154, 107, 0)
+fun star_path(cx :: Real, cy :: Real, outer :: Real, inner :: Real) :: draw.Path:
+  def p = draw.Path()
+  for (i in 0..8):
+    def r = if i mod 2 == 0 | outer | inner
+    def a = i * math.pi / 4 - math.pi / 2
+    def pt = [cx + r * math.cos(a), cy + r * math.sin(a)]
+    if i == 0 | p.move_to(pt) | p.line_to(pt)
+  p.close()
+  p
+fun wand(~size: size :: Real = 120.0) :: pc.Pict:
+  def k = size / 120.0
+  def rod = draw.Path()
+  rod.move_to([22.0 * k, 104.0 * k])
+  rod.line_to([76.0 * k, 50.0 * k])
+  fun star(cx, cy, outer, inner) :: pc.Pict:
+    written_shape(star_path(cx * k, cy * k, outer * k, inner * k),
+                  ~width: size, ~height: size,
+                  ~fill: wand_gold, ~line: wand_gold_line, ~line_width: 2.0)
+  pc.overlay(~horiz: #'left, ~vert: #'top,
+             written_stroke(rod, ~width: size, ~height: size,
+                            ~pen: draw.Pen(~color: draw.Color(60, 60, 60), ~width: 11.0 * k,
+                                           ~cap: #'round)),
+             star(86.0, 36.0, 24.0, 8.0),
+             star(46.0, 30.0, 8.0, 3.0),
+             star(104.0, 76.0, 7.0, 2.5))
 
 // A window onto a pict: the pict drawn through a hole of its own, which is what
 // lets the outline show the corner of a section that says what it was rather than

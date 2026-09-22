@@ -16,7 +16,14 @@ import:
   "write.rhm".extent_for
   "write.rhm".unwrite_pace
   "write.rhm".already
+  "write.rhm".popped
+  "write.rhm".ink_bounds
+  "write.rhm".Arrival
+  "write.rhm".arriving
+  "write.rhm".pop_frame
+  "write.rhm".current_draw
   pict as pc
+  draw
 
 export:
   slide_egraph
@@ -40,8 +47,9 @@ export:
 //
 // A press explains the operation. The next one magic-moves each line into its
 // `(v, ω) = update(...)` form: the pieces already on screen slide right to make
-// room, the parentheses and the ωs fade in around them, the first bubble goes
-// and one naming the state value arrives.
+// room, the parentheses and the ωs fade in around them, the bubble staying up;
+// one naming the state value arrives under it. Then an aside on what the state
+// form allows -- see `update_opening`.
 fun slide_update(): update_opening()[#'pict]
 
 // The pieces `slide_update` is made of, for `slide_update_story` to carry on from.
@@ -60,78 +68,325 @@ fun update_opening() :: Map:
   // the code on a layer of its own, for the press that writes it onto the page
   def code_layer = put(pc.blank(~width: slide_width, ~height: slide_height),
                        code_plain, code_x, code_y)
-  // The bubbles are a layer of their own over the code, pinned at measured
-  // points: `magic_move` rebuilds its two pictures piece by piece, and a balloon
-  // pinned by a finder does not survive that. Kept apart, the layer can fade out
-  // as the move runs and the next one fade in, which is what should happen anyway.
-  def blank_layer = pc.blank(~width: slide_width, ~height: slide_height)
-  // Both bubbles are about the first line, and point at it: the spike lands just
-  // off the end of that line's own text, inside the box, while the body stays out
-  // past the box's edge -- so the spike reaches in over the border rather than
-  // stopping at it, which pointed at the box. Not from above, where the signature
-  // is. The line's end moves as the code moves into its state form, and the second
-  // bubble points at where it is then. It replaces the first in place, so the eye
-  // stays on the line they are both about.
+
+  // ---------------------------------------------------------------- the bubbles
+  // Both are about the first line and point at it: the spike lands just off the end
+  // of that line's own text, inside the box, while the body stays out past the
+  // box's edge -- so the spike reaches in over the border rather than stopping at
+  // it, which pointed at the box. The first sits high, level with the title, so
+  // that the second has the room beside the line and both stay up: the slide builds
+  // up rather than swapping one sentence for the next. The line's end moves as the
+  // code moves into its state form, and the first bubble's spike follows it.
   def (fx, _) = pc.Find.right(parts[#'frame]).in(plain)
-  def body_x = fx + 30.0
-  // where line 0 ends on `page`, in the form named, and how far the body is from it
-  fun at_first_line(form, page :: pc.Pict):
+  def body_x = fx + 40.0
+  def explain_body = [body_x, 150.0]
+  def omega_body = [body_x, 330.0]
+  // where line 0 ends on `page`, in the form named: the point the spikes aim at
+  fun line_end(form, page :: pc.Pict) :: List:
     def line :~ pc.Pict = ((parts[#'lines] :~ List)[0] :~ Map)[form]
     def (x, y) = pc.Find.right(line).in(page)
-    values(pc.Find.abs(x + 8.0, y), body_x - (x + 8.0))
-  def (explain_at, explain_reach) = at_first_line(#'plain, plain)
-  def (state_at, state_reach) = at_first_line(#'states, with_states)
-  def explain:
-    callout(~on: blank_layer, ~at: explain_at, ~spike: #'w, ~reach: explain_reach,
-            prose_stack([[["Write ", #'plain], ["x", #'bold], [" to address ", #'plain],
-                          ["a", #'bold], [",", #'plain]],
-                         [["return the previous value at ", #'plain], ["a", #'bold]]]))
-  def name_state:
-    callout(~on: blank_layer, ~at: state_at, ~spike: #'w, ~reach: state_reach,
-            prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
-                         [["after the update", #'plain]]]))
-  // Why the code is about to change: an e-graph holds terms, and a program whose
-  // effects are in the order of its lines is not a term until the memory those lines
-  // act on is a value they pass along. Said in red, under the box, on a press of its
-  // own, and taken back with the first bubble as the states come in.
-  def dataflow:
-    def (bx, by) = pc.Find.center_bottom(parts[#'frame]).in(plain)
-    callout(~on: blank_layer, ~at: pc.Find.abs(bx, by), ~spike: #'n, ~color: talk_red,
-            prose([["e-graphs need terms in a ", #'plain], ["dataflow", #'bold_italic],
-                   [" IR", #'plain]]))
-  // One bubble out, then the other in -- not both at once. They are two different
-  // sentences in the same place, and crossing them leaves the middle of the move
-  // showing the two of them printed over each other at half strength. So the first
-  // is unwritten -- and the red one with it, at the same pace -- and then the second
-  // written, each at the pace its own words ask for, while the code slides into its
-  // new form underneath over the whole press.
-  def explain_w = writer(explain)
-  def dataflow_w = writer(dataflow)
-  def name_state_w = writer(name_state)
-  def out_t = unwrite_pace * extent_for(math.max(explain_w.total, dataflow_w.total))
-  def in_t = extent_for(name_state_w.total)
-  def extent = math.max(1.0, out_t + in_t)
-  def split = out_t / extent
+    [x + 8.0, y]
+  def end_plain = line_end(#'plain, plain)
+  def end_states = line_end(#'states, with_states)
+  // a bubble aimed at a point: what it points at is a speck there, laundered by
+  // `bubble_at`, so every bubble has a target of its own
+  def speck = pc.blank(~width: 16.0, ~height: 16.0)
+  fun aimed(~at: at :~ List, ~body: body :~ List, ~content: content :: pc.Pict,
+            ~color: color = talk_blue) :: pc.Pict:
+    bubble_at(speck, ~spot: [at[0] - 8.0, at[1] - 8.0], ~body: body, ~color: color,
+              ~content: content)
+  fun explain_at(at :~ List) :: pc.Pict:
+    aimed(~at: at, ~body: explain_body,
+          ~content: prose_stack([[["Write ", #'plain], ["x", #'bold], [" to address ", #'plain],
+                                  ["a", #'bold], [",", #'plain]],
+                                 [["return the previous value at ", #'plain], ["a", #'bold]]]))
+  def explain_plain = explain_at(end_plain)
+  def explain_states = explain_at(end_states)
+  def omega_bubble:
+    aimed(~at: end_states, ~body: omega_body,
+          ~content: prose_stack([[["ω", #'plain], ["1", #'sub], [" is the state of memory", #'plain]],
+                                 [["after the update", #'plain]]]))
+
+  // The code slides into its state form -- the pieces already on screen move right
+  // to make room, the parentheses and the ωs fade in around them -- with the first
+  // bubble staying up and its spike following the end of the line it points at.
+  // Both play under the same bend, so the tip rides the line's end rather than
+  // running ahead of it or behind.
   def moving:
     pc.overlay(~horiz: #'left, ~vert: #'top,
-               pc.magic_move(plain, with_states, ~other: #'fade, ~extent: extent)
+               pc.magic_move(plain, with_states, ~other: #'fade, ~extent: 1.0)
                  .time_pad(~after: -1),
-               pc.animate(~extent: extent, ~bend: fun (x): x,
-                          fun (t): explain_w.frame(clamp01(1.0 - t / split))),
-               pc.animate(~extent: extent, ~bend: fun (x): x,
-                          fun (t): dataflow_w.frame(clamp01(1.0 - t / split))),
-               pc.animate(~extent: extent, ~bend: fun (x): x,
-                          fun (t): name_state_w.frame(clamp01((t - split) / (1.0 - split)))))
-  // the page with its title; the code writes itself; the bubble explains a line; the
-  // red one says why the code has to change; then the states move in
-  def explained = pc.overlay(~horiz: #'left, ~vert: #'top, plain, explain).refocus(plain)
+               pc.animate(~extent: 1.0,
+                          fun (t): explain_at([lerp(end_plain[0], end_states[0], t),
+                                               lerp(end_plain[1], end_states[1], t)])))
+
+  // ------------------------------------------------ who reads which state, and why
+  // The point of the state form is that memory is passed along like any other
+  // value -- and that is also a freedom: a program in it can read a state that is
+  // not the last one. Arrows over the program say which state each `update` reads,
+  // and the `return` too: each reads the one before it, and a bubble says so. Then
+  // a copy of the program comes up under it and is rewritten so that the second
+  // write reads the state the program was handed rather than the first write's.
+  // That program is equivalent to the original -- the second write overwrites the
+  // first, so the memory it leaves is the same, and both writes return what `a`
+  // held to begin with -- and a bubble says so; and it reads one memory twice, the
+  // two arrows that do turning red, and a red bubble names that. The original stays
+  // up throughout, so the two can be read against each other.
+  //
+  // The arrows run from the letter ω that reads to the letter ω that is read: out
+  // of the top of the one and into the bottom of the other, so that in the program
+  // as written each runs in the gap between its line and the line above rather
+  // than across the words. Their ends are unseen anchors the size of the letter's
+  // own ink, laid over it -- a text pict is as tall as its font, and an arrow that
+  // stops at that box floats clear of the letter. The anchors are keys of the
+  // frame, so the press that rewrites the copy moves them from one ω to the other
+  // and the arrow swings there rather than fading and redrawing.
+  def read_at = [[0, #'state_in], [1, #'state_in], [2, #'state]]
+  def as_written_reads = [#'sig, 0, 1]      // what each reads, in the program as written
+  def forked_reads = [#'sig, #'sig, 1]      // and once it is rewritten
+  def omega_glyph :: pc.Pict = (parts[#'header] :~ Map)[#'omega]
+  def [ink_x0, ink_y0, ink_x1, ink_y1] = ink_bounds(omega_glyph)
+  fun anchor() :: pc.Pict: pc.blank(~width: ink_x1 - ink_x0, ~height: ink_y1 - ink_y0)
+  // where the ink of the ω that starts the piece `[pict, x, y]` is
+  fun letter_at(piece :~ List) :: List:
+    def [p :: pc.Pict, x, y] = piece
+    [x + ink_x0, y + p.height - omega_glyph.height + ink_y0]
+  // The anchors of one program's arrows: `[from, i]` over the ω line `i` reads
+  // with -- the pieces in `uses`, `[pict, x, y]` each -- and `[read, i]` over the ω
+  // it reads, named by `reads`. The anchor picts are handed in, so that the same
+  // ones stand in every frame and a press moves them.
+  fun arrow_ends(prog :~ Map, ~uses: uses :~ List, ~reads: reads :~ List,
+                 ~from: from_tag, ~read: read_tag,
+                 ~from_picts: fps :~ List, ~read_picts: rps :~ List) :: Map:
+    def defs = { #'sig: code_piece_at(prog, #'sig, #'omega),
+                 0: code_piece_at(prog, 0, #'state), 1: code_piece_at(prog, 1, #'state) }
+    for values(m :~ Map = {}) (i in 0..3):
+      def [fx, fy] = letter_at(uses[i])
+      def [rx, ry] = letter_at(defs[reads[i]])
+      m ++ { [from_tag, i]: [fps[i], fx, fy, band_below],
+             [read_tag, i]: [rps[i], rx, ry, band_below] }
+  // The arrows: `[#'ref, from, read, dx, red]`. `dx` lands the head a little off
+  // the letter's middle, so that two arrows reading one ω do not put their heads on
+  // one another; `red` is how far from blue to red the arrow is, which the press
+  // that turns one red draws as one arrow changing colour.
+  def head_dx = [-4.0, 6.0, 0.0]
+  fun ref_edges(~from: from_tag, ~read: read_tag, ~red: reds :~ List) :: List:
+    for List (i in 0..3): [#'ref, [from_tag, i], [read_tag, i], head_dx[i], reds[i]]
+  fun mix(t :: Real) :: draw.Color:
+    def a :: draw.Color = keynote_blue
+    def b :: draw.Color = talk_red
+    fun ch(x, y): math.exact(math.round(x + (y - x) * t))
+    draw.Color(ch(a.red, b.red), ch(a.green, b.green), ch(a.blue, b.blue))
+  fun draw_ref(q :: pc.Pict, at :~ Map, from_key, read_key, dx :: Real, red :: Real) :: pc.Pict:
+    arrow(~on: q, at[from_key], at[read_key], ~line_width: 3, ~color: mix(red),
+          ~from_at: pc.Find.top(as_pict(at[from_key]), ~dy: -2.0),
+          ~to_at: pc.Find.bottom(as_pict(at[read_key]), ~dx: dx, ~dy: 3.0))
+  fun ref_wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+    for values(q :~ pc.Pict = layer) (e :~ List in es):
+      cond
+      | e[0] == #'ref: draw_ref(q, at, e[1], e[2], e[3], e[4])
+      // the arrow turning red: the same ends, the colour `e[3]` of the way over
+      | e[0] == #'morph:
+          def gone :~ List = e[1]
+          def new :~ List = e[2]
+          draw_ref(q, at, new[1], new[2], new[3],
+                   gone[4] + (new[4] - gone[4]) * smooth(e[3]))
+      | ~else: q
+
+  // the program as written, on the page: its arrows have fixed ends
+  def orig_uses = for List ([k, role] in read_at): code_piece_at(parts, k, role)
+  def orig_ends:
+    arrow_ends(parts, ~uses: orig_uses, ~reads: as_written_reads, ~from: #'from, ~read: #'read,
+               ~from_picts: (for List (i in 0..3): anchor()),
+               ~read_picts: (for List (i in 0..3): anchor()))
+  def orig_edges = ref_edges(~from: #'from, ~read: #'read, ~red: [0.0, 0.0, 0.0])
+
+  // The copy, under the original, from pieces of its own so that its ωs are things
+  // the press can find and change. The ωs it reads with stand in holes in its code,
+  // popping in with the lines round them; the rewritten one -- the second write
+  // reading the state the program was handed -- sits centred in the room the piece
+  // it replaces had.
+  def copy_parts = code_parts()
+  def copy_dy = (parts[#'frame] :~ pc.Pict).height + 30.0
+  def copy_code = code_pict(copy_parts, ~states: #true, ~holes: read_at)
+  fun lower(piece :~ List) :: List:
+    def [p, x, y] = piece
+    [p, x, y + copy_dy]
+  // The copy's lines pop in one after another as the box is written, and the ω a
+  // line reads with is a key of its own: left to itself it would pop the moment the
+  // press starts, ahead of its line. So it is given the line's own timing -- unseen
+  // until the line starts, then the same pop over the same stretch -- read off the
+  // writer that plays the box: its parts are the frame, the signature, then a line
+  // each.
+  def copy_w = writer(copy_code)
+  fun with_line(p :: pc.Pict, k :: Int) :: pc.Pict:
+    def start = (copy_w.starts[k + 2] :~ Real) / copy_w.total
+    def dur = (copy_w.durs[k + 2] :~ Real) / copy_w.total
+    arriving(p, Arrival(fun (n): pop_frame(p, clamp01((n - start) / dur)),
+                        copy_w.total, ~kind: #'pop))
+  def copy_uses_written:
+    for List ([k, role] in read_at):
+      def [p :: pc.Pict, x, y] = lower(code_piece_at(copy_parts, k, role))
+      [with_line(p, k), x, y]
+  def rewritten = { 1: greek("ω") }
+  def copy_uses_forked:
+    for List (u :~ List in copy_uses_written, i in 0..):
+      if rewritten.has_key(i)
+      | def [p :: pc.Pict, x, y] = u
+        def other :: pc.Pict = rewritten[i]
+        [other, x + (p.width - other.width) / 2, y + p.height - other.height]
+      | u
+  def c_from_picts = for List (i in 0..3): anchor()
+  def c_read_picts = for List (i in 0..3): anchor()
+  fun copy_picts(~forked: forked :: Boolean) :: Map:
+    def uses = if forked | copy_uses_forked | copy_uses_written
+    // the copy's own pieces read their states in the copy, `copy_dy` lower
+    def ends:
+      arrow_ends(copy_parts, ~uses: (for List (u :~ List in uses): [u[0], u[1], u[2] - copy_dy]),
+                 ~reads: (if forked | forked_reads | as_written_reads),
+                 ~from: #'c_from, ~read: #'c_read,
+                 ~from_picts: c_from_picts, ~read_picts: c_read_picts)
+    def lowered_ends:
+      for values(m :~ Map = {}) (key in ends.keys()):
+        def [p, x, y, band] = ends[key] :~ List
+        m ++ { key: [p, x, y + copy_dy, band] }
+    { #'copy: [copy_code, code_x, code_y + copy_dy, band_nodes] }
+      ++ (for values(m :~ Map = {}) (u :~ List in uses, i in 0..):
+            m ++ { [#'c_use, i]: [u[0], u[1], u[2], band_flight] })
+      ++ lowered_ends
+  // the copy's arrows, the two that read one memory red once `~red` says so
+  fun copy_edges(~red: red :: Boolean) :: List:
+    ref_edges(~from: #'c_from, ~read: #'c_read, ~red: (if red | [1.0, 1.0, 0.0] | [0.0, 0.0, 0.0]))
+
+  // the bubbles: the two about the first line, up throughout; one on each program
+  // saying how it uses memory, pointing at its box beside the second write; and
+  // one on the copy, beside its first write, saying it is the same program
+  def (box_right, _) = pc.Find.right(parts[#'frame]).in(plain)
+  def first_write_y = code_y + code_inset + code_row + code_row / 2
+  def second_write_y = code_y + code_inset + code_row * 2 + code_row / 2
+  def explained = { #'explain: [explain_states, 0.0, 0.0, band_callout] }
+  def with_omega = explained ++ { #'omega: [omega_bubble, 0.0, 0.0, band_callout] }
+  def linear_over:
+    { #'linear: [aimed(~at: [box_right - 4.0, second_write_y], ~body: [body_x, 475.0],
+                       ~content: prose([["uses memory ", #'plain], ["linearly", #'bold]])),
+                 0.0, 0.0, band_callout] }
+  def equivalent_over:
+    { #'equivalent: [aimed(~at: [box_right - 4.0, first_write_y + copy_dy],
+                           ~body: [body_x, 650.0], ~color: talk_green,
+                           ~content: prose_stack([[["equivalent", #'bold], [" to original", #'plain]],
+                                                  [["under dataflow semantics", #'plain]]])),
+                     0.0, 0.0, band_callout] }
+  // and the one line the rest of the talk answers, under the copy, pointing up at it
+  def challenge_over:
+    def copy_frame :: pc.Pict = copy_parts[#'frame]
+    def under_x = code_x + copy_frame.width / 2
+    def under_y = code_y + copy_dy + copy_frame.height
+    { #'challenge: [aimed(~at: [under_x, under_y - 4.0], ~body: [under_x - 270.0, under_y + 28.0],
+                          ~color: talk_red,
+                          ~content: prose_stack([[["central challenge:", #'bold]],
+                                                 [["unavoidable in the e-graph!", #'plain]]])),
+                    0.0, 0.0, band_callout] }
+  def nonlinear_over:
+    { #'nonlinear: [aimed(~at: [box_right - 4.0, second_write_y + copy_dy],
+                          ~body: [body_x, 475.0 + copy_dy], ~color: talk_red,
+                          ~content: prose([["uses memory ", #'plain], ["non-linearly", #'bold]])),
+                    0.0, 0.0, band_callout] }
+  def f_states = Frame(~picts: explained)
+  def f_omega = Frame(~picts: with_omega)
+  def f_chain = Frame(~picts: with_omega ++ orig_ends, ~edges: orig_edges)
+  def f_linear = Frame(~picts: with_omega ++ orig_ends ++ linear_over, ~edges: orig_edges)
+  def f_copy:
+    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #false),
+          ~edges: orig_edges ++ copy_edges(~red: #false))
+  def f_forked:
+    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true),
+          ~edges: orig_edges ++ copy_edges(~red: #false))
+  def f_equivalent:
+    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
+                    ++ equivalent_over,
+          ~edges: orig_edges ++ copy_edges(~red: #false))
+  // the two arrows reading one memory turn red as the bubble that names it comes
+  def f_nonlinear:
+    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
+                    ++ equivalent_over ++ nonlinear_over,
+          ~edges: orig_edges ++ copy_edges(~red: #true))
+  def f_challenge:
+    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
+                    ++ equivalent_over ++ nonlinear_over ++ challenge_over,
+          ~edges: orig_edges ++ copy_edges(~red: #true))
+  fun press(a :: Frame, b :: Frame) :: pc.Pict:
+    magic_press(with_states, a, b, ~wire: ref_wire, ~edge_band: band_wires)
+
+  // Then everything the slide put up over the program is taken back the way it
+  // came: one layer holding all of it in the order it arrived, unwritten in one
+  // press -- so the last thing said goes first and the first bubble last -- and
+  // the arrows retract from their heads as they came. The layer is built by hand
+  // rather than read off a frame, since a press fades what goes and does not
+  // unwrite it, and since the order things were said in is not the order a frame's
+  // map holds them.
+  fun arrows_layer(ends :~ Map, edges :~ List) :: pc.Pict:
+    def ghosts:
+      for values(q :~ pc.Pict = blank_slide) (key in ends.keys()):
+        def [p, x, y, _] = ends[key] :~ List
+        put(q, as_pict(p).ghost(), x, y)
+    def at = for values(m :~ Map = {}) (key in ends.keys()): m ++ { key: (ends[key] :~ List)[0] }
+    fun upto(n :: Real) :: pc.Pict:
+      parameterize { current_draw: n }:
+        ref_wire(ghosts, edges, at)
+    def whole = upto(1.0)
+    arriving(whole, Arrival(fun (n):
+                              cond
+                              | n >= 1.0: whole
+                              | n <= 0.0: whole.ghost()
+                              | ~else: upto(n),
+                            0.6, ~kind: #'stroke))
+  fun layer_of(over :~ Map, key) :: pc.Pict: (over[key] :~ List)[0]
+  // The rewritten copy as one box, its second write's ω set into the line, so that
+  // its lines pop out whole. The pieces the frames key are not used here: the
+  // timing they carry is for the press that brought them in, and a writer that
+  // played it again on its own clock had the return's ω2 gone at the first instant.
+  def copy_layer:
+    put(blank_slide,
+        code_pict(copy_parts, ~states: #true, ~holes: [[1, #'state_in, rewritten[1]]]),
+        code_x, code_y + copy_dy)
+  def copy_ends:
+    for values(m :~ Map = {}) (key in copy_picts(~forked: #true).keys()):
+      keep_when key is_a List && ((key :~ List)[0] == #'c_from || (key :~ List)[0] == #'c_read)
+      m ++ { key: copy_picts(~forked: #true)[key] }
+  def aside_layer:
+    pc.overlay(~horiz: #'left, ~vert: #'top,
+               explain_states, omega_bubble, arrows_layer(orig_ends, orig_edges),
+               layer_of(linear_over, #'linear), copy_layer,
+               arrows_layer(copy_ends, copy_edges(~red: #true)),
+               layer_of(equivalent_over, #'equivalent), layer_of(nonlinear_over, #'nonlinear),
+               layer_of(challenge_over, #'challenge))
+  def aside_w = writer(aside_layer)
+  def clearing:
+    pc.animate(~extent: math.max(1.2, unwrite_pace * extent_for(aside_w.total)),
+               ~bend: fun (x): x,
+               fun (t): put(with_states, aside_w.frame(1.0 - t), 0.0, 0.0))
+
+  // the page with its title; the code writes itself; a bubble explains a line; the
+  // states move in under it; a second bubble names one; the arrows say who reads
+  // which and a bubble says that is linear; a copy of the program comes up; it is
+  // rewritten, its arrows swinging; a bubble says it is the same program, a red one
+  // says how it differs as the two arrows reading one memory turn red, and another
+  // red one says the e-graph cannot help but hold it; and everything over the
+  // program is unwritten, leaving the program alone under its title
   { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
-                      pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain))
+                      pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain_plain))
                         .refocus(plain),
-                      pc.overlay(~horiz: #'left, ~vert: #'top, explained, write(dataflow))
-                        .refocus(explained),
-                      moving),
-    #'title: title, #'bubble: name_state, #'code: code_states, #'parts: parts }
+                      moving,
+                      press(f_states, f_omega),
+                      press(f_omega, f_chain),
+                      press(f_chain, f_linear),
+                      press(f_linear, f_copy),
+                      press(f_copy, f_forked),
+                      press(f_forked, f_equivalent),
+                      press(f_equivalent, f_nonlinear),
+                      press(f_nonlinear, f_challenge),
+                      clearing),
+    #'title: title, #'code: code_states, #'parts: parts }
 
 // -------------------------------------------------------------------------------------
 // slide_egraph: the chain of `update`s going into the e-graph, one per press, the
@@ -206,7 +461,7 @@ fun egraph_frames(parts :~ Map) :: List:
   // The first write stores a value that the second one throws away. That is worth
   // saying as soon as the graph is up and before any rule is stated, because it is
   // the reason there is a rule at all -- so the part that builds the graph ends on
-  // it, in place of the bubble naming the walk. It points at the write in the graph
+  // it, beside the bubble naming the walk. It points at the write in the graph
   // and at the line of the program it came from -- at the end of that line, as the
   // other bubbles about a line do, so the spike comes in from the right rather than
   // across the line below -- and stands between the two.
@@ -237,8 +492,16 @@ fun egraph_frames(parts :~ Map) :: List:
                   ~edges: chain_edges(k + 1))]),
    Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ statewalk_over,
          ~edges: chain_edges(3)),
-   Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ redundant_over,
+   Frame(~picts: chain_node_picts(chain_spots_upto(3), []) ++ statewalk_over ++ redundant_over,
          ~edges: chain_edges(3))]
+
+// The two bubbles the graph part ends on, for the part after it to keep up: they
+// stay through the rule and go when extraction is asked for.
+fun egraph_bubbles(parts :~ Map) :: Map:
+  def frames :~ List = egraph_frames(parts)
+  def last :: Frame = frames.last
+  for values(m :~ Map = {}) (key in [#'statewalk, #'redundant]):
+    m ++ { key: last.picts[key] }
 
 // -------------------------------------------------------------------------------------
 // slide_rue: a rule over `update`, and the rule applied.
@@ -272,10 +535,6 @@ fun rue_frames(parts :~ Map) :: List:
       keep_when (chain_pos :~ Map).has_key(role) && chain_matched.contains(role)
       role
   // a chip per one of those, and none for the rest
-  def chips_here:
-    chain_rule_chips(parts, ~value: #true, ~only: reused)
-  def chips_lit:
-    chain_rule_chips(parts, ~value: #true, ~lit: #true, ~only: reused)
   def chips_below:
     chain_rule_chips(parts, ~value: #true, ~lit: #true,
                      ~from: #'conclusion, ~only: reused)
@@ -289,17 +548,15 @@ fun rue_frames(parts :~ Map) :: List:
   def program = chain_node_picts(chain_spots_upto(3), [])
   def lit = chain_node_picts(chain_spots_upto(3), [], ~gold: reused)
   def with_rule = chain_node_picts(chain_spots, [])
-  // The copies ride along, invisible against the rule's own text, until the movement
-  // that is theirs; the rule is stated with all of them already made.
+  // The matching itself is not shown: the talk does not turn on how a rule finds its
+  // match, so the rule is stated and then, in one press, the line it concludes is
+  // written with its variables gold and pointing at the nodes they stand for.
   [// the graph the program builds
    Frame(~picts: program, ~edges: chain_edges(3)),
    // the rule, said beside the two lines of the program it is about
-   Frame(~picts: program ++ rule_here ++ chips_here, ~edges: chain_edges(3)),
-   // its variables light up and point at the nodes they matched
-   Frame(~picts: lit ++ rule_here ++ chips_lit,
-         ~edges: chain_edges(3) ++ chain_match_edges(chips_lit, ~only: pointed)),
-   // and the pointers slide down to the line it concludes, taking the place of the
-   // variables written there: the same bindings, now saying what the rule adds
+   Frame(~picts: program ++ rule_here, ~edges: chain_edges(3)),
+   // the line it concludes, its variables gold and pointing at what they matched:
+   // the bindings, saying what the rule adds
    Frame(~picts: lit ++ rule_here ++ chips_below ++ conclusion ++ equalities,
          ~edges: chain_edges(3) ++ chain_match_edges(chips_below, ~only: pointed)),
    // the words of that line become the nodes they name, standing where the words
@@ -494,19 +751,15 @@ fun slide_update_story():
   def parts :~ Map = opening[#'parts]
   def code_states :: pc.Pict = opening[#'code]
   def title_update :: pc.Pict = opening[#'title]
-  def bubble :: pc.Pict = opening[#'bubble]
   def title_graph = title_text("The Effectful E-Graph")
 
   // The join from the opening to the graph: the page and the code stay, and the
-  // opening's last bubble goes with its title while the next title comes. It ends
-  // on exactly the page the graph presses stand on.
+  // title goes while the next comes -- the opening has already taken everything
+  // else back. It ends on exactly the page the graph presses stand on.
   def bare = put(page_canvas(), code_states, code_x, code_y)
   def old_w = writer(title_update)
   def new_w = writer(title_graph)
-  def bubble_w = writer(bubble)
-  // the bubble and the old title go at the pace the bubble's words ask for, and
-  // the new title comes at its own
-  def out_t = unwrite_pace * extent_for(bubble_w.total)
+  def out_t = unwrite_pace * extent_for(old_w.total)
   def in_t = extent_for(new_w.total)
   def join_extent = math.max(0.8, out_t + in_t)
   def split = out_t / join_extent
@@ -516,8 +769,7 @@ fun slide_update_story():
                  def going = clamp01(1.0 - t / split)
                  def coming = clamp01((t - split) / (1.0 - split))
                  def q1 = put(bare, old_w.frame(going), title_x, title_y)
-                 def q2 = put(q1, new_w.frame(coming), title_x, title_y)
-                 put(q2, bubble_w.frame(going), 0.0, 0.0))
+                 put(q1, new_w.frame(coming), title_x, title_y))
 
   // The graph presses, on a page with no title: the title is a key in every frame,
   // the one pict throughout, so no press has anything to do to it.
@@ -530,10 +782,13 @@ fun slide_update_story():
   // Each later part opens on the picture the part before ends with, which as its own
   // slide was where it took over: the rule's on the graph, the fork's on the graph
   // with the rule and its classes. In one story those frames are the ones before
-  // them, or all but -- the rule's part would spend a press taking the "redundant
-  // update" bubble away before the rule came -- so each part's opening frame is left
-  // out, and the bubble goes on the press that brings the rule.
-  def ru = entitled(rue_frames(parts).rest, title_graph)
+  // them, so each part's opening frame is left out. The two bubbles the graph part
+  // ends on stay up through the rule's part, and go on the press that asks for the
+  // extraction: nothing is taken down until what it says has been used.
+  def kept = egraph_bubbles(parts)
+  def ru:
+    for List (f :: Frame in entitled(rue_frames(parts).rest, title_graph)):
+      Frame(~picts: f.picts ++ kept, ~edges: f.edges)
   def fk = entitled(fork_frames(parts).rest, title_graph)
   def frames = eg ++ ru ++ fk
   // The first walk down the graph steps a row a press, but its first four rows are

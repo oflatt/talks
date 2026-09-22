@@ -28,6 +28,7 @@ import:
 export:
   Arrival
   arriving
+  pop_frame
   arrival_of
   already
   remains

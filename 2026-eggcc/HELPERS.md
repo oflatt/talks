@@ -60,6 +60,12 @@ fun slide_thing():
   the same transform (`slide_40`'s way into the e-graph in `workflow.rhm`). Keep the
   frame's box the slide's -- `put(...).refocus(page)` after each placement, `.clip()`
   at the end -- since a thing placed part way off the slide grows the box.
+- A hand-rolled press can play magic presses inside it: `magic_press(...)` is a
+  one-epoch pict, so `press.snapshot(0, u)` is its picture at `u`, and a run of them
+  sampled in turn comes on in the order you chose rather than the order a frame's map
+  holds its keys (the three steps landing at the end of `slide_40`'s zoom). Two slides
+  that must draw one picture the same -- so the show cuts between them -- share it
+  from a module of its own (`steps.rhm`).
 
 ## 3. How things arrive
 
@@ -139,7 +145,11 @@ magic_slide(page, [Frame(), frame_1, frame_2, ...], ~wire: my_wire, ~edge_band: 
   the specs it is for -- `chain_wire(layer, at, [[from, to]], ~color, ~line_width)`
   is the usual body. Shared edges are solid; an edge only one frame has draws
   itself (new) or fades (gone); `[#'morph, gone, new, t]` is a pointer becoming an
-  edge (`~pairs`). `~under_wire`/`~under_band` is a second edge layer under the
+  edge, or one edge changing: a gone and a new spec of the same kind between the
+  same two keys with a *number* after them (`[#'op_shift, from, to, 0.0]` becoming
+  `[..., -24.0]`) are handed to the wire as one morph, so an arrow that steps aside
+  slides rather than redraws. A spec with a colour after the keys is not paired.
+  `~under_wire`/`~under_band` is a second edge layer under the
   picture; `~stage: fun (blank, a, b, t)` a layer that changes shape as the press runs.
 - `chain_press(page, a, b)` is one press on its own, for a slide that opens some
   other way and carries on with frames; splice presses with `pc.switch(..., ~join: #'splice)`.

@@ -15,6 +15,7 @@ import:
 
 export:
   slide_dp
+  dp_title
 
 // The two branches out of the argument state, as colours. Two hues and not two
 // strengths of one: they are two different walks, not more and less of the same
@@ -40,10 +41,11 @@ def walk_seed_line = "6E6E82"
 // them puts within reach. Most classes have one answer. The class where the two
 // writes meet has two, and the two are not the same, which is why the table cannot
 // keep just one of them -- and that is the whole slide.
+// the title, named once: the divider before this slide writes it as its outline
+// goes up, and reads it from here
+def dp_title = "The Statewalk DP Algorithm"
 fun slide_dp():
-  def canvas = titled("The Statewalk DP Algorithm", ~tag: "Statewalk DP title",
-                      ~nudge: [0.0, 0.0])
-  def parts = code_parts()
+  def canvas = titled(dp_title, ~tag: "Statewalk DP title", ~nudge: [0.0, 0.0])
   def rows :~ List = chain_statewalks()
 
   // ------------------------------------------------------------ where the graph goes
@@ -276,33 +278,34 @@ fun slide_dp():
           ~width: slide_width, ~height: slide_height)
 
   // ------------------------------------------------------------------- the words
-  // What the slide's pictures are of, said before the first is shown: in the margin
-  // left of the graph, where the code box was, and up for the whole of the stepping.
-  def definition:
-    def words:
-      // Short lines rather than small ones: the margin is 500 wide.
-      prose_stack([[["extractable set", #'bold_italic], [":", #'plain]],
-                   [["e-classes we can", #'plain]],
-                   [["extract using a", #'plain]],
-                   [["particular ", #'plain], ["state walk", #'bold]]])
-    { #'define: [make_bubble(~color: talk_blue, ~padding: 24.0, words),
-                 100.0, 300.0, band_callout] }
-
-  // What the whole slide is an instance of, said once the first example is up --
-  // late enough that "extend" and "extractable set" both mean something, early enough
-  // to be what the stepping is read against -- and up for the rest of the stepping.
-  // Right of the graph, which is the empty side once the definition has the left.
+  // What the whole slide is an instance of, said first: in the margin left of the
+  // graph, where the code box was, and up for the whole of the stepping, which is
+  // read against it.
+  def idea_at = [100.0, 300.0]
   def key_idea:
     def words:
+      // Short lines rather than small ones: the margin is 500 wide.
       prose_stack([[["Key idea:", #'bold]],
-                   [["extend the", #'plain]],
-                   [["statewalk,", #'plain]],
-                   [["keep one per", #'plain]],
-                   [["extractable set", #'bold]]])
+                   [["keep ", #'plain], ["multiple", #'bold]],
+                   [["statewalks", #'plain]],
+                   [["per e-class", #'plain]]])
     // the face over the words, not beside them: the margin is taller than it is wide
     def content: robot_says(#'idea, words, ~sep: 12.0, ~above: #true, ~scale: 0.85)
     { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
-               1440.0, 380.0, band_callout] }
+               idea_at[0], idea_at[1], band_callout] }
+  // And the refinement of the key idea, said once the class that holds two walks is
+  // up and before their sets are shown: not every walk that reaches a class is worth
+  // keeping, only one per set. Right of the graph, level with the key idea, and up
+  // for the rest of the slide like it.
+  def distinct:
+    def words:
+      prose_stack([[["keep statewalks", #'plain]],
+                   [["with ", #'plain], ["distinct", #'bold]],
+                   [["extractable sets", #'plain]]])
+    { #'distinct: [make_bubble(~color: talk_green, ~padding: 24.0, words),
+                   1440.0, 300.0, band_callout] }
+  // the two of them, for every frame after both are up
+  def said = key_idea ++ distinct
 
   // The last word. The algorithm's cost is in the statewalk width `k` (paper,
   // Section 6): how many walks a class ends up holding, which on this graph is two,
@@ -363,22 +366,24 @@ fun slide_dp():
       for values(acc :~ List = acc) (row :~ List in rows_along((order :~ List)[i] :~ List)):
         if acc.contains(row) | acc | acc ++ [row]
 
+  // `~walks` are the rows whose walks are drawn along the graph's edges, and `~sets`
+  // the rows whose extractable sets are drawn, in that order -- listed later is drawn
+  // later. The stepping shows walks and the classes they fill; the sets come only
+  // once there are two walks in one class to compare.
   fun beat(shown :~ List,
-           ~walk: walk = #false, ~over: over = #false,
-           ~point: point = #false, ~define: define :: Boolean = #false,
-           ~idea: idea :: Boolean = #false) :: Frame:
+           ~walks: walks :~ List = [], ~sets: sets :~ List = [],
+           ~point: point = #false,
+           ~idea: idea :: Boolean = #false, ~distinct: told :: Boolean = #false) :: Frame:
     Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away)
                     ++ (if point == #false | {} | pointer_at(point))
-                    ++ (if define | definition | {})
-                    ++ (if idea | key_idea | {}),
+                    ++ (if idea | key_idea | {})
+                    ++ (if told | distinct | {}),
           ~edges: chain_edges(4)
-                    ++ (if walk == #false | [] | walk_edges(walk :~ List))
-                    ++ (if walk == #false | [] | blob_marks(walk :~ List))
-                    ++ (if over == #false | [] | blob_marks(over :~ List)))
-  fun step(i :: Int, ~define: define :: Boolean = #true,
-           ~idea: idea :: Boolean = #true) :: Frame:
+                    ++ List.append(& for List (row :~ List in walks): walk_edges(row))
+                    ++ List.append(& for List (row :~ List in sets): blob_marks(row)))
+  fun step(i :: Int) :: Frame:
     def walk :~ List = (order :~ List)[i]
-    beat(stored(i + 1), ~walk: row_for(walk), ~define: define, ~idea: idea,
+    beat(stored(i + 1), ~walks: [row_for(walk)], ~idea: #true,
          ~point: walk[walk.length() - 1])
 
   def w_root_a = [#'s0, #'us, #'s3, #'ret]
@@ -409,57 +414,75 @@ fun slide_dp():
       [e[0], e[1], taken[c]]
   def answer = chain_dp_term(r_best)
 
+  // The last word of all: the kind of answer this is. A hard problem with a
+  // parameter that stays small in practice is what a parameterized algorithm is for,
+  // and this one is one. Right of the graph, under the bubble about distinct sets.
+  def parameterized:
+    def words:
+      prose_stack([[["parameterized", #'bold_italic]],
+                   [["algorithms", #'bold_italic]],
+                   [["provide practical", #'plain]],
+                   [["solutions to", #'plain]],
+                   [["NP-hard problems", #'plain]]])
+    { #'wand: [make_bubble(~color: talk_green, ~padding: 24.0,
+                           pc.stack(~sep: 12.0, ~horiz: #'center, wand(~size: 110.0), words)),
+               1440.0, 560.0, band_callout] }
+
   chain_slide(
     as_pict(canvas),
-    [// where the last slide left it: the program, the rule, and the graph
-     Frame(~picts: picts_at(chain_spots, {}, ~scale: 1.0) ++ regions_at(chain_spots)
-                     ++ { #'code: [code_pict(parts, ~states: #true),
-                                   code_x, code_y, band_below] }
-                     ++ chain_rule_over(parts, ~value: #true),
-           ~edges: chain_edges(4)),
-     // and then the graph has the slide to itself
+    [// the title the divider wrote, and nothing else yet: the show cuts to it
+     Frame(),
+     // the example's graph, written out in the middle of the slide with nothing
+     // else on it: the program and the rule that made it were the section before
      Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
-     // the words first: what an extractable set is
-     beat([], ~define: #true),
-     // and the first one: the write the rule added, as a walk of one step out of
-     // the argument state, and the classes it puts within reach. Not the walk that
-     // is the argument state alone -- a set reached by a leaf is a puzzle before
-     // it is an example -- though that row is in the table all the same.
-     step(1, ~idea: #false),
-     // and then what the rest of the slide is an instance of, now that there is
-     // an instance to read it against
-     step(1),
-     // the state that write leaves
-     step(2),
-     // then the program's own first write, the state it leaves, its second write --
-     // which is the one that puts `v2` within reach, since only a walk that performs
-     // it can have the value it returns -- and the state that leaves
-     step(3), step(4), step(5), step(6),
-     // That last state is a class the table already had a walk for. The set it
-     // reaches is drawn over the set that walk reaches: the same, but for the one
-     // lobe, so the two are not interchangeable and both are kept.
+     // the idea first, to read the stepping against
+     beat([], ~idea: #true),
+     // then the walks, one press per term the table grows by, each filling the
+     // class it reaches in its colour: the write the rule added and the state it
+     // leaves -- not the walk that is the argument state alone, a puzzle before it
+     // is an example, though that row is in the table all the same -- then the
+     // program's own first write, the state it leaves, its second write and the
+     // state that leaves
+     step(1), step(2), step(3), step(4), step(5), step(6),
+     // That last state is a class the table already had a walk for, and the class is
+     // now filled in both colours. The refinement of the idea, then; then the first
+     // walk to reach that class again, with the set it reaches; then the set the
+     // second reaches, drawn over it: the same, but for the one lobe, so the two are
+     // not interchangeable and both are kept.
      beat(stored((order :~ List).length()),
-          ~walk: row_for((order :~ List)[6] :~ List),
-          ~over: row_for((order :~ List)[2] :~ List),
-          ~point: #'s2, ~idea: #true, ~define: #true),
+          ~walks: [row_for((order :~ List)[6] :~ List)],
+          ~point: #'s2, ~idea: #true, ~distinct: #true),
+     beat(stored((order :~ List).length()),
+          ~walks: [row_for((order :~ List)[6] :~ List), row_for((order :~ List)[2] :~ List)],
+          ~sets: [row_for((order :~ List)[2] :~ List)],
+          ~point: #'s3, ~idea: #true, ~distinct: #true),
+     beat(stored((order :~ List).length()),
+          ~walks: [row_for((order :~ List)[6] :~ List), row_for((order :~ List)[2] :~ List)],
+          ~sets: [row_for((order :~ List)[6] :~ List), row_for((order :~ List)[2] :~ List)],
+          ~point: #'s2, ~idea: #true, ~distinct: #true),
      // The root is reached both ways too, for the same reason, so there are two
-     // answers to choose between.
-     beat(all_stored, ~point: #'ret),
+     // answers to choose between. The two bubbles stay up from here to the end.
+     beat(all_stored, ~point: #'ret, ~idea: #true, ~distinct: #true),
      // The cheaper of them, and the term it stands for. The value the `return` takes
      // is the one this walk's write returned -- on this walk there is no other.
      Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away)
-                     ++ green_at(away, answer),
+                     ++ green_at(away, answer) ++ said,
            ~edges: chain_edges(4) ++ walk_edges(r_best)),
      // and then just that term, laid out as the tree it is
-     Frame(~picts: green_at(term_spots, answer), ~edges: term_edges(answer)),
+     Frame(~picts: green_at(term_spots, answer) ++ said, ~edges: term_edges(answer)),
      // and back to the graph as the table left it, every class filled by the walks
      // that reach it: the term's nodes go back to their places and take their
      // colours, and the rest writes in around them
-     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away),
+     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said,
            ~edges: chain_edges(4)),
      // and what finding the term cost, which is the section's whole claim, said of
      // the class that holds two walks -- the one place on this graph the width is
      // more than one
-     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ in_practice,
+     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
+                     ++ in_practice,
+           ~edges: chain_edges(4)),
+     // and what kind of answer that makes this
+     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
+                     ++ in_practice ++ parameterized,
            ~edges: chain_edges(4))],
     ~stage: blob_stage, ~stage_band: band_below)

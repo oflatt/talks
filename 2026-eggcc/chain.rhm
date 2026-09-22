@@ -380,10 +380,12 @@ def chain_bubbles:
     #'fork: [1480.0, 600.0],          // "two copies of memory!", under the write it blames
     // "Redundant update", between the code and the graph: it points both at the
     // write it names and at the line of the program that write came from, so it
-    // stands in the gap between the two, under the graph's top row and clear of
-    // the edges that come down from it. The face goes over the words rather than
-    // beside them, since the gap is taller than it is wide.
-    #'redundant: [920.0, 410.0] }
+    // stands in the gap between the two -- high in it, level with the graph's top
+    // rows, since it stays up while the rule fires and the rule's pointers run up
+    // through the lower part of the gap to the nodes they matched. The face goes
+    // over the words rather than beside them, since the gap is taller than it is
+    // wide.
+    #'redundant: [870.0, 235.0] }
 
 fun chain_y(row :: Int) :: Real: (chain_rows :~ List)[row]
 def chain_layers = (chain_rows :~ List).length()
@@ -507,9 +509,12 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     | e[0] == #'blink: q
     | e[0] == #'bhue: q
     | e[0] == #'m: q
-    // a statewalk being laid down, in the colour of the branch it took
+    // a statewalk being laid down, in the colour of the branch it took: the state
+    // edges it runs along, drawn again in that colour and just wide enough to cover
+    // them, so the walk reads as those edges coloured in and not as a second thing
+    // laid over them
     | e[0] == #'walk:
-        chain_wire(q, at, [[e[1], e[2]]], ~line_width: 11, ~color: hex_color(e[3]))
+        chain_wire(q, at, [[e[1], e[2]]], ~line_width: 7, ~color: hex_color(e[3]))
     // a rule's pointer at the node it matched, becoming the edge of the node the
     // rule added: `e[1]` is the pointer spec, `e[2]` the edge it becomes, `e[3]`
     // how far along the press is
