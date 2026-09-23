@@ -150,10 +150,20 @@ fun bubble_shell(w :: Real, h :: Real, r :: Real, line_color :: draw.Color,
 // one into the other: the old words unwrite, the shell eases to the new size, and
 // the new words write. `magic_between` asks for this when a key is drawn as one
 // bubble in one frame and another in the next.
+// `content` is what the bubble says, as laid out, before whatever wraps it to say
+// how it arrives: a rewording compares its words and writes them -- the old words
+// unwritten, the new written -- whatever way the bubble's own words came on.
 class Reword(kind, color :: draw.Color,
              shell_at :: Function.of_arity(2),
              content :: Pict, width :: Real, height :: Real,
              place :: Function.of_arity(3))
+
+// How the words in a bubble arrive. The shell is always written -- traced and
+// filled -- and by default the words then pop in, which is quicker than writing a
+// sentence out and is what a callout's words want; `~text: #'write` writes them
+// instead. A content that already plays something of its own is left to it.
+fun bubble_text(content :: Pict, text) :: Pict:
+  if text == #'pop && !moving(content) | popped(content) | content
 
 fun reworded(p :: Pict, r :: Reword) :: Pict:
   p.set_metadata(p.metadata() ++ { #'reword: r })
@@ -221,9 +231,11 @@ fun make_bubble(~width: width :: maybe(Real) = #false,
                 ~height: height :: maybe(Real) = #false,
                 ~padding: padding :: Real = 30,
                 ~color: color :: draw.Color || String = talk_blue,
+                ~text: text = #'pop,
                 child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
-  def content = gap_stack(child, ...)
+  def said = gap_stack(child, ...)
+  def content = bubble_text(said, text)
   def (w, h) = shape_size(settled(content), width, height, padding)
   fun shell_at(w :: Real, h :: Real) :: Pict:
     def (shell, _, _) = bubble_shell(w, h, absolute_radius(corner_radius, w, h), line_color)
@@ -236,7 +248,7 @@ fun make_bubble(~width: width :: maybe(Real) = #false,
   fun over(c :: Pict) :: Pict:
     overlay(shell, c).refocus(shell)
   def whole = reworded(over(content),
-                       Reword(#'bubble, line_color, shell_at, content, w, h, place))
+                       Reword(#'bubble, line_color, shell_at, said, w, h, place))
   if moving(content)
   | // the shell writes itself around the room the content will take, and then the
     // content plays; `~join: #'splice` makes those one press
@@ -275,9 +287,11 @@ fun make_arrow(~width: width :: maybe(Real) = #false,
                ~color: color :: draw.Color || String = talk_blue,
                ~head: head :: Real = 0.34,
                ~shaft: shaft :: Real = 0.62,
+               ~text: text = #'pop,
                child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
-  def content = gap_stack(child, ...)
+  def said = gap_stack(child, ...)
+  def content = bubble_text(said, text)
   // wide enough that the label fits the part of the shape it is centred in, with
   // `padding` either side of it -- see `place` below for which part that is
   def w = width || ((content.width + 2 * padding) / (1 - head * shaft))
@@ -306,7 +320,7 @@ fun make_arrow(~width: width :: maybe(Real) = #false,
   def [dx, dy] = place(w, h, content)
   reworded(overlay(~horiz: #'left, ~vert: #'top, ~dx: dx, ~dy: dy, shell, content)
              .refocus(shell),
-           Reword(#'arrow, line_color, shell_at, content, w, h, place))
+           Reword(#'arrow, line_color, shell_at, said, w, h, place))
 
 // A cog, for the step of a picture that is a machine rather than a thing: teeth
 // round a pale body, in the same colours as the bubbles. Two shapes, so that the
@@ -356,9 +370,10 @@ fun callout(~on: on :: Pict,
             ~padding: padding :: Real = 14,
             ~reach: reach :: Real = 30,
             ~corner_radius: cr :: Real = corner_radius,
+            ~text: text = #'pop,
             child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
-  def content = gap_stack(child, ...)
+  def content = bubble_text(gap_stack(child, ...), text)
   def (tx, ty) = at.in(on)
   def w = content.width + 2 * padding
   def h = content.height + 2 * padding
@@ -410,9 +425,10 @@ fun multi_callout(~on: on :: Pict,
                   ~padding: padding :: Real = 14,
                   ~base: half_base :: Real = 15,
                   ~corner_radius: cr :: Real = corner_radius,
+                  ~text: text = #'pop,
                   child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
-  def content = stack.left(~sep: 6, child, ...)
+  def content = bubble_text(stack.left(~sep: 6, child, ...), text)
   // The radius comes from the body the content asks for, not the larger body the
   // spikes may force: a negative `~corner_radius` is a fraction of the smaller side,
   // so measuring it against the grown size would round the corners off in proportion
@@ -583,6 +599,37 @@ fun border_scale(dx :: Real, dy :: Real, w :: Real, h :: Real,
       def disc = dc * dc - dd * (cx * cx + cy * cy - r * r)
       if disc <= 0.0 | t_box | (dc + math.sqrt(disc)) / dd
 
+// Where a ray from the point (px, py) inside a `w` by `h` box, centred on the
+// origin, in direction (dx, dy), leaves the box, as a multiple of (dx, dy). The same
+// as `border_scale` but from a point off the centre: a line slid sideways from the
+// line of centres leaves the box somewhere else, and on a rounded corner somewhere
+// nearer the middle, and an end put where the centre line left it and slid across
+// hangs off the corner.
+fun border_exit(px :: Real, py :: Real, dx :: Real, dy :: Real, w :: Real, h :: Real,
+                ~corner: corner :: Real = 0.0) :: Real:
+  def far = 1.0e9
+  fun toward(p :: Real, d :: Real, half :: Real) :: Real:
+    cond
+    | d > 1.0e-9: (half - p) / d
+    | d < -1.0e-9: (-half - p) / d
+    | ~else: far
+  def t_box = math.min(toward(px, dx, w / 2), toward(py, dy, h / 2))
+  def r = corner * math.min(w, h)
+  def x1 = px + dx * t_box
+  def y1 = py + dy * t_box
+  cond
+  | r <= 0.0 || math.abs(x1) < w / 2 - r || math.abs(y1) < h / 2 - r: t_box
+  | ~else:
+      def cx = (if x1 < 0 | -1.0 | 1.0) * (w / 2 - r)
+      def cy = (if y1 < 0 | -1.0 | 1.0) * (h / 2 - r)
+      def ex = px - cx
+      def ey = py - cy
+      def a = dx * dx + dy * dy
+      def b = 2.0 * (ex * dx + ey * dy)
+      def c = ex * ex + ey * ey - r * r
+      def disc = b * b - 4.0 * a * c
+      if disc <= 0.0 | t_box | (0.0 - b + math.sqrt(disc)) / (2.0 * a)
+
 // A colour part way from one to another.
 fun lerp_color(a :: draw.Color, b :: draw.Color, t :: Real) :: draw.Color:
   fun ch(x :: Real, y :: Real) :: Int:
@@ -605,10 +652,11 @@ fun arrow_ends(on :: Pict, from :: Pict, to :: Pict,
   def dist = math.max(1.0e-9, math.sqrt(dx * dx + dy * dy))
   def ux = dx / dist
   def uy = dy / dist
-  def tf = border_scale(dx, dy, from.width, from.height, ~corner: corner_of(from))
-  def tt = border_scale(dx, dy, to.width, to.height, ~corner: corner_of(to))
   def px = -uy * shift
   def py = ux * shift
+  // where the (slid) line leaves each box, measured along (dx, dy)
+  def tf = border_exit(px, py, dx, dy, from.width, from.height, ~corner: corner_of(from))
+  def tt = border_exit(px, py, 0.0 - dx, 0.0 - dy, to.width, to.height, ~corner: corner_of(to))
   def (sx, sy):
     if from_at
     | (from_at :~ Find).in(on)
@@ -640,6 +688,10 @@ fun arrow(~on: on :: Pict,
           // *and* an e-class saying they are the same value -- and without this the
           // second lies exactly on top of the first.
           ~shift: shift :: Real = 0,
+          // bow the line: the angle, in radians, its two ends leave and arrive at
+          // off the straight line between them, the same way at both ends, so that
+          // two edges between one pair of nodes can be told apart as two arcs
+          ~bend: bend :: Real = 0,
           ~from_at: from_at :: maybe(Find) = #false,
           ~to_at: to_at :: maybe(Find) = #false,
           ~label: label :: maybe(Pict) = #false,
@@ -655,6 +707,13 @@ fun arrow(~on: on :: Pict,
   def dist = math.sqrt(dx * dx + dy * dy)
   cond
   | dist < 1.0e-9: on   // one on top of the other: nothing to draw
+  | bend != 0:
+      def [sx, sy, ex, ey] = arrow_ends(on, from, to, ~gap: gap, ~shift: shift,
+                                        ~from_at: from_at, ~to_at: to_at)
+      overlay(~horiz: #'left, ~vert: #'top, on,
+              bowed_arrow(on.width, on.height, sx, sy, ex, ey, bend,
+                          ~color: as_color(color), ~line_width: lw,
+                          ~head: head_for(lw, arrow_size, dist), ~drawn: smooth(current_draw())))
   | ~else:
       def [sx, sy, ex, ey] = arrow_ends(on, from, to, ~gap: gap, ~shift: shift,
                                         ~from_at: from_at, ~to_at: to_at)
@@ -675,6 +734,64 @@ fun arrow(~on: on :: Pict,
               ~label_dx: label_dx,
               ~label_dy: label_dy,
               ~order: order)
+
+// A bowed arrow from (sx, sy) to (ex, ey) on a layer `w` by `h`: a cubic whose ends
+// leave and arrive `bend` off the chord, drawn `drawn` of the way along with the
+// head riding its nib, the way the straight one draws. Solid only.
+fun bowed_arrow(w :: Real, h :: Real, sx :: Real, sy :: Real, ex :: Real, ey :: Real,
+                bend :: Real, ~color: color :: draw.Color, ~line_width: lw :: Real,
+                ~head: head :: Real, ~drawn: drawn :: Real) :: Pict:
+  def cdx = ex - sx
+  def cdy = ey - sy
+  def chord = math.max(1.0e-9, math.sqrt(cdx * cdx + cdy * cdy))
+  def theta = math.atan(cdy, cdx)
+  def pull = 0.36 * chord
+  def p0 = [sx, sy]
+  def p1 = [sx + pull * math.cos(theta + bend), sy + pull * math.sin(theta + bend)]
+  def p2 = [ex - pull * math.cos(theta - bend), ey - pull * math.sin(theta - bend)]
+  def p3 = [ex, ey]
+  fun mix(a :~ List, b :~ List, t :: Real) :: List:
+    [lerp(a[0], b[0], t), lerp(a[1], b[1], t)]
+  // the curve up to `u`, by de Casteljau: its own four control points
+  def u = clamp01(drawn)
+  def q01 = mix(p0, p1, u)
+  def q12 = mix(p1, p2, u)
+  def q23 = mix(p2, p3, u)
+  def q012 = mix(q01, q12, u)
+  def q123 = mix(q12, q23, u)
+  def tip = mix(q012, q123, u)
+  // the tangent at the nib, for the head
+  def tan_x = (tip[0] :~ Real) - (q012[0] :~ Real)
+  def tan_y = (tip[1] :~ Real) - (q012[1] :~ Real)
+  def tlen = math.max(1.0e-9, math.sqrt(tan_x * tan_x + tan_y * tan_y))
+  def hx = tan_x / tlen
+  def hy = tan_y / tlen
+  def hl = math.min(head, 0.45 * chord * u)
+  dc(fun (target :: draw.DC, ddx, ddy):
+       when u > 0.0
+       | target.save()
+         // the line stops where the head begins, so the head's point is the nib
+         def line = draw.Path()
+         line.move_to([ddx + sx, ddy + sy])
+         line.curve_to([ddx + (q01[0] :~ Real), ddy + (q01[1] :~ Real)],
+                       [ddx + (q012[0] :~ Real), ddy + (q012[1] :~ Real)],
+                       [ddx + (tip[0] :~ Real) - hx * hl * 0.6, ddy + (tip[1] :~ Real) - hy * hl * 0.6])
+         target.pen := draw.Pen(~color: color, ~width: lw, ~cap: #'butt, ~join: #'round)
+         target.brush := draw.Brush.none
+         target.path(line)
+         def head_path = draw.Path()
+         def bx = (tip[0] :~ Real) - hx * hl
+         def by = (tip[1] :~ Real) - hy * hl
+         def hw = 0.42 * hl
+         head_path.move_to([ddx + (tip[0] :~ Real), ddy + (tip[1] :~ Real)])
+         head_path.line_to([ddx + bx - hy * hw, ddy + by + hx * hw])
+         head_path.line_to([ddx + bx + hy * hw, ddy + by - hx * hw])
+         head_path.close()
+         target.pen := draw.Pen.none
+         target.brush := draw.Brush(~color: color)
+         target.path(head_path)
+         target.restore(),
+     ~width: w, ~height: h)
 
 // Several arrows in one style: `edges` is a list of `[from, to]` pairs.
 fun arrows(~on: on :: Pict, edges :: List.of(List), ~& kws) :: Pict:
@@ -770,8 +887,15 @@ def outline_row = 172.0          // one row of the list
 def outline_gap = 56.0           // disc to label
 def outline_text = 52.0          // label font size
 
+// The sections' colours, from the deck's own palette rather than a rainbow: the
+// blue its bubbles are drawn in for the motivation, the red its bad news comes in
+// for the hard problem, the teal of the statewalk the algorithm follows for the way
+// round it, and the group's purple for the compiler. A fifth section would start
+// the list over.
+def outline_palette:
+  [talk_blue, draw.Color(214, 48, 49), draw.Color(23, 120, 110), draw.Color(75, 46, 131)]
 fun hue_of(i :: Int, n :: Int) :: draw.Color:
-  hue_color(1.0 * i / math.max(1.0, 1.0 * (n - 1)) * 0.85)
+  outline_palette[i mod outline_palette.length()]
 
 // `hl` is how lit this one is, 0 to 1.
 fun outline_disc(i :: Int, n :: Int, hl :: Real) :: Pict:

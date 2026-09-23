@@ -161,9 +161,14 @@ fun slide_12():
   // the other; or in its row, off to the right -- the line runs from the one to
   // the other and the spread is across it, rather than pinned to sides chosen for
   // where the nodes end up.
-  fun blue_shifted(q, from, to, shift :: Real):
-    arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue, ~shift: shift)
-  def pair_offsets = [-18.0, 18.0]
+  fun blue_shifted(q, from, to, shift :: Real, ~bend: bend :: Real = 0.0):
+    arrow(~on: q, from, to, ~line_width: 4, ~gap: 4, ~color: keynote_blue, ~shift: shift,
+          ~bend: bend)
+  // The two lines of a pair leave and arrive a little apart and bow away from each
+  // other, so they read as two edges rather than one drawn twice: the offset says
+  // which is which at the ends, the bow in between.
+  def pair_offsets = [-9.0, 9.0]
+  def pair_bend = 0.28
   // how far the arrow from the sum to `a` stands aside once the class line runs
   // down their lane: 24 and not 40, since a node is 100 wide with its corners
   // rounded by 30, and an end further out lands where the box has no edge
@@ -190,7 +195,7 @@ fun slide_12():
       // of its own -- `[#'op_half, from, to, offset]` -- so that the pair exists
       // from the press that brings the node on. They run side by side, `offset`
       // either side of the line between the two middles.
-      | #'op_half: blue_shifted(q, from, to, e[3])
+      | #'op_half: blue_shifted(q, from, to, e[3], ~bend: (if e[3] > 0 | pair_bend | 0.0 - pair_bend))
       // `+_r` reads `a`, and once the third rule fires `a` is also in `+_r`'s class:
       // this operand arrow and the line that says those two are equal join the same
       // two boxes, one directly above the other, and would run down the same lane.

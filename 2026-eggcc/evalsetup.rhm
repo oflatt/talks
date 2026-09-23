@@ -320,9 +320,11 @@ fun slide_eval_setup():
     | #'tuple: tuple_node(w)
     | #'port: port_node(color)
     | ~else:
+        // the long names a size down: in the code's face a word of six letters
+        // is wider than the box a shorter one fits
         graph_node(~width: w, ~height: ev_h, ~adj: "33878",
                    ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
-                   ~fill: fill, ~label: node_label(text))
+                   ~fill: fill, ~label: node_label(text, ~size: (if text.length() > 5 | 30.0 | 40.0)))
   fun drawings(~fill: fill :: String) :: Map:
     for values(m :~ Map = {}) ([key, text, color, w, _, _, kind] in ev_nodes):
       m ++ { key: node(color, w, text, kind, ~fill: fill) }
@@ -382,9 +384,17 @@ fun slide_eval_setup():
   def opt:
     { [#'opt]: [opt_pict, 1560.0, 452.0],
       [#'opt_cap]: caption("optimized program", 1560.0) }
+  // the pickaxe, left of the root class -- the `print` -- which is what extraction
+  // takes its term out of
+  def pick_size = 72.0
+  def pick:
+    def [px, py, _, ph] = ev_at[[#'print]]
+    { [#'pick]: [as_pict(pickaxe(~size: pick_size)), px - pick_size - 16.0,
+                 py + ph / 2 - pick_size / 2, band_above] }
   fun frame(~says: said :: Boolean = #false,
             ~graph: graph :: Boolean = #false,
             ~rule: rule :: Boolean = #false,
+            ~pick: picking :: Boolean = #false,
             ~picked: picked :: Boolean = #false,
             ~opt: emitted :: Boolean = #false) :: Frame:
     def keys = if rule | all_keys | (if graph | program_keys | [])
@@ -392,6 +402,7 @@ fun slide_eval_setup():
                     ++ { [#'cfg_cap]: caption("a Bril CFG", 140.0) }
                     ++ (if said | says | {})
                     ++ (if graph | region | {})
+                    ++ (if picking | pick | {})
                     ++ spots(keys, ~picked: if picked | ev_extracted | [])
                     ++ (if graph | { [#'eg_cap]: caption("its e-graph", 760.0) } | {})
                     ++ (if rule | equality | {})
@@ -409,10 +420,13 @@ fun slide_eval_setup():
      frame(~says: #true, ~graph: #true),
      // the rules fire: `a & -a` is the same value, so it joins that e-class
      frame(~says: #true, ~graph: #true, ~rule: #true),
+     // the pickaxe, on the root class
+     frame(~says: #true, ~graph: #true, ~rule: #true, ~pick: #true),
      // extraction takes the member without a loop in it: those nodes turn green
-     frame(~says: #true, ~graph: #true, ~rule: #true, ~picked: #true),
+     frame(~says: #true, ~graph: #true, ~rule: #true, ~pick: #true, ~picked: #true),
      // and that term, as Bril again, is the program eggcc emits
-     frame(~says: #true, ~graph: #true, ~rule: #true, ~picked: #true, ~opt: #true)],
+     frame(~says: #true, ~graph: #true, ~rule: #true, ~pick: #true, ~picked: #true,
+           ~opt: #true)],
     ~wire: ev_wire_specs, ~edge_band: band_wires, ~extent: 1.3)
 
 // values black and thin, the state edge blue and thick, as everywhere else

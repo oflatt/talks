@@ -56,11 +56,21 @@ fun stage_code(s :: String) :: pc.Pict: code_text(s, ~size: 40.0)
 fun stage_greek(s :: String) :: pc.Pict: math_text(s, ~size: 40.0)
 fun stage_line(& pieces) :: pc.Pict: popped(pc.beside(~vert: #'bottom, & pieces))
 
+// A stage's name: one line, or a name with a smaller second line under it saying
+// which form the thing in the box is in.
+fun stage_name(label) :: pc.Pict:
+  match label
+  | s :: String: prose_text(s, ~size: 36.0, ~bold: #true, ~arrive: #'pop)
+  | [main :: String, sub :: String]:
+      pc.stack(~sep: 2.0, ~horiz: #'center,
+               prose_text(main, ~size: 36.0, ~bold: #true, ~arrive: #'pop),
+               prose_text(sub, ~size: 28.0, ~arrive: #'pop))
+
 // The box a stage is drawn in, sized to hold every body that stage ever shows: the
 // two pictures put different things in the same boxes, and a box sized to its
 // contents would grow between them and carry its name a few pixels along with it.
-fun stage_fit(label :: String, bodies :: List) :: List:
-  def name = prose_text(label, ~size: 36.0, ~bold: #true, ~arrive: #'pop)
+fun stage_fit(label, bodies :: List) :: List:
+  def name = stage_name(label)
   for values(acc :~ List = [0.0, 0.0]) (body :: pc.Pict in bodies):
     def box :: pc.Pict:
       as_pict(make_bubble(~color: talk_blue, ~padding: 24,
@@ -71,12 +81,12 @@ fun stage_fit(label :: String, bodies :: List) :: List:
 // that says what the stages are before there is anything to put in them.
 // `~middle` puts the box's vertical middle there instead of its top at `at[1]`: a
 // box whose height depends on what is in it, lined up on something beside it.
-fun stage_pieces(label :: String, body :: maybe(pc.Pict), at_in :~ List,
+fun stage_pieces(label, body :: maybe(pc.Pict), at_in :~ List,
                  ~width: w :: maybe(Real) = #false,
                  ~height: h :: maybe(Real) = #false,
                  ~middle: middle :: maybe(Real) = #false) :: Map:
   // the stage's name is a label, and pops; what is in the box is written
-  def name = prose_text(label, ~size: 36.0, ~bold: #true, ~arrive: #'pop)
+  def name = stage_name(label)
   def inside = if body | pc.stack(~sep: 18.0, ~horiz: #'center, name, body) | name
   def box:
     as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
@@ -121,6 +131,9 @@ def flow_rules_at = [95.0, 748.0]
 def flow_egraph_at = [700.0, 380.0]
 def flow_arrow_at = [1020.0, 466.0]
 def flow_optimized_at = [1390.0, 466.0]
+// the optimized program in the original IR, under the one in the dataflow IR, the
+// way the dataflow IR stands under the input program on the left
+def flow_original_at = [1390.0, 700.0]
 def flow_egraph_size = [280.0, 300.0]
 def flow_arrow_size = [330.0, 164.0]
 // the optimized program's box is centred on the arrow that reads it out, whatever
@@ -138,8 +151,11 @@ def flow_rule_scale = 0.55
 // `~bare` draws the boxes with their names and nothing in them -- no program, no
 // rules, no result -- for the slide that says what the stages are before the next
 // one shows what goes in them.
+// `~split` divides the output: the box extraction fills is named as the dataflow
+// IR's, and a second box under it holds the program back in the original IR.
 fun workflow_scene(~section: section :: Int,
                    ~ir: ir :: Boolean = #false,
+                   ~split: split :: Boolean = #false,
                    ~safe: safe :: Boolean = #false,
                    ~bare: bare :: Boolean = #false) :: Map:
   def parts = code_parts()
@@ -180,12 +196,21 @@ fun workflow_scene(~section: section :: Int,
      stage_line(stage_code("return update(a, x+1, "),
                 stage_greek("ω"), stage_code(")")).scale(0.52)]
   def optimized_body = optimized_bodies[section]
-  def [optimized_w, optimized_h] = stage_fit("Optimized Program", optimized_bodies)
+  def optimized_label = if split | ["Optimized Program", "(dataflow IR)"] | "Optimized Program"
+  def [optimized_w, optimized_h] = stage_fit(optimized_label, optimized_bodies)
   def optimized:
     if bare
-    | stage_pieces("Optimized Program", #false, flow_optimized_at, ~middle: flow_arrow_middle)
-    | stage_pieces("Optimized Program", optimized_body, flow_optimized_at,
+    | stage_pieces(optimized_label, #false, flow_optimized_at, ~middle: flow_arrow_middle)
+    | stage_pieces(optimized_label, optimized_body, flow_optimized_at,
                    ~width: optimized_w, ~height: optimized_h, ~middle: flow_arrow_middle)
+  // and the same program back in the original IR: the one write, and the value it
+  // returns
+  def original_body:
+    pc.stack(~sep: 8.0, ~horiz: #'left,
+             stage_line(stage_code("v"), code_sub("1"), stage_code(" = update(a, x+1)")),
+             stage_line(stage_code("return v"), code_sub("1"))).scale(flow_code_scale)
+  def original:
+    stage_pieces(["Optimized Program", "(original IR)"], original_body, flow_original_at)
   def ir_stage:
     stage_pieces("Dataflow IR",
                  code_updates(parts, ~states: #true).scale(flow_code_scale),
@@ -211,6 +236,7 @@ fun workflow_scene(~section: section :: Int,
                            band_nodes] }
             | { #'rules_body: rules[#'body] })
         ++ (if ir | { #'ir_box: ir_stage[#'box], #'ir: ir_stage[#'body] } | {})
+        ++ (if split | { #'original_box: original[#'box], #'original: original[#'body] } | {})
 
 // The first picture arrives a stage at a time: what you write, what else you write,
 // what they are put into, and what comes back out.
@@ -219,9 +245,11 @@ def flow_steps:
    [#'rules_box, #'rule_1, #'rule_2, #'rules_body],
    [#'egraph_box, #'egraph],
    [#'extract, #'optimized_box, #'optimized]]
-fun flow_keys(~upto: upto :: Int, ~ir: ir :: Boolean = #false) :: List:
+fun flow_keys(~upto: upto :: Int, ~ir: ir :: Boolean = #false,
+              ~split: split :: Boolean = #false) :: List:
   List.append(& for List (k in 0..upto): (flow_steps :~ List)[k])
     ++ (if ir | [#'ir_box, #'ir] | [])
+    ++ (if split | [#'original_box, #'original] | [])
 def flow_all = flow_keys(~upto: (flow_steps :~ List).length())
 
 // The program goes into the e-graph, the rules go into the e-graph, and a program
@@ -234,6 +262,8 @@ fun workflow_edges(~ir: ir :: Boolean, ~shown: shown :~ List) :: List:
      | [[#'program_box, #'ir_box], [#'ir_box, #'egraph_box]]
      | [[#'program_box, #'egraph_box]])
       ++ [[#'rules_box, #'egraph_box]]
+      // the way back out of the dataflow IR, drawn once the box it goes to is there
+      ++ [[#'optimized_box, #'original_box]]
   for List (e :~ List in wanted):
     keep_when shown.contains(e[0]) && shown.contains(e[1])
     e
@@ -343,8 +373,10 @@ fun slide_41():
   def pure = workflow_scene(~section: 0)
   def effectful = workflow_scene(~section: 1)
   def with_ir = workflow_scene(~section: 1, ~ir: #true)
-  def safe = workflow_scene(~section: 1, ~ir: #true, ~safe: #true)
+  def split = workflow_scene(~section: 1, ~ir: #true, ~split: #true)
+  def safe = workflow_scene(~section: 1, ~ir: #true, ~split: #true, ~safe: #true)
   def ir_keys = flow_keys(~upto: (flow_steps :~ List).length(), ~ir: #true)
+  def split_keys = flow_keys(~upto: (flow_steps :~ List).length(), ~ir: #true, ~split: #true)
   def threading:
     { #'threading: flow_callout(page, with_ir[#'ir_box], ~body: [746.0, 202.0],
                                 ~color: talk_green,
@@ -353,11 +385,11 @@ fun slide_41():
                                              [["threading", #'bold],
                                               [" functional objects!", #'plain]]])) }
   def refine:
-    { #'refine: flow_callout(page, safe[#'extract], ~body: [1130.0, 740.0],
+    { #'refine: flow_callout(page, safe[#'extract], ~body: [900.0, 700.0],
                              ~color: talk_green,
                              ~content: prose_stack(
                                          [[["Refine the semantics to", #'plain]],
-                                          [["only ", #'plain], ["effect-safe", #'bold],
+                                          [["only ", #'plain], ["linear", #'bold],
                                            [" programs", #'plain]]])) }
   // Green, like the other two: these are the three things that go right, and a
   // bubble in the diagram's own blue reads as another stage of it rather than as a
@@ -380,7 +412,7 @@ fun slide_41():
   def bad_news:
     { #'bad: flow_callout(page, safe[#'extract], ~body: bad_body, ~color: talk_red,
                           ~content: bad_head) }
-  def told = workflow_frame(safe, ir_keys, ~ir: #true,
+  def told = workflow_frame(safe, split_keys, ~ir: #true,
                             ~over: threading ++ refine ++ worry ++ bad_news)
 
   // A press per thing to say. What extraction becomes and the bubble about it are
@@ -392,9 +424,12 @@ fun slide_41():
                 [workflow_frame(pure, flow_all),
                  workflow_frame(effectful, flow_all),
                  workflow_frame(with_ir, ir_keys, ~ir: #true, ~over: threading),
-                 workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading),
-                 workflow_frame(safe, ir_keys, ~ir: #true, ~over: threading ++ refine),
-                 workflow_frame(safe, ir_keys, ~ir: #true,
+                 // and what comes out divides the same way: the program in the
+                 // dataflow IR, and then back in the original
+                 workflow_frame(split, split_keys, ~ir: #true, ~over: threading),
+                 workflow_frame(safe, split_keys, ~ir: #true, ~over: threading),
+                 workflow_frame(safe, split_keys, ~ir: #true, ~over: threading ++ refine),
+                 workflow_frame(safe, split_keys, ~ir: #true,
                                 ~over: threading ++ refine ++ worry),
                  told],
                 ~wire: workflow_wire))

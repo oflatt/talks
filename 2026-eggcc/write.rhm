@@ -108,26 +108,33 @@ fun already(p :: Pict) :: Pict:
 fun remains(p :: Pict) :: Pict:
   arriving(p, Arrival(fun (n): if n > 0.0 | p | p.ghost(), 0.0, ~kind: #'still, ~lead: 0.0))
 
-// Two arrivals for things that are not written. A label pops: it grows in from a
-// little smaller than itself, overshooting a touch as it fades up, the way a label
-// arrives in a Manim scene -- for a big short word over a picture, which is read at
-// a glance rather than followed letter by letter. A title fades where it stands.
-// Both keep the pict's own bounds, so what they are placed by never moves.
+// Two arrivals for things that are not written. A label pops: it fades up from a
+// little below its place and rises into it, settling with a touch of overshoot, the
+// way a label arrives in a Manim scene -- for a big short word over a picture, or
+// the words in a bubble, which are read at a glance rather than followed letter by
+// letter. It keeps its size throughout. A title fades where it stands. Both keep
+// the pict's own bounds, so what they are placed by never moves.
 fun back_out(t :: Real) :: Real:
   def c1 = 1.70158
   def c3 = c1 + 1.0
   1.0 + c3 * math.expt(t - 1.0, 3) + c1 * math.expt(t - 1.0, 2)
+// how far below its place a pop starts: a share of its height, but a big bubble
+// does not travel far
+def pop_rise = 0.35
+def pop_rise_cap = 60.0
 fun pop_frame(p :: Pict, n :: Real) :: Pict:
   cond
   | n >= 1.0: p
   | n <= 0.0: p.ghost()
   | ~else:
       def k = back_out(n)
-      def s = 0.55 + 0.45 * k
-      def a = smooth(clamp01(n / 0.6))
-      // from a little below its place, up into it -- overshooting with the scale
+      def a = smooth(clamp01(n / 0.7))
+      def rise = math.min(pop_rise * p.height, pop_rise_cap)
       def g = p.ghost()
-      overlay(~dy: 0.45 * p.height * (1.0 - k), g, p.scale(s).alpha(a)).refocus(g)
+      // drawn straight once it is whole: a pict at full alpha still goes through
+      // a compositing layer, which rounds its edges to pixels and can shave the
+      // side of a glyph
+      overlay(~dy: rise * (1.0 - k), g, (if a >= 1.0 | p | p.alpha(a))).refocus(g)
 fun popped(p :: Pict, ~weight: weight :: Real = 0.45) :: Pict:
   arriving(p, Arrival(fun (n): pop_frame(p, n), weight, ~kind: #'pop, ~lead: 0.5))
 fun faded(p :: Pict, ~weight: weight :: Real = 0.6) :: Pict:

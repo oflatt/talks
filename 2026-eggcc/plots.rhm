@@ -282,7 +282,7 @@ fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0],
       put(q, lab, cdf_x + cdf_xv(math.expt(10.0, d)) - lab.width / 2,
           cdf_y + cdf_h + 14.0)
   def y_label:
-    (axis_text("Regions Extracted") :~ pc.Pict).rotate(math.pi / 2)
+    (axis_text("E-Graphs Extracted") :~ pc.Pict).rotate(math.pi / 2)
   // each curve named in the clear air beside it rather than in a key in the corner,
   // so the eye never has to travel to find out which line it is looking at
   def named:
@@ -297,7 +297,7 @@ fun cdf_chart(~draw: ks :~ List = [1.0, 1.0, 1.0],
       put(q, lab, cdf_x + cdf_xv(secs), cdf_y + cdf_yv(frac) - lab.height / 2)
   def with_body = put(named, cdf_body(ks, ~sweep: sweep, ~sweep_alpha: sweep_alpha),
                       cdf_x, cdf_y)
-  def x_label :~ pc.Pict = axis_text("Extraction time per e-graph region")
+  def x_label :~ pc.Pict = axis_text("Extraction time per e-graph")
   put(put(with_body, y_label, cdf_x - 196.0,
           cdf_y + cdf_h / 2 - (y_label :~ pc.Pict).height / 2),
       x_label, cdf_x + (cdf_w - x_label.width) / 2, cdf_y + cdf_h + 66.0)

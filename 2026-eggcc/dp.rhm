@@ -298,19 +298,36 @@ fun slide_dp():
     def content: robot_says(#'idea, words, ~sep: 12.0, ~above: #true, ~scale: 0.85)
     { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
                idea_at[0], idea_at[1], band_callout] }
-  // And the refinement of the key idea, said once the class that holds two walks is
-  // up and before their sets are shown: not every walk that reaches a class is worth
-  // keeping, only one per set. Right of the graph, level with the key idea, and up
-  // for the rest of the slide like it.
+  // And the optimization on the key idea, said once the class that holds two walks
+  // is up and before their sets are shown: not every walk that reaches a class is
+  // worth keeping, only one per set. Right of the graph, level with the key idea,
+  // and up for the rest of the slide like it.
   def distinct:
     def words:
-      prose_stack([[["keep statewalks", #'plain]],
-                   [["with ", #'plain], ["distinct", #'bold]],
-                   [["extractable sets", #'plain]]])
+      prose_stack([[["Optimization:", #'bold]],
+                   [["collapse by unique", #'plain]],
+                   [["extractable set", #'plain]]])
     { #'distinct: [make_bubble(~color: talk_green, ~padding: 24.0, words),
                    1440.0, 300.0, band_callout] }
-  // the two of them, for every frame after both are up
-  def said = key_idea ++ distinct
+  // What the whole slide is after, said at the return as soon as the graph is up: a
+  // term out of the root class that one state walk reaches the whole of. It stays
+  // up to the end, pointing at the return wherever the return stands -- which, for
+  // the press that lays the answer out as a tree, is somewhere else.
+  // The body stands in the corner left of the graph's last row, three short lines
+  // so that it fits between the bubble about the width and the row's first state,
+  // clear of the slide's bottom edge and of the bubbles on the right; for the tree,
+  // whose return is over there, it stands on the right instead, in two lines.
+  fun want_at(spots :~ Map, ~body: body :~ List = [530.0, 890.0],
+              ~lines: lines :~ List = [[["Want:", #'bold]],
+                                       [["extraction using", #'plain]],
+                                       [["a single state walk", #'plain]]]) :: Map:
+    def [rx, ry] = spots[#'ret] :~ List
+    { #'want: [bubble_at(as_pict(chain_plain[#'ret]).scale(dp_scale), ~spot: [rx, ry],
+                         ~body: body, ~color: talk_blue, ~content: prose_stack(lines)),
+               0.0, 0.0, band_callout] }
+  def want = want_at(away)
+  // the three of them, for every frame after all are up
+  def said = key_idea ++ distinct ++ want
 
   // The last word. The algorithm's cost is in the statewalk width `k` (paper,
   // Section 6): how many walks a class ends up holding, which on this graph is two,
@@ -335,17 +352,19 @@ fun slide_dp():
   // The pointer the other extractions use, on the class being considered. It stands
   // to the left of it, which is clear on this graph for every class a walk ends in
   // except two, and those two say where they want it.
-  def point_w = 96.0
-  def point_h = 38.0
-  def dp_point_right:
-    as_pict(walk_arrow(~facing: "rightArrow", ~width: point_w, ~height: point_h))
-  def dp_point_left:
-    as_pict(walk_arrow(~facing: "leftArrow", ~width: point_w, ~height: point_h))
+  def point_w = 80.0
+  def point_h = 80.0
+  def dp_point_right = as_pict(pickaxe(~size: point_w))
+  def dp_point_left = as_pict(pickaxe(~size: point_w, ~facing: #'left))
   // It stands to the left of the class it names, which is clear on this graph for
   // every one a walk ends in except the argument state -- `x+1` is in that lane, so
   // that one is pointed at from the other side.
   def point_side = { #'s0: #'right }
-  fun pointer_at(key) :: Map:
+  // and the state the second walk ends in has the first walk's state right beside
+  // it, in the one class, so the pickaxe stands left of that class as a whole
+  def point_stand = { #'s2: #'s3 }
+  fun pointer_at(key_in) :: Map:
+    def key = if point_stand.has_key(key_in) | point_stand[key_in] | key_in
     def [x, y] = (away :~ Map)[key] :~ List
     def [w, h] = node_size(key)
     def right = point_side.has_key(key)
@@ -379,7 +398,7 @@ fun slide_dp():
            ~walks: walks :~ List = [], ~sets: sets :~ List = [],
            ~point: point = #false,
            ~idea: idea :: Boolean = #false, ~distinct: told :: Boolean = #false) :: Frame:
-    Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away)
+    Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away) ++ want
                     ++ (if point == #false | {} | pointer_at(point))
                     ++ (if idea | key_idea | {})
                     ++ (if told | distinct | {}),
@@ -429,7 +448,8 @@ fun slide_dp():
                    [["provide practical", #'plain]],
                    [["solutions to", #'plain]],
                    [["NP-hard problems", #'plain]]])
-    { #'wand: [make_bubble(~color: talk_green, ~padding: 24.0,
+    // written out rather than popped: the last word of the section, said slowly
+    { #'wand: [make_bubble(~color: talk_green, ~padding: 24.0, ~text: #'write,
                            pc.stack(~sep: 12.0, ~horiz: #'center, wand(~size: 110.0), words)),
                1440.0, 560.0, band_callout] }
 
@@ -440,8 +460,13 @@ fun slide_dp():
      // the example's graph, written out in the middle of the slide with nothing
      // else on it: the program and the rule that made it were the section before
      Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
-     // the idea first, to read the stepping against
+     // what is wanted of it, at the return
+     Frame(~picts: picts_at(away, {}) ++ regions_at(away) ++ want, ~edges: chain_edges(4)),
+     // the idea, to read the stepping against
      beat([], ~idea: #true),
+     // the pickaxe, on the class the first walk ends in: extraction is what the
+     // stepping is for
+     beat([], ~idea: #true, ~point: #'us),
      // then the walks, one press per term the table grows by, each filling the
      // class it reaches in its colour: the write the rule added and the state it
      // leaves -- not the walk that is the argument state alone, a puzzle before it
@@ -473,8 +498,13 @@ fun slide_dp():
      Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away)
                      ++ green_at(away, answer) ++ said,
            ~edges: chain_edges(4) ++ walk_edges(r_best)),
-     // and then just that term, laid out as the tree it is
-     Frame(~picts: green_at(term_spots, answer) ++ said, ~edges: term_edges(answer)),
+     // and then just that term, laid out as the tree it is, the bubble at the return
+     // following it there
+     Frame(~picts: green_at(term_spots, answer) ++ key_idea ++ distinct
+                     ++ want_at(term_spots, ~body: [1300.0, 880.0],
+                                ~lines: [[["Want: ", #'bold], ["extraction using", #'plain]],
+                                         [["a single state walk", #'plain]]]),
+           ~edges: term_edges(answer)),
      // and back to the graph as the table left it, every class filled by the walks
      // that reach it: the term's nodes go back to their places and take their
      // colours, and the rest writes in around them

@@ -48,6 +48,7 @@ export:
   robot
   robot_says
   wand
+  pickaxe
   node_font
   prose
   prose_face
@@ -94,7 +95,9 @@ def math_font = "Times New Roman"
 // slash through it and gives `1` a flag, which is wrong for a term in a graph.
 // Setting this to `code_font` draws them as the code boxes instead -- but then every
 // sigma needs an exception, because PT Mono has no Greek at all.
-def node_font = math_font
+// the nodes of an e-graph are labelled in the code's own face: `update` in the
+// graph is the `update` in the program
+def node_font = code_font
 
 current_default_font(code_font)
 
@@ -402,6 +405,33 @@ fun star_path(cx :: Real, cy :: Real, outer :: Real, inner :: Real) :: draw.Path
     if i == 0 | p.move_to(pt) | p.line_to(pt)
   p.close()
   p
+// A pickaxe, for the pointer that says which e-class extraction is taking a term
+// out of: a handle up to the right and a curved head across its top, whose lower
+// tip is the one that strikes -- so, stood left of a class, it is about to strike
+// it. `~facing: #'left` mirrors it, for standing to the right of one. Drawn from
+// paths, so it writes: the handle as one stroke, the head as a shape.
+def pick_handle = draw.Color(120, 78, 40)
+def pick_steel = draw.Color(96, 102, 112)
+def pick_steel_line = draw.Color(40, 44, 52)
+fun pickaxe(~size: size :: Real = 80.0, ~facing: facing = #'right) :: pc.Pict:
+  def k = size / 100.0
+  fun x(v :: Real) :: Real: (if facing == #'left | 100.0 - v | v) * k
+  fun y(v :: Real) :: Real: v * k
+  def handle = draw.Path()
+  handle.move_to([x(12.0), y(94.0)])
+  handle.line_to([x(68.0), y(33.0)])          // up into the underside of the head
+  def head = draw.Path()
+  head.move_to([x(28.0), y(12.0)])
+  // the outer edge, over to the striking tip, and the inner edge back
+  head.curve_to([x(72.0), y(4.0)], [x(94.0), y(36.0)], [x(96.0), y(74.0)])
+  head.curve_to([x(82.0), y(48.0)], [x(62.0), y(30.0)], [x(28.0), y(12.0)])
+  head.close()
+  pc.overlay(~horiz: #'left, ~vert: #'top,
+             written_stroke(handle, ~width: size, ~height: size,
+                            ~pen: draw.Pen(~color: pick_handle, ~width: 9.0 * k, ~cap: #'round)),
+             written_shape(head, ~width: size, ~height: size,
+                           ~fill: pick_steel, ~line: pick_steel_line, ~line_width: 2.0))
+
 fun wand(~size: size :: Real = 120.0) :: pc.Pict:
   def k = size / 120.0
   def rod = draw.Path()

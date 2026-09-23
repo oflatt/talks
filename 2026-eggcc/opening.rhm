@@ -9,6 +9,7 @@ import:
   "backdrop.rhm" open
   "write.rhm".ink_bounds
   pict as pc
+  draw
 
 export:
   slide_1
@@ -43,18 +44,24 @@ fun title_canvas(): slide_canvas(
   // Keynote had here (`image1.png`). A hand-drawn pict is an element like any other
   // once it is a pict handle.
   at(0.0, 0.0, ~name: "E-graph backdrop", backdrop().snapshot().handle),
+  // a band of near-white behind the faces and the names, so they are read against
+  // the paper and not against the graph; it fades up into the picture rather than
+  // starting at a line
+  at(0.0, band_top, ~name: "Names band", names_band),
   // Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,… (id 89)
-  at(26.843, 896.485,
+  // the names, under the faces and their marks, as large as the room over the
+  // school's logo allows
+  at(26.843, 858.0,
      ~name: "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,…",
-     textbox(~width: 1833.914, ~height: 101.563, ~autofit: #'shrink,
+     textbox(~width: 1860.0, ~height: 124.0, ~autofit: #'shrink,
              ~insets: insets(3.6, 3.6, 3.6, 3.6),
              para(
                   run(
                       "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
-                      ~font: prose_font, ~size: 39.0)),
+                      ~font: prose_font, ~size: 46.0)),
              para(
                   run("Chandrakana Nandi, Eli Rosenthal, Zachary Tatlock, Haobin Ni",
-                      ~font: prose_font, ~size: 39.0)))),
+                      ~font: prose_font, ~size: 46.0)))),
   // Efficient Extraction from Effectful E-Graphs (id 90)
   at(95.0, 202.755, ~name: "Efficient Extraction from Effectful E-Graphs",
      textbox(~width: 1730.0, ~height: 366.0, ~anchor: #'bottom, ~autofit: #'shrink,
@@ -67,37 +74,77 @@ fun title_canvas(): slide_canvas(
   at(-4.619, 984.406, ~name: "unknown.png (2)",
      image_pict(media("image2.png"), 616.548, 101.578,
                 ~crop: [0.121, 0.318, 0.135, 0.37])),
-  // unknown.png (3) (id 92)
-  at(172.867, 743.613, ~name: "unknown.png (3)",
-     image_pict(media("image3.png"), 115.0, 115.0)),
-  // unknown.png (4) (id 93)
-  at(809.334, 743.633, ~name: "unknown.png (4)",
-     image_pict(media("image4.png"), 115.0, 115.0, ~crop: [0.0, 0.02, 0.0, 0.02])),
-  // unknown.png (5) (id 94)
-  at(1127.567, 743.662, ~name: "unknown.png (5)",
-     image_pict(media("image5.png"), 115.0, 115.0, ~crop: [0.0, 0.052, 0.0, 0.198])),
-  // unknown.png (6) (id 95)
-  at(331.984, 743.623, ~name: "unknown.png (6)",
-     image_pict(media("image6.png"), 115.0, 115.0)),
-  // unknown.png (7) (id 96)
-  at(650.217, 743.563, ~name: "unknown.png (7)",
-     image_pict(media("image7.png"), 115.0, 115.065, ~crop: [0.0, 0.123, 0.0, 0.123])),
-  // unknown.png (8) (id 97)
-  at(491.1, 743.662, ~name: "unknown.png (8)",
-     image_pict(media("image8.png"), 115.0, 115.0, ~crop: [0.0, 0.0, 0.0, 0.093])),
-  // pasted-movie.png (id 98)
-  at(1286.684, 743.584, ~name: "pasted-movie.png",
-     image_pict(media("image9.png"), 115.0, 115.0)),
-  // unknown.png (9) (id 99)
-  at(1427.083, 743.584, ~name: "unknown.png (9)",
-     image_pict(media("image10.png"), 479.167, 115.0)),
-  // pasted-movie.png (2) (id 100)
-  at(13.75, 743.613, ~name: "pasted-movie.png (2)",
-     image_pict(media("image11.png"), 115.0, 115.0)),
-  // pasted-movie.png (3) (id 101)
-  at(968.45, 743.613, ~name: "pasted-movie.png (3)",
-     image_pict(media("image12.png"), 115.0, 115.0))
+  // the faces, in one row across the slide
+  & for List ([x, who, file, crop] in photo_row):
+      at(x, photo_y, ~name: who, image_pict(media(file), 115.0, 115.0, ~crop: crop)),
+  // and where each of them is, as a mark under the face -- two marks, one over the
+  // other, for someone in two places
+  & List.append(& for List ([x, who, _, _] in photo_row): affiliation_marks(x, who))
 )
+
+// the marks under one face, one under the other, each centred under it
+fun affiliation_marks(x :: Real, who :: String) :: List:
+  def places :~ List = affiliation[who]
+  def (marks, _):
+    for values(acc :~ List = [], y :~ Real = photo_y + 115.0 + 8.0) (p in places):
+      def [file, h] = affiliation_mark(p, mark_w)
+      def mark = at(x + (115.0 - mark_w) / 2, y, ~name: "affiliation " +& who +& " " +& file,
+                    image_pict(media(file), mark_w, h))
+      values(acc ++ [mark], y + h + 4.0)
+  marks
+
+// The band under the faces: transparent at its top, full strength by the faces,
+// drawn as strips whose alpha eases up, so there is no edge to see.
+def band_top = 528.0
+def band_full = 638.0
+def band_alpha = 0.86
+def names_band:
+  def strips = 22
+  def step = (band_full - band_top) / strips
+  def board = pc.blank(~width: slide_width, ~height: slide_height - band_top)
+  def fade:
+    for values(q :~ pc.Pict = board) (i in 0..strips):
+      def u = (i + 1) / strips
+      def a = band_alpha * u * u * (3.0 - 2.0 * u)
+      put(q, pc.rectangle(~width: slide_width, ~height: step + 1.0,
+                          ~fill: draw.Color(255, 255, 255, a), ~line: #false),
+          0.0, i * step)
+  put(fade, pc.rectangle(~width: slide_width, ~height: slide_height - band_full,
+                         ~fill: draw.Color(255, 255, 255, band_alpha), ~line: #false),
+      0.0, band_full - band_top)
+
+// The faces along the bottom of the title, left to right, spread evenly across the
+// slide now that the group's logo has gone from beside them, and up from where
+// Keynote had them so that the marks and the names under them have room. Each is
+// `[x, who, file, crop]`.
+def photo_y = 648.0
+def photo_pitch = 216.0
+def photo_row:
+  for List ([who, file, crop] in [["Oliver Flatt", "image11.png", #false],
+                                  ["Anjali Pal", "image3.png", #false],
+                                  ["Yihong Zhang", "image6.png", #false],
+                                  ["Ryan Tjoa", "image8.png", [0.0, 0.0, 0.0, 0.093]],
+                                  ["Kirsten Graham", "image7.png", [0.0, 0.123, 0.0, 0.123]],
+                                  ["Chandrakana Nandi", "image4.png", [0.0, 0.02, 0.0, 0.02]],
+                                  ["Eli Rosenthal", "image12.png", #false],
+                                  ["Alex Fischman", "image5.png", [0.0, 0.052, 0.0, 0.198]],
+                                  ["Zachary Tatlock", "image9.png", #false]],
+            i in 0..):
+    [40.0 + i * photo_pitch, who, file, crop]
+def affiliation:
+  { "Oliver Flatt": [#'plse], "Anjali Pal": [#'plse], "Yihong Zhang": [#'plse],
+    "Ryan Tjoa": [#'plse], "Kirsten Graham": [#'plse], "Alex Fischman": [#'plse],
+    "Chandrakana Nandi": [#'plse, #'certora], "Eli Rosenthal": [#'google],
+    "Zachary Tatlock": [#'plse] }
+// a mark `w` wide, at its logo's own proportions: `[file, height]`. One width for
+// all of them, since the wordmarks differ in how tall they are for their width, and
+// matched by height the wide one reads as the big one.
+def mark_w = 124.0
+fun affiliation_mark(place, w :: Real) :: List:
+  match place
+  | #'plse: ["image10.png", w * 144.0 / 600.0]
+  | #'google: ["google.png", w * 184.0 / 544.0]
+  | #'certora: ["certora.png", w * 174.0 / 600.0]
 
 // -------------------------------------------------------------------------------------
 // slide_2: Keynote's 10-stage build of Slide 2, as one animated pict.
@@ -115,21 +162,53 @@ fun title_canvas(): slide_canvas(
 // goes up, and reads it from here.
 def useful_title = "E-Graphs are Super Useful!"
 
-// A label of the grid, in Keynote's 48pt, and where its text box was.
-fun label(s :: String, x :: Real, y :: Real) :: List:
-  [prose_text(s, ~size: 48.0, ~arrive: #'pop), x + box_dx, y + box_dy]
-fun logo(file :: String, w :: Real, h :: Real, x :: Real, y :: Real,
-         ~crop: crop = #false) :: List:
-  [image_pict(media(file), w, h, ~crop: crop), x, y]
-// A label centred over its logo -- over the logo's ink, since the pictures carry
-// very different margins of transparent padding -- at the height its box had.
-fun label_over(s :: String, piece :: List, y :: Real) :: List:
-  def [img, lx, ly] = piece
-  def p = as_pict(img)
-  def box = ink_bounds(p) || [0.0, 0.0, p.width, p.height]
-  def cx = lx + ((box[0] :~ Real) + (box[2] :~ Real)) / 2
-  def word = prose_text(s, ~size: 48.0, ~arrive: #'pop)
-  [word, cx - word.width / 2, y + box_dy]
+// The grid: ten slots in two rows of five, each a label over a box its logo is
+// fitted into. The logos carry very different proportions and margins, so each is
+// scaled to fit the one box and centred in it on its *ink*, and every label sits on
+// its row's common bottom edge -- so the rows read as rows whatever is in them.
+def use_cols = 5
+def slot_w = slide_width / use_cols
+def box_w = 330.0
+def box_h = 180.0
+def box_top = [290.0, 730.0]
+def label_bottom = [280.0, 720.0]
+def label_size = 40.0
+fun slot_left(c :: Int) :: Real: c * slot_w + (slot_w - box_w) / 2
+fun slot_mid(c :: Int) :: Real: c * slot_w + slot_w / 2
+// a logo at the proportions and crop Keynote gave it, scaled to fit the box
+fun fitted(file :: String, w :: Real, h :: Real, ~crop: crop = #false) :: pc.Pict:
+  def k = math.min(box_w / w, box_h / h)
+  as_pict(image_pict(media(file), w * k, h * k, ~crop: crop))
+fun ink_box(p :: pc.Pict) :: List: ink_bounds(p) || [0.0, 0.0, p.width, p.height]
+// the logo in box (r, c), centred on its ink
+fun in_box(p :: pc.Pict, r :: Int, c :: Int) :: List:
+  def [x0, y0, x1, y1] = ink_box(p)
+  [p, slot_left(c) + (box_w - (x1 - x0)) / 2 - x0, box_top[r] + (box_h - (y1 - y0)) / 2 - y0]
+// where a placed logo's ink is on the slide: `[x, y, w, h]`
+fun ink_at(piece :~ List) :: List:
+  def [p :: pc.Pict, x, y] = piece
+  def [x0, y0, x1, y1] = ink_box(p)
+  [x + x0, y + y0, x1 - x0, y1 - y0]
+// a label, one line or two, on its row's bottom edge, centred in its slot
+fun caption(lines :~ List, r :: Int, c :: Int) :: List:
+  def word = pc.stack(~sep: 0.0, ~horiz: #'center,
+                      & for List (s in lines): prose_text(s, ~size: label_size, ~arrive: #'pop))
+  [word, slot_mid(c) - word.width / 2, label_bottom[r] - word.height]
+// a note under a box, naming the tool
+fun under(s :: String, r :: Int, c :: Int) :: List:
+  def word = prose_text(s, ~size: label_size, ~arrive: #'pop)
+  [word, slot_mid(c) - word.width / 2, box_top[r] + box_h + 8.0]
+// the logos, each in its slot
+def use_logos:
+  { #'float: in_box(fitted("image17.png", 558.478, 250.198), 0, 0),
+    #'numba: in_box(fitted("image13.png", 280.727, 280.727), 0, 1),
+    #'intel: in_box(fitted("image19.png", 371.484, 246.071), 0, 2),
+    #'luminal: in_box(fitted("image18.png", 264.568, 264.568), 0, 3),
+    #'certora: in_box(fitted("certora.png", 600.0, 174.0), 0, 4),
+    #'sql: in_box(fitted("image15.png", 276.435, 285.65), 1, 0),
+    #'cad: in_box(fitted("image14.png", 375.394, 295.819, ~crop: [0.0, 0.0, 0.1, 0.0]), 1, 1),
+    #'wasm: in_box(fitted("image16.png", 404.626, 232.136), 1, 2),
+    #'mlir: in_box(fitted("image20.png", 633.867, 253.547), 1, 3) }
 // A stage: its pieces on a transparent layer, each at its place on the slide.
 fun layer(pieces :: List) :: pc.Pict:
   for values(p :~ pc.Pict = blank_slide) ([q, x, y] in pieces): put(p, q, x, y)
@@ -138,37 +217,24 @@ fun slide_2():
   // the picture before the first reveal
   def base_canvas:
     titled(useful_title, ~tag: "E-Graphs are Super Useful!")
-  // Labels sit on one line per row. Keynote left each label at its own group's top,
-  // and the groups sit at different heights, so the labels stepped up and down
-  // across the row and every one of them ran into its logo. These offsets put each
-  // row's labels on a common bottom edge, 8pt clear of the highest logo *ink* in
-  // that row -- ink, not bounding box, because the logos carry very different
-  // amounts of transparent padding. The logos have not moved.
-  def l_float = logo("image17.png", 558.478, 250.198, 35.955, 236.25 + 42.089)
-  def l_numba = logo("image13.png", 280.727, 280.727, 620.266 + 70.107, 236.144 + 40.268)
-  def l_intel = logo("image19.png", 371.484, 246.071, 1099.052, 247.464 + 23.789)
-  def l_luminal = logo("image18.png", 264.568, 264.568, 1571.646, 211.913 + 45.622)
-  def l_sql = logo("image15.png", 276.435, 285.65, 39.033 + 35.938, 623.282 + 59.801)
-  def l_cad = logo("image14.png", 375.394, 295.819, 391.284, 662.932 + 40.848,
-                   ~crop: [0.0, 0.0, 0.1, 0.0])
-  def l_wasm = logo("image16.png", 404.626, 232.136, 806.567 + 2.627, 630.163 + 68.882)
-  def l_mlir = logo("image20.png", 633.867, 253.547, 1256.336, 640.14 + 58.176)
   // One layer for the whole grid, in reading order: `write` plays a layer's parts
   // in the order they were put down, each starting part way through the one before
   // it, so the logos come up one after another with their labels popping in behind
-  // them, the way a word's letters do. Nine presses became two.
+  // them, the way a word's letters do.
   def grid:
-    layer([l_float, label_over("Floating point", l_float, 236.25 - 51.323),
-           l_numba, label_over("Python Simulations", l_numba, 236.144 - 51.217),
-           l_intel, label_over("RTL Optimization", l_intel, 247.464 - 62.537),
-           l_luminal, label_over("ML Kernels", l_luminal, 211.913 - 26.986),
-           label_over("Luminal", l_luminal, 211.913 + 337.154),
-           l_sql, label_over("SQL", l_sql, 623.282 - 12.807),
-           l_cad, label_over("CAD", l_cad, 662.932 - 52.457),
-           l_wasm, label_over("WASM", l_wasm, 630.163 - 19.688),
-           l_mlir, label_over("User DSL Optimizations", l_mlir, 640.14 - 29.665)])
-  // ...and more! -- the beat after the grid, on a press of its own
-  def more = layer([label("…and more!", 1625.216, 967.946)])
+    layer([caption(["Floating point"], 0, 0), use_logos[#'float],
+           caption(["Python Simulations"], 0, 1), use_logos[#'numba],
+           caption(["RTL Optimization"], 0, 2), use_logos[#'intel],
+           caption(["ML Kernels"], 0, 3), use_logos[#'luminal], under("Luminal", 0, 3),
+           caption(["Verification"], 0, 4), use_logos[#'certora],
+           caption(["SQL"], 1, 0), use_logos[#'sql],
+           caption(["CAD"], 1, 1), use_logos[#'cad],
+           caption(["WASM"], 1, 2), use_logos[#'wasm],
+           caption(["User DSL", "Optimizations"], 1, 3), use_logos[#'mlir]])
+  // ...and more! -- the beat after the grid, on a press of its own, in the last slot
+  def more:
+    def word = prose_text("…and more!", ~size: 48.0, ~arrive: #'pop)
+    layer([[word, slot_mid(4) - word.width / 2, box_top[1] + (box_h - word.height) / 2]])
   staged(base_canvas, [grid, more])
 
 // -------------------------------------------------------------------------------------
@@ -185,51 +251,47 @@ fun slide_20():
   def grid = slide_2()
   def shown = grid.snapshot(grid.duration - 1, 1.0)
 
-  // Which of these need effectful e-graphs. Each sits just under its logo's ink,
-  // the way slide_2's own "Luminal" sits under the ML Kernels logo -- ink rather
-  // than bounding box, because the logos carry very different bottom padding.
+  // Which of these need effectful e-graphs: a note under each such logo, naming the
+  // tool, the way the grid names Luminal.
   def notes:
-    layer([label("(Herbie)", 228.358, 522.666),
-           label("(Cranelift)", 905.804, 943.181),
-           label("(Szalinski)", 489.157, 1011.599)])
+    layer([under("(Herbie)", 0, 0),
+           under("(Cranelift)", 1, 2),
+           under("(Szalinski)", 1, 1)])
 
   // the notes are part of the picture from the moment the slide arrives; the
   // bubble is the one thing revealed on a click
   def base:
     pc.overlay(~horiz: #'left, ~vert: #'top, shown, notes)
-
   def stage_1:
-    // The body goes in the band between the two rows, right of centre: the left of
-    // that band is taken by "(Herbie)" and the right by the "Luminal" note, and this
-    // is the clear stretch between them -- as far left in it as the WASM label,
-    // which it covers either way, so that "User DSL Optimizations" beside it stays
-    // readable. Its top is under the Numba logo's bottom edge and its bottom over
-    // the Cranelift logo's top, with the face small enough to leave room for a spike
-    // at each: a target inside the body gives a spike with no length, which is a
-    // notch in the outline. Sitting between the rows it points into is
-    // what lets two spikes leave upwards and two downwards, rather than four of them
-    // crossing the picture from one side.
+    // The body goes in the band between the two rows, left of centre so that it is
+    // clear of the note under the ML Kernels logo, and sitting between the rows it
+    // points into, so that two spikes leave upwards and two downwards rather than
+    // four of them crossing the picture from one side.
     def slot = pc.blank(~width: 1.0, ~height: 1.0)
-    // Each marker is one logo's ink. Two of these images have no alpha channel and
-    // are opaque white to their edges, so the extent has to come from where the
-    // drawing stops being white -- MLIR's artwork is 507pt of its 634pt box, and
-    // aiming at the box would leave the spike short of the logo by 60pt.
-    def m_numba = pc.blank(~width: 256.0, ~height: 250.4)
-    def m_luminal = pc.blank(~width: 264.6, ~height: 264.6)
-    def m_cranelift = pc.blank(~width: 404.6, ~height: 232.1)
-    def m_mlir = pc.blank(~width: 507.1, ~height: 169.5)
+    // Each marker is one logo's ink, which is what a spike should land on. The
+    // Cranelift target is the lower part of its logo: the body sits close over that
+    // logo's top, and a spike aimed at the near edge of the whole would have no
+    // length, which shows as a notch in the outline.
+    fun marker_of(key, ~lower: lower :: Boolean = #false) :: List:
+      def [x, y, w, h] = ink_at(use_logos[key])
+      if lower
+      | [pc.blank(~width: w, ~height: h * 0.6), x, y + h * 0.4]
+      | [pc.blank(~width: w, ~height: h), x, y]
+    def m_numba = marker_of(#'numba)
+    def m_luminal = marker_of(#'luminal)
+    def m_cranelift = marker_of(#'wasm, ~lower: #true)
+    def m_mlir = marker_of(#'mlir)
     def placed:
-      layer([[slot, 800.0, 556.0], [m_numba, 702.7, 288.8], [m_luminal, 1571.6, 257.5],
-             [m_cranelift, 809.2, 699.1], [m_mlir, 1319.7, 740.3]])
+      layer([[slot, 700.0, box_top[0] + box_h + 22.0], m_numba, m_luminal, m_cranelift, m_mlir])
     multi_callout(~on: placed, ~place: slot,
-                  ~at: [m_numba, m_luminal, m_cranelift, m_mlir],
+                  ~at: [m_numba[0], m_luminal[0], m_cranelift[0], m_mlir[0]],
                   ~color: talk_red, ~padding: 14.0,
-                  // two lines: on one it is wider than the clear stretch of the band
+                  // two lines, the face as tall as the two of them
                   robot_says(#'teeth,
                              pc.stack(~sep: 2.0, ~horiz: #'center,
-                                      prose_text("limited to pure", ~size: 48.0, ~bold: #true),
-                                      prose_text("optimizations!", ~size: 48.0, ~bold: #true)),
-                             ~sep: 12.0, ~scale: 0.75))
+                                      prose_text("limited to pure", ~size: 44.0, ~bold: #true),
+                                      prose_text("optimizations!", ~size: 44.0, ~bold: #true)),
+                             ~sep: 12.0, ~scale: 0.9))
 
   staged(base, [stage_1])
 

@@ -221,7 +221,8 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
                                      [morph_es, 1.0, 1.0]]):
       keep_when specs != [] && al > 0.0
       parameterize { write.current_draw: drawn }:
-        draw_them(ghosts, specs, at).alpha(al)
+        def layer = draw_them(ghosts, specs, at)
+        if al >= 1.0 | layer | layer.alpha(al)
   def edge_layers = layers_of(wire)
   def under_layers = if under_wire | layers_of(under_wire) | []
   def stage_layer = if stage | stage(blank, a, b, t) | #false
@@ -250,7 +251,10 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
       def shown:
         def p = as_pict(d[1])
         if d[5] | sampled(p, d[5]) | settled(p)
-      put(q, shown.alpha(d[4]), d[2], d[3])
+      // drawn straight when whole: a pict at full alpha is composited through a
+      // layer rather than drawn, which comes out a shade off and rounds its edges
+      // to pixels
+      put(q, (if (d[4] :~ Real) >= 1.0 | shown | shown.alpha(d[4])), d[2], d[3])
 
 fun magic_still(base :: pc.Pict, f :: Frame, ~& kws) :: pc.Pict:
   magic_between(base, f, f, 0.0, ~& kws)

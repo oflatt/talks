@@ -205,6 +205,8 @@ fun chain_walk_frames(~graph: graph :~ List,
   // puts them here. Building them again would be the same three presses twice.
   [scene(~rule: #true, ~union: #true),
    scene(~rule: #true, ~union: #true, ~ask: #true),
+   // the pickaxe comes on at the first row on a press of its own, before it picks
+   scene(~rule: #true, ~union: #true, ~ask: #true, ~point: 0),
    & for List (row in 0..chain_layers):
        scene(~rule: #true, ~union: #true, ~ask: #true, ~point: row,
              ~picks: chain_picks(graph, ~upto: row)),

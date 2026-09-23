@@ -34,18 +34,20 @@ class Rng(mutable state :: Int):
 
 // The grid the nodes are jittered on: `rows` by `cols` cells over the slide, and a
 // ring of cells round them off it. A node sits at least `pad` inside its cell.
-def rows = 5
-def cols = 8
-def node_size = 62.0
+// Few cells and big nodes: the camera is close in on a graph that runs off every
+// edge, and a title is read over it, so it wants to be quiet rather than busy.
+def rows = 3
+def cols = 5
+def node_size = 96.0
 def row_gap = slide_height / rows
 def col_gap = slide_width / cols
 def board_w = slide_width + 2 * col_gap
 def board_h = slide_height + 2 * row_gap
-def pad_x = 24.0
-def pad_y = 30.0
-def node_line = 3.0
-def edge_line = 3.0
-def walk_line = 5.0
+def pad_x = 44.0
+def pad_y = 44.0
+def node_line = 4.0
+def edge_line = 4.0
+def walk_line = 7.0
 def tube = node_size + 2 * eclass_pad
 // the cells, ring included, that the loops run over
 def all_rows = rows + 2
@@ -55,14 +57,16 @@ def all_cols = cols + 2
 def walk_fill = "D9E3FF"
 def class_dash = draw.Color(120, 120, 120)
 
-fun backdrop(~alpha: alpha :: Real = 0.3, ~walk_alpha: walk_alpha :: Real = 0.62) :: pc.Pict:
+// faint: the graph a shade off the background, the walk a little more than that
+fun backdrop(~alpha: alpha :: Real = 0.16, ~walk_alpha: walk_alpha :: Real = 0.38) :: pc.Pict:
   def rng = Rng(20260918)
   def board = pc.blank(~width: board_w, ~height: board_h)
   // The walk first: one node a row, drifting a column at a time, so that its cells
   // are the ones the grid is not allowed to leave empty. It keeps to the right third
   // of the slide, which is the part the title does not reach: a walk behind the
   // title is a walk the title is read through.
-  def walk_lo = all_cols - 3
+  // with cells this wide, that is the one column on the slide's right
+  def walk_lo = all_cols - 2
   def walk_hi = all_cols - 2
   def walk_cols:
     for values(acc :~ List = [walk_hi]) (r in 1..all_rows):

@@ -22,6 +22,7 @@ import:
   "write.rhm".arriving
   "write.rhm".pop_frame
   "write.rhm".current_draw
+  "write.rhm".written_shape
   pict as pc
   draw
 
@@ -267,9 +268,11 @@ fun update_opening() :: Map:
   def explained = { #'explain: [explain_states, 0.0, 0.0, band_callout] }
   def with_omega = explained ++ { #'omega: [omega_bubble, 0.0, 0.0, band_callout] }
   def linear_over:
+    // a band above the other bubbles: its spike runs up past the one about ω, and
+    // is to be seen doing so
     { #'linear: [aimed(~at: [box_right - 4.0, second_write_y], ~body: [body_x, 475.0],
                        ~content: prose([["uses memory ", #'plain], ["linearly", #'bold]])),
-                 0.0, 0.0, band_callout] }
+                 0.0, 0.0, band_callout + 1] }
   def equivalent_over:
     { #'equivalent: [aimed(~at: [box_right - 4.0, first_write_y + copy_dy],
                            ~body: [body_x, 650.0], ~color: talk_green,
@@ -286,11 +289,38 @@ fun update_opening() :: Map:
                           ~content: prose_stack([[["central challenge:", #'bold]],
                                                  [["unavoidable in the e-graph!", #'plain]]])),
                     0.0, 0.0, band_callout] }
+  // And what the challenge comes to, as a picture: every program the original IR
+  // calls equivalent, the dataflow IR does too, and it calls more equivalent besides
+  // -- one circle inside a bigger one, on the empty right of the slide.
+  def venn_over:
+    def ow = 460.0
+    def iw = 270.0
+    def gap = 30.0
+    fun disc(d :: Real, color) :: pc.Pict:
+      def p = draw.Path()
+      p.ellipse([0.0, 0.0, d, d])
+      written_shape(p, ~width: d, ~height: d, ~fill: pale(color), ~line: color,
+                    ~line_width: border_width)
+    fun label(a :: String, b :: String) :: pc.Pict:
+      pc.stack(~sep: 2.0, ~horiz: #'center,
+               prose_text(a, ~size: 30.0, ~bold: #true, ~arrive: #'pop),
+               prose_text(b, ~size: 30.0, ~bold: #true, ~arrive: #'pop))
+    def outer_words = label("dataflow IR", "equivalence")
+    def inner_words = label("original IR", "equivalence")
+    def ix = (ow - iw) / 2
+    def iy = ow - iw - gap
+    def picture:
+      put(put(put(put(pc.blank(~width: ow, ~height: ow), disc(ow, talk_blue), 0.0, 0.0),
+                  disc(iw, talk_green), ix, iy),
+              // the outer's words in the band over the inner circle
+              outer_words, (ow - outer_words.width) / 2, (iy - outer_words.height) / 2),
+          inner_words, ix + (iw - inner_words.width) / 2, iy + (iw - inner_words.height) / 2)
+    { #'venn: [picture, 1450.0, 330.0, band_callout] }
   def nonlinear_over:
     { #'nonlinear: [aimed(~at: [box_right - 4.0, second_write_y + copy_dy],
                           ~body: [body_x, 475.0 + copy_dy], ~color: talk_red,
                           ~content: prose([["uses memory ", #'plain], ["non-linearly", #'bold]])),
-                    0.0, 0.0, band_callout] }
+                    0.0, 0.0, band_callout + 1] }
   def f_states = Frame(~picts: explained)
   def f_omega = Frame(~picts: with_omega)
   def f_chain = Frame(~picts: with_omega ++ orig_ends, ~edges: orig_edges)
@@ -314,6 +344,8 @@ fun update_opening() :: Map:
     Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
                     ++ equivalent_over ++ nonlinear_over ++ challenge_over,
           ~edges: orig_edges ++ copy_edges(~red: #true))
+  def f_venn:
+    Frame(~picts: f_challenge.picts ++ venn_over, ~edges: f_challenge.edges)
   fun press(a :: Frame, b :: Frame) :: pc.Pict:
     magic_press(with_states, a, b, ~wire: ref_wire, ~edge_band: band_wires)
 
@@ -359,7 +391,10 @@ fun update_opening() :: Map:
                layer_of(linear_over, #'linear), copy_layer,
                arrows_layer(copy_ends, copy_edges(~red: #true)),
                layer_of(equivalent_over, #'equivalent), layer_of(nonlinear_over, #'nonlinear),
-               layer_of(challenge_over, #'challenge))
+               layer_of(challenge_over, #'challenge),
+               block:
+                 def [p, x, y, _] = venn_over[#'venn] :~ List
+                 put(blank_slide, p, x, y))
   def aside_w = writer(aside_layer)
   def clearing:
     pc.animate(~extent: math.max(1.2, unwrite_pace * extent_for(aside_w.total)),
@@ -371,8 +406,9 @@ fun update_opening() :: Map:
   // which and a bubble says that is linear; a copy of the program comes up; it is
   // rewritten, its arrows swinging; a bubble says it is the same program, a red one
   // says how it differs as the two arrows reading one memory turn red, and another
-  // red one says the e-graph cannot help but hold it; and everything over the
-  // program is unwritten, leaving the program alone under its title
+  // red one says the e-graph cannot help but hold it, and a picture on the right
+  // says the same of the two IRs' equivalences; and everything over the program is
+  // unwritten, leaving the program alone under its title
   { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
                       pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain_plain))
                         .refocus(plain),
@@ -385,6 +421,7 @@ fun update_opening() :: Map:
                       press(f_forked, f_equivalent),
                       press(f_equivalent, f_nonlinear),
                       press(f_nonlinear, f_challenge),
+                      press(f_challenge, f_venn),
                       clearing),
     #'title: title, #'code: code_states, #'parts: parts }
 
@@ -455,8 +492,8 @@ fun egraph_frames(parts :~ Map) :: List:
     { #'statewalk: [bubble_at(chain_plain[#'ret], ~spot: chain_spots[#'ret],
                               ~body: (chain_bubbles :~ Map)[#'statewalk],
                               ~color: talk_blue,
-                              ~content: prose([["blue nodes form a ", #'plain],
-                                               ["state walk", #'bold]])),
+                              ~content: prose([["state walk", #'bold],
+                                               [" uses memory linearly", #'plain]])),
                     0.0, 0.0, band_callout] }
   // The first write stores a value that the second one throws away. That is worth
   // saying as soon as the graph is up and before any rule is stated, because it is
@@ -659,11 +696,7 @@ fun fork_frames(parts :~ Map) :: List:
   def fork_over:
     { #'fork: [bubble_at(chain_plain[blamed_write], ~spot: chain_spots[blamed_write],
                          ~body: (chain_bubbles :~ Map)[#'fork], ~color: talk_red,
-                         ~content: robot_says(
-                                     #'frown,
-                                     prose_stack([[["two copies", #'bold]],
-                                                  [["of memory!", #'bold]]]),
-                                     ~sep: 12.0, ~scale: 0.82)),
+                         ~content: prose([["non-linear!", #'bold]])),
                0.0, 0.0, band_callout] }
   def blamed:
     Frame(~picts: chain_node_picts(spots_of(kept), kept, ~red: fork_red)
@@ -698,9 +731,11 @@ fun fork_frames(parts :~ Map) :: List:
                         | { #'point: [chain_pointer, & chain_point_at(point)] }),
           ~edges: chain_edges(4))
   def rewalk:
-    for List (row in 0..chain_layers):
-      again(~point: row,
-            ~picks: for List (key in safe): keep_when chain_layer_of[key] <= row; key)
+    [// the pickaxe back at the top, on its own press
+     again(~point: 0),
+     & for List (row in 0..chain_layers):
+         again(~point: row,
+               ~picks: for List (key in safe): keep_when chain_layer_of[key] <= row; key)]
 
   // and what it comes back with, which is the program we wanted: one write, no
   // memory read twice, and cheaper than the program we started from
@@ -795,8 +830,9 @@ fun slide_update_story():
   // classes of one node each -- there is nothing to choose in them -- so those four
   // presses are one: the pointer runs down the rows and the picks land as it
   // passes, in one quicker go. `chain_walk_frames` puts the row the pointer first
-  // lands on two frames into the fork's part, one with its opening frame gone.
-  def walk_start = eg.length() + ru.length() + 1
+  // picks from three frames into the fork's part -- after the asking and the
+  // pickaxe's own arrival -- two with its opening frame gone.
+  def walk_start = eg.length() + ru.length() + 2
   def quick = for List (k in 0..4): walk_start + k
   def presses:
     for List (i in 1..frames.length()):

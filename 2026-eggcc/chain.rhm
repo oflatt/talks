@@ -441,7 +441,7 @@ def chain_gold = chain_nodes(~matched: chain_keys)
 // the state column, so it has to be narrow enough to sit clear of both the class
 // region beside it and the edge of the slide.
 def chain_pointer:
-  as_pict(walk_arrow(~facing: "leftArrow", ~width: 56.0, ~height: 24.0))
+  as_pict(pickaxe(~size: 64.0, ~facing: #'left))
 // where it goes for a layer: level with the middle of that row's nodes
 fun chain_point_at(layer :: Int) :: List:
   [chain_point_x, chain_y(layer) + 32.0 - (chain_pointer :~ pc.Pict).height / 2]

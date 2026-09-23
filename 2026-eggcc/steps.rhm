@@ -1,0 +1,67 @@
+#lang rhombus/and_meta
+// The three steps an e-graph optimizer takes -- put the term in, run the rules, take
+// a term out -- as three boxes with arrows between them. They are the last thing the
+// workflow slide draws, written in the middle of the page as the camera goes into
+// the e-graph, and the first thing the big-space slide has, where they go up into
+// the corner and stay for the rest of it, the step we are on filled gold. In a
+// module of their own so that the two slides draw the very same picture, and the
+// show can cut from the one to the other.
+
+import:
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  "egraph.rhm" open
+  "magicmove.rhm" open
+  "write.rhm".written_shape
+  pict as pc
+
+export:
+  step_keys
+  steps_at
+  step_edges
+  step_wire
+  steps_wire
+  steps_frame
+  with_steps
+
+def step_keys = [#'insert, #'rules, #'extract]
+def step_names = { #'insert: "Insert Term", #'rules: "Run Rules", #'extract: "Extract" }
+def step_w = 222.0
+def step_h = 64.0
+// The same box in both places, so the move to the corner is a move and not a smear;
+// two drawings of each, plain and lit, built once.
+fun step_box(name :: String, ~lit: lit :: Boolean) :: pc.Pict:
+  pc.overlay(written_shape(rounded_path(step_w, step_h, 0.2 * step_h),
+                           ~width: step_w, ~height: step_h,
+                           ~fill: (if lit | hex_color(node_match) | pale(talk_blue)),
+                           ~line: talk_blue, ~line_width: border_width),
+             prose_text(name, ~size: 32.0, ~bold: #true))
+def step_plain:
+  for values(m :~ Map = {}) (k in step_keys): m ++ { k: step_box(step_names[k], ~lit: #false) }
+def step_lit:
+  for values(m :~ Map = {}) (k in step_keys): m ++ { k: step_box(step_names[k], ~lit: #true) }
+def step_centre = for List (i in 0..3): [(slide_width - step_w) / 2, 380.0 + 120.0 * i]
+// up in the corner, level with the title, right of where it ends
+def step_corner = for List (i in 0..3): [1660.0, 90.0 + 100.0 * i]
+
+// the first `upto` of them, in the middle or in the corner, `lit` filled gold
+fun steps_at(~lit: lit = #false, ~upto: upto :: Int = 3,
+             ~corner: corner :: Boolean = #true) :: Map:
+  for values(m :~ Map = {}) (k in step_keys.take(upto), i in 0..):
+    def [x, y] = (if corner | step_corner | step_centre)[i]
+    m ++ { [#'step, k]: [(if k == lit | step_lit | step_plain)[k], x, y, band_above] }
+fun step_edges(upto :: Int) :: List:
+  for List (i in 0..upto - 1): [#'step, [#'step, step_keys[i]], [#'step, step_keys[i + 1]]]
+// one arrow between two of them, for a wire that draws `[#'step, from, to]` specs
+fun step_wire(q :: pc.Pict, from, to) :: pc.Pict:
+  arrow(~on: q, from, to, ~line_width: 4, ~gap: 6, ~color: talk_blue)
+// a wire that draws the steps' arrows and nothing else
+fun steps_wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) (e :~ List in es):
+    skip_when e[0] != #'step
+    step_wire(q, at[e[1]], at[e[2]])
+// the three in the middle of the page: the frame both slides draw
+def steps_frame = Frame(~picts: steps_at(~corner: #false), ~edges: step_edges(3))
+// a frame with the corner steps on it, the step named lit
+fun with_steps(f :: Frame, lit) :: Frame:
+  Frame(~picts: f.picts ++ steps_at(~lit: lit), ~edges: f.edges ++ step_edges(3))

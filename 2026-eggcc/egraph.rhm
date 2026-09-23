@@ -92,9 +92,12 @@ fun hex_color(h :: String) :: draw.Color:
 // subscript. The subscript is as Keynote set it: 58% of the size, its baseline 6% of
 // the size below the line's. A pict's baseline is measured up from its bottom, so
 // trimming that much off the digit's bottom is what lowers it.
+// a Greek letter is set in the maths face, as the code sets its ωs
+fun greek_letter(s :: String) :: Boolean:
+  s.length() > 0 && (Char.to_int(s[0]) >= 0x370 && Char.to_int(s[0]) <= 0x3FF)
 fun node_label(s :: String, ~sub: sub :: maybe(String) = #false,
                ~size: size :: Real = 40.0) :: pc.Pict:
-  def face = draw.Font(~name: node_font, ~size: size)
+  def face = draw.Font(~name: (if greek_letter(s) | math_font | node_font), ~size: size)
   def main = written_text(s, ~font: face)
   if sub
   | def below = written_text(sub, ~font: face with (size = 0.58 * size))

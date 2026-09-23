@@ -100,8 +100,10 @@ parts in tree order, each its own way, overlapping. Three arrivals:
 ## 4. Bubbles and arrows
 
 - `make_bubble(~color, ~padding, ~width, ~height, child, ...)`: pale fill,
-  saturated border; written, the shell is traced and filled and then the words
-  write. `make_arrow(...)` the same as a fat arrow; `make_gear(~size, ~teeth)`.
+  saturated border; written, the shell is traced and filled and then the words pop
+  in. `~text: #'write` writes the words out instead, for a bubble whose words are
+  the point; `callout`, `multi_callout` and `make_arrow` take the same keyword.
+  `make_arrow(...)` the same as a fat arrow; `make_gear(~size, ~teeth)`.
 - `callout(~on, ~at: Find, ~spike: #'n/#'s/#'e/#'w, content)` pins a bubble to a
   point. `multi_callout(~on, ~at: [targets], ~place: marker, content)` reaches
   several targets from one body, each spike leaving the side that faces its target.
