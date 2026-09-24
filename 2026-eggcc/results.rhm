@@ -30,8 +30,14 @@ export:
 // already open. Each curve draws itself from the left, which is the extractor
 // working through the regions.
 fun slide_cdf():
-  def page = titled("Extraction is Fast in Practice",
-                    ~tag: "Extraction CDF title", ~nudge: [0.0, 0.0])
+  // the chart named, over it, between the slide's title and the plot: what was
+  // measured and on what
+  def caption:
+    pc.text("Eggcc Extraction Performance on Polybench and Bril Benchmark Suites",
+            ~font: draw.Font(~name: prose_font, ~size: 34.0, ~weight: #'bold))
+  def page:
+    put(titled("Extraction is Fast in Practice", ~tag: "Extraction CDF title", ~nudge: [0.0, 0.0]),
+        caption, cdf_x + (cdf_w - caption.width) / 2, cdf_y - 66.0)
   fun scene(ks :~ List, ~sweep: sweep = #false, ~sweep_alpha: sweep_alpha = 1.0) :: pc.Pict:
     pc.overlay(~horiz: #'left, ~vert: #'top, page,
                cdf_chart(~draw: ks, ~sweep: sweep, ~sweep_alpha: sweep_alpha))

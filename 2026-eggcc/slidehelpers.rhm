@@ -888,12 +888,12 @@ def outline_gap = 56.0           // disc to label
 def outline_text = 52.0          // label font size
 
 // The sections' colours, from the deck's own palette rather than a rainbow: the
-// blue its bubbles are drawn in for the motivation, the red its bad news comes in
-// for the hard problem, the teal of the statewalk the algorithm follows for the way
+// blue its bubbles are drawn in for the motivation, a wine red -- on the cool side,
+// to sit with the teal and the purple -- for the hard problem, the teal of the statewalk the algorithm follows for the way
 // round it, and the group's purple for the compiler. A fifth section would start
 // the list over.
 def outline_palette:
-  [talk_blue, draw.Color(214, 48, 49), draw.Color(23, 120, 110), draw.Color(75, 46, 131)]
+  [talk_blue, draw.Color(158, 42, 84), draw.Color(23, 120, 110), draw.Color(75, 46, 131)]
 fun hue_of(i :: Int, n :: Int) :: draw.Color:
   outline_palette[i mod outline_palette.length()]
 

@@ -26,6 +26,9 @@ export:
   cdf_stages
   cdf_point
   cdf_dp_color
+  cdf_x
+  cdf_y
+  cdf_w
   sweep_secs
   sweep_frac
   compile_chart
