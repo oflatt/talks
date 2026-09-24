@@ -608,9 +608,10 @@ fun slide_12():
   // them lit, and then the term is written over the place the graph is about to take.
   def term_stage = { #'term: [input_line, & stage_at(input_line), band_nodes] }
   def opening:
-    [steps_frame,
-     Frame(~picts: steps_at(~lit: #'insert), ~edges: step_edges(3)),
-     Frame(~picts: steps_at(~lit: #'insert) ++ term_stage, ~edges: step_edges(3))]
+    [// the three steps in the corner, where the slide before this carried them
+     corner_frame,
+     Frame(~picts: steps_at(~lit: #'program), ~edges: step_edges(3)),
+     Frame(~picts: steps_at(~lit: #'program) ++ term_stage, ~edges: step_edges(3))]
   // Putting the term in, one thing at a time: the nodes it is made of appear under
   // it, each under the word it stands for and at that word's size, with the arrows
   // between them -- the operands in a row, and the operators in a row below them, so
@@ -743,7 +744,7 @@ fun slide_12():
      term_2]
   def story:
     opening
-      ++ inserting.map(fun (f): with_steps(f, #'insert))
+      ++ inserting.map(fun (f): with_steps(f, #'program))
       ++ (rewrites ++ [grouping]).map(fun (f): with_steps(f, #'rules))
       ++ extraction.map(fun (f): with_steps(f, #'extract))
 

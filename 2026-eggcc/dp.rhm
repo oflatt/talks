@@ -14,6 +14,8 @@ import:
   draw
 
 export:
+  collapse_title
+  slide_collapse
   slide_dp
   dp_title
 
@@ -36,6 +38,333 @@ def walk_a_line = "17786E"
 def walk_b_line = "553C93"
 def walk_seed_line = "6E6E82"
 
+// ---------------------------------------------------------------------------
+// The picture the two slides in this section share: where the graph goes once
+// the code box has gone, which walks the table holds, and the mass each one can
+// build. Both slides draw the same graph in the same place, so they are written
+// against one description of it rather than two.
+def dp_rows :~ List = chain_statewalks()
+
+// ------------------------------------------------------------ where the graph goes
+// The same graph, moved into the middle of the slide once the code box has gone,
+// and grown by as much as the height allows. Not stretched: the columns keep the
+// spacing the layout solved for, the picture just takes the room the code had.
+fun node_size(key) :: List:
+  def w = (chain_box :~ Map)[key] :~ Real
+  [w, if w > 100 | 64.0 | 63.486]
+def home_box:
+  for values(b :~ List = [1.0e9, 1.0e9, -1.0e9, -1.0e9]) (key in chain_spots.keys()):
+    def [x, y] = (chain_spots :~ Map)[key] :~ List
+    def [w, h] = node_size(key)
+    [math.min(b[0], x), math.min(b[1], y),
+     math.max(b[2], x + w), math.max(b[3], y + h)]
+def dp_top = 216.0
+def dp_bottom = 1032.0
+def dp_scale:
+  math.min(1.25, (dp_bottom - dp_top) / ((home_box[3] :~ Real) - (home_box[1] :~ Real)))
+def dp_left:
+  (slide_width - ((home_box[2] :~ Real) - (home_box[0] :~ Real)) * dp_scale) / 2
+fun moved(spots :~ Map) :: Map:
+  for values(m :~ Map = {}) (key in spots.keys()):
+    def [x, y] = spots[key] :~ List
+    m ++ { key: [dp_left + (x - (home_box[0] :~ Real)) * dp_scale,
+                 dp_top + (y - (home_box[1] :~ Real)) * dp_scale] }
+def away :~ Map = moved(chain_spots)
+fun middle(spots :~ Map, key) :: List:
+  def [x, y] = spots[key] :~ List
+  def [w, h] = node_size(key)
+  [x + w * dp_scale / 2, y + h * dp_scale / 2]
+
+// The classes the rule made, drawn wherever the graph is: `v1 ≡ v3` and `ω2 ≡ ω3`
+// are the reason any of this is hard, and a slide about which class holds which
+// walk cannot be one that has stopped drawing the classes.
+fun regions_at(spots :~ Map) :: Map:
+  fun tube(from, to, dash):
+    def r :~ List = eclass_region(middle(spots, from), middle(spots, to), ~dash: dash)
+    [r[0], r[1], r[2], band_below]
+  { #'old_class: tube(#'v1, #'v3, value_class),
+    #'memory_class: tube(#'s3, #'s2, state_class) }
+
+fun picts_at(spots :~ Map, fills :~ Map, ~scale: k :: Real = dp_scale) :: Map:
+  def nodes :~ Map = chain_nodes(~fills: fills)
+  for values(m :~ Map = {}) (key in spots.keys()):
+    def [x, y] = spots[key] :~ List
+    m ++ { key: [as_pict(nodes[key]).scale(k), x, y] }
+fun green_at(spots :~ Map, term :~ List) :: Map:
+  def nodes :~ Map = chain_nodes(~picked: term)
+  for values(m :~ Map = {}) (key in term):
+    def [x, y] = spots[key] :~ List
+    m ++ { key: [as_pict(nodes[key]).scale(dp_scale), x, y] }
+
+// ------------------------------------------------------------------ the two walks
+// Which way out of the argument state a walk went. That is what the colours are
+// about, so it is one function and everything else reads it.
+fun branch(walk :~ List):
+  cond
+  | walk.length() < 2: #'seed
+  | walk[1] == #'us: #'a
+  | ~else: #'b
+fun branch_fill(b) :: String:
+  match b
+  | #'a: branch_a_fill
+  | #'b: branch_b_fill
+  | ~else: branch_seed_fill
+fun branch_blob(b) :: String: branch_fill(b)
+fun branch_line(b) :: String:
+  match b
+  | #'a: walk_a_line
+  | #'b: walk_b_line
+  | ~else: walk_seed_line
+
+fun row_where(cls, b) :: List:
+  for values(found :~ List = []) (row :~ List in dp_rows):
+    if row[0] == cls && branch(row[2] :~ List) == b | row | found
+def r_seed = dp_rows[0]
+def r_a = row_where(chain_class_of[#'s3], #'a)      // the state the two writes meet in
+def r_b = row_where(chain_class_of[#'s3], #'b)
+def r_root_a = row_where(chain_root, #'a)
+def r_root_b = row_where(chain_root, #'b)
+def r_best = chain_dp_best()
+
+// every row the table has written by the time a walk has been followed: the walks
+// that are a prefix of it are the ones it was built out of
+fun rows_along(walk :~ List) :: List:
+  for List (row :~ List in dp_rows):
+    def w :~ List = row[2]
+    keep_when w.length() <= walk.length()
+      && (for values(all = #true) (i in 0..w.length()): all && w[i] == walk[i])
+    row
+fun fills_of(shown :~ List) :: Map:
+  def by_class:
+    for values(m :~ Map = {}) (row :~ List in shown):
+      def c = row[0]
+      def col = branch_fill(branch(row[2] :~ List))
+      def had :~ List = if m.has_key(c) | m[c] | []
+      if had.contains(col) | m | m ++ { c: had ++ [col] }
+  for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
+    if by_class.has_key(c) | m ++ { key: by_class[c] } | m
+// the walk of one row, as edges, in its branch's colour
+fun walk_edges(row :~ List) :: List:
+  def walk :~ List = row[2]
+  def hue = branch_line(branch(walk))
+  for List (j in 0..walk.length() - 1): [#'walk, walk[j + 1], walk[j], hue]
+
+// ---------------------------------------------------------- what a walk can build
+// The extractable set, as one mass: every *pure* node of every class the walk puts
+// within reach. Not the walk's own nodes -- the writes it performs and the memories
+// they leave are how it got there, not what it can build once there -- and that is
+// what makes two walks comparable at a glance: what they reach differs only in the
+// values, and where it does not differ at all, either of them will do.
+//
+// Classes and not representatives, because the set *is* a set of classes. They are
+// joined by the graph's own edges between covered nodes, and by a neck between
+// members of one class. The layout keeps an edge from passing behind a box it does
+// not end at, so a neck along one cannot swallow a node not in the set.
+def blob_pad = 18.0
+def blob_neck = 34.0
+fun blob_nodes(row :~ List) :: List:
+  for values(acc :~ List = []) ([key, c, _] in chain_graph :~ List):
+    if (row[1] :~ List).contains(c) && !chain_eff_class(c) && !acc.contains(key)
+    | acc ++ [key]
+    | acc
+fun blob_links(row :~ List) :: List:
+  def covered :~ List = blob_nodes(row)
+  def args :~ Map = chain_args_of(chain_graph)
+  def down:
+    for values(acc :~ List = []) (key in covered):
+      for values(acc :~ List = acc) (a in args[key] :~ List):
+        for values(acc :~ List = acc) ([k2, c2, _] in chain_graph :~ List):
+          if c2 == a && covered.contains(k2) | acc ++ [[key, k2]] | acc
+  // and the members of one class to each other, which is the one join the graph
+  // has no edge for
+  for values(acc :~ List = down) ([k1, c1, _] in chain_graph :~ List):
+    for values(acc :~ List = acc) ([k2, c2, _] in chain_graph :~ List):
+      if c1 == c2 && k1 != k2 && covered.contains(k1) && covered.contains(k2)
+      | acc ++ [[k1, k2]]
+      | acc
+// A mass carries its own colour, so that one press can show two of them: the set
+// the table already had and the set the walk that just arrived reaches. The two
+// are nested, and each is laid at half strength, so where both reach the colours
+// mix and where only the bigger does its own colour shows -- which is the whole
+// difference between the two entries, and the reason both are kept.
+fun blob_marks(row :~ List) :: List:
+  def hue = branch_blob(branch(row[2] :~ List))
+  (for List (k in blob_nodes(row)): [#'blob, k, hue])
+    ++ (for List ([f, t] in blob_links(row)): [#'blink, f, t, hue])
+
+fun marks_of(f :: Frame, tag) :: List:
+  for List (e :~ List in f.edges): keep_when e[0] == tag; e.rest
+// the masses a frame shows, in the order they are to be drawn
+fun hues_of(f :: Frame) :: List:
+  for values(acc :~ List = []) (m :~ List in marks_of(f, #'blob)):
+    if acc.contains(m[1]) | acc | acc ++ [m[1]]
+
+// The mass is drawn by the press rather than by either frame, because what has to
+// happen between two presses is that it *grows*: a shape that arrives as a second
+// pict can only dissolve into place. Each piece new to this press swells from
+// nothing, and the ones further from the mass that is already there start later, so
+// it runs outwards from the walk instead of blinking on all at once.
+fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
+  // a piece of a mass is a colour and a node, so that two masses can be in flight
+  // at once without either one's growth being confused for the other's
+  def was :~ List = for List (m :~ List in marks_of(a, #'blob)): [m[1], m[0]]
+  def now :~ List = for List (m :~ List in marks_of(b, #'blob)): [m[1], m[0]]
+  def links :~ List = marks_of(a, #'blink) ++ marks_of(b, #'blink)
+  fun reach_dist(item :~ List) :: Real:
+    def [cx, cy] = middle(away, item[1])
+    for values(d :~ Real = 1.0e9) (o :~ List in was):
+      def [ox, oy] = middle(away, o[1])
+      math.min(d, math.sqrt((cx - ox) * (cx - ox) + (cy - oy) * (cy - oy)))
+  def coming :~ List: for List (k in now): keep_when !was.contains(k); k
+  def far: for values(m :~ Real = 1.0) (k in coming): math.max(m, reach_dist(k))
+  def size :~ Map:
+    for values(m :~ Map = {}) (item in now ++ was):
+      def f:
+        cond
+        | was.contains(item) && now.contains(item): 1.0
+        | now.contains(item):
+            def start = 0.5 * (if far > 0.0 | reach_dist(item :~ List) / far | 0.0)
+            smooth((t - start) / math.max(0.05, 1.0 - start))
+        | ~else: smooth(1.0 - t)
+      m ++ { item: f }
+  fun at(hue, key) :: Real:
+    if size.has_key([hue, key]) | (size[[hue, key]] :~ Real) | 0.0
+  // the frame this press lands on says the order, so the press ends on the picture
+  // the still after it draws; a set on its way out goes after them
+  def order :~ List:
+    for values(acc :~ List = hues_of(b)) (h in hues_of(a)):
+      if acc.contains(h) | acc | acc ++ [h]
+  // one set, as a flat mass in its own colour: its pieces drawn opaque, so that
+  // where they overlap each other is no darker, and the whole faded once
+  fun mass_of(hue) :: pc.Pict:
+    pc.dc(fun (target :: draw.DC, dx, dy):
+            target.save()
+            target.brush := draw.Brush(~color: hex_color(hue))
+            // the necks first, so a node's own blob is drawn over where they meet
+            target.pen := draw.Pen(~color: hex_color(hue),
+                                   ~width: blob_neck * dp_scale,
+                                   ~cap: #'round, ~join: #'round)
+            for ([f, tk, h] in links):
+              skip_when h != hue
+              def anchor = if at(hue, f) >= at(hue, tk) | f | tk
+              def other = if anchor == f | tk | f
+              def u = math.min(at(hue, f), at(hue, tk))
+              skip_when u <= 0.02
+              def [ax, ay] = middle(away, anchor)
+              def [ox, oy] = middle(away, other)
+              def path = draw.Path()
+              path.move_to([dx + ax, dy + ay])
+              path.line_to([dx + ax + (ox - ax) * u, dy + ay + (oy - ay) * u])
+              target.path(path)
+            target.pen := draw.Pen(~color: hex_color(hue), ~width: 0, ~cap: #'round)
+            for (item :~ List in size.keys()):
+              skip_when item[0] != hue
+              def f = (size[item] :~ Real)
+              skip_when f <= 0.02
+              def [cx, cy] = middle(away, item[1])
+              def [w, h] = node_size(item[1])
+              def bw = (w + 2 * blob_pad) * dp_scale * f
+              def bh = (h + 2 * blob_pad) * dp_scale * f
+              def path = draw.Path()
+              path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
+                                     math.min(bw, bh) * 0.45)
+              target.path(path)
+            target.restore(),
+          ~width: slide_width, ~height: slide_height)
+  for values(q :~ pc.Pict = layer) (hue in order):
+    put(q, mass_of(hue).alpha(blob_alpha, ~composite: #true), 0.0, 0.0)
+
+// One press per term the walk grows by, in the order a reader would try them:
+// everything the first write opens up, and then everything the second does, so
+// that the two arrive at the same class one after the other rather than
+// interleaved. The last of them is the point of the slide.
+def order:
+  [[#'s0],
+   [#'s0, #'us], [#'s0, #'us, #'s3],
+   [#'s0, #'u1], [#'s0, #'u1, #'s1],
+   [#'s0, #'u1, #'s1, #'u2], [#'s0, #'u1, #'s1, #'u2, #'s2]]
+fun row_for(walk :~ List) :: List:
+  for values(found :~ List = []) (row :~ List in dp_rows):
+    if (row[2] :~ List) == walk | row | found
+// what the table holds once the first `n` of those have been taken
+fun stored(n :: Int) :: List:
+  for values(acc :~ List = []) (i in 0..n):
+    for values(acc :~ List = acc) (row :~ List in rows_along((order :~ List)[i] :~ List)):
+      if acc.contains(row) | acc | acc ++ [row]
+
+
+def w_root_a = [#'s0, #'us, #'s3, #'ret]
+def w_root_b = [#'s0, #'u1, #'s1, #'u2, #'s2, #'ret]
+def all_stored:
+  def more = rows_along(w_root_a) ++ rows_along(w_root_b)
+  for values(acc :~ List = stored((order :~ List).length())) (row :~ List in more):
+    if acc.contains(row) | acc | acc ++ [row]
+
+// ------------------------------------------------------------------- the words
+// What the whole slide is an instance of, said first: in the margin left of the
+// graph, where the code box was, and up for the whole of the stepping, which is
+// read against it.
+def idea_at = [100.0, 168.0]
+def key_idea:
+  def words:
+    // Short lines rather than small ones: the margin is 500 wide.
+    prose_stack([[["Key idea:", #'bold]],
+                 [["keep ", #'plain], ["multiple", #'bold]],
+                 [["statewalks", #'plain]],
+                 [["per e-class", #'plain]]])
+  // the face over the words, not beside them: the margin is taller than it is wide
+  def content: robot_says(#'idea, words, ~sep: 10.0, ~above: #true, ~scale: 0.7)
+  { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
+             idea_at[0], idea_at[1], band_callout] }
+def idea_bubble :: pc.Pict = (key_idea[#'idea] :~ List)[0]
+
+// The last word. The algorithm's cost is bounded by the statewalk width `k` (paper,
+// Section 6): how many walks a class ends up holding, which on this graph is two,
+// for the class the two writes meet in -- so the bubble points at that class, the
+// one filled in both colours. The measured mean width across the benchmarks is
+// 33.15, which is the claim: the parameter the bound is in stays small. The bound
+// itself is left to the paper. It stands in the margin right of the graph, which
+// is the empty side, and reaches down to the class.
+def in_practice:
+  def words:
+    prose_stack([[["time bounded by", #'bold]],
+                 [["statewalk width ", #'bold_italic], ["(", #'bold],
+                  ["k", #'bold_italic], [")", #'bold]],
+                 [["is low in practice!", #'bold]]])
+  def [region, rx, ry, _] = (regions_at(away) :~ Map)[#'memory_class]
+  { #'practice: [bubble_at(region, ~spot: [rx, ry], ~body: [1440.0, 190.0],
+                           ~color: talk_green,
+                           // the face over the words: the margin is taller than wide
+                           ~content: robot_says(#'smile, words, ~sep: 12.0, ~above: #true,
+                                                ~scale: 0.85)),
+                 0.0, 0.0, band_callout] }
+
+
+// The last word of all: the kind of answer this is. A hard problem with a
+// parameter that stays small in practice is what a parameterized algorithm is for,
+// and this one is one. Right of the graph, which is the empty side of the slide.
+def parameterized:
+  def words:
+    prose_stack([[["parameterized", #'bold_italic]],
+                 [["algorithms", #'bold_italic]],
+                 [["provide practical", #'plain]],
+                 [["solutions to", #'plain]],
+                 [["NP-hard problems", #'plain]]])
+  // written out rather than popped: the last word of the section, said slowly
+  { #'wand: [make_bubble(~color: talk_green, ~padding: 24.0, ~text: #'write,
+                         pc.stack(~sep: 12.0, ~horiz: #'center, wand(~size: 110.0), words)),
+             1440.0, 570.0, band_callout] }
+
+
+// The title, as a piece of the slide rather than of the page: the slide after
+// this one opens on this one's last picture and changes the words, which it can
+// only do if they are drawn like everything else.
+def dp_page = as_pict(page_canvas())
+fun dp_titled(t :: String) :: Map:
+  { #'title: [title_text(t), title_x, title_y, band_callout] }
+fun entitled(frames :~ List, over :~ Map) :: List:
+  for List (f :: Frame in frames): Frame(~picts: f.picts ++ over, ~edges: f.edges)
+
 // -------------------------------------------------------------------------------------
 // The algorithm, on the example the section before this one was about.
 //
@@ -48,305 +377,28 @@ def walk_seed_line = "6E6E82"
 // goes up, and reads it from here
 def dp_title = "The Statewalk DP Algorithm"
 fun slide_dp():
-  def canvas = titled(dp_title, ~tag: "Statewalk DP title", ~nudge: [0.0, 0.0])
-  def rows :~ List = chain_statewalks()
 
-  // ------------------------------------------------------------ where the graph goes
-  // The same graph, moved into the middle of the slide once the code box has gone,
-  // and grown by as much as the height allows. Not stretched: the columns keep the
-  // spacing the layout solved for, the picture just takes the room the code had.
-  fun node_size(key) :: List:
-    def w = (chain_box :~ Map)[key] :~ Real
-    [w, if w > 100 | 64.0 | 63.486]
-  def home_box:
-    for values(b :~ List = [1.0e9, 1.0e9, -1.0e9, -1.0e9]) (key in chain_spots.keys()):
-      def [x, y] = (chain_spots :~ Map)[key] :~ List
-      def [w, h] = node_size(key)
-      [math.min(b[0], x), math.min(b[1], y),
-       math.max(b[2], x + w), math.max(b[3], y + h)]
-  def dp_top = 216.0
-  def dp_bottom = 1032.0
-  def dp_scale:
-    math.min(1.25, (dp_bottom - dp_top) / ((home_box[3] :~ Real) - (home_box[1] :~ Real)))
-  def dp_left:
-    (slide_width - ((home_box[2] :~ Real) - (home_box[0] :~ Real)) * dp_scale) / 2
-  fun moved(spots :~ Map) :: Map:
-    for values(m :~ Map = {}) (key in spots.keys()):
-      def [x, y] = spots[key] :~ List
-      m ++ { key: [dp_left + (x - (home_box[0] :~ Real)) * dp_scale,
-                   dp_top + (y - (home_box[1] :~ Real)) * dp_scale] }
-  def away :~ Map = moved(chain_spots)
-  fun middle(spots :~ Map, key) :: List:
-    def [x, y] = spots[key] :~ List
-    def [w, h] = node_size(key)
-    [x + w * dp_scale / 2, y + h * dp_scale / 2]
-
-  // The classes the rule made, drawn wherever the graph is: `v1 ≡ v3` and `ω2 ≡ ω3`
-  // are the reason any of this is hard, and a slide about which class holds which
-  // walk cannot be one that has stopped drawing the classes.
-  fun regions_at(spots :~ Map) :: Map:
-    fun tube(from, to, dash):
-      def r :~ List = eclass_region(middle(spots, from), middle(spots, to), ~dash: dash)
-      [r[0], r[1], r[2], band_below]
-    { #'old_class: tube(#'v1, #'v3, value_class),
-      #'memory_class: tube(#'s3, #'s2, state_class) }
-
-  fun picts_at(spots :~ Map, fills :~ Map, ~scale: k :: Real = dp_scale) :: Map:
-    def nodes :~ Map = chain_nodes(~fills: fills)
-    for values(m :~ Map = {}) (key in spots.keys()):
-      def [x, y] = spots[key] :~ List
-      m ++ { key: [as_pict(nodes[key]).scale(k), x, y] }
-  fun green_at(spots :~ Map, term :~ List) :: Map:
-    def nodes :~ Map = chain_nodes(~picked: term)
-    for values(m :~ Map = {}) (key in term):
-      def [x, y] = spots[key] :~ List
-      m ++ { key: [as_pict(nodes[key]).scale(dp_scale), x, y] }
-
-  // ------------------------------------------------------------------ the two walks
-  // Which way out of the argument state a walk went. That is what the colours are
-  // about, so it is one function and everything else reads it.
-  fun branch(walk :~ List):
-    cond
-    | walk.length() < 2: #'seed
-    | walk[1] == #'us: #'a
-    | ~else: #'b
-  fun branch_fill(b) :: String:
-    match b
-    | #'a: branch_a_fill
-    | #'b: branch_b_fill
-    | ~else: branch_seed_fill
-  fun branch_blob(b) :: String: branch_fill(b)
-  fun branch_line(b) :: String:
-    match b
-    | #'a: walk_a_line
-    | #'b: walk_b_line
-    | ~else: walk_seed_line
-
-  fun row_where(cls, b) :: List:
-    for values(found :~ List = []) (row :~ List in rows):
-      if row[0] == cls && branch(row[2] :~ List) == b | row | found
-  def r_seed = rows[0]
-  def r_a = row_where(chain_class_of[#'s3], #'a)      // the state the two writes meet in
-  def r_b = row_where(chain_class_of[#'s3], #'b)
-  def r_root_a = row_where(chain_root, #'a)
-  def r_root_b = row_where(chain_root, #'b)
-  def r_best = chain_dp_best()
-
-  // every row the table has written by the time a walk has been followed: the walks
-  // that are a prefix of it are the ones it was built out of
-  fun rows_along(walk :~ List) :: List:
-    for List (row :~ List in rows):
-      def w :~ List = row[2]
-      keep_when w.length() <= walk.length()
-        && (for values(all = #true) (i in 0..w.length()): all && w[i] == walk[i])
-      row
-  fun fills_of(shown :~ List) :: Map:
-    def by_class:
-      for values(m :~ Map = {}) (row :~ List in shown):
-        def c = row[0]
-        def col = branch_fill(branch(row[2] :~ List))
-        def had :~ List = if m.has_key(c) | m[c] | []
-        if had.contains(col) | m | m ++ { c: had ++ [col] }
-    for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
-      if by_class.has_key(c) | m ++ { key: by_class[c] } | m
-  // the walk of one row, as edges, in its branch's colour
-  fun walk_edges(row :~ List) :: List:
-    def walk :~ List = row[2]
-    def hue = branch_line(branch(walk))
-    for List (j in 0..walk.length() - 1): [#'walk, walk[j + 1], walk[j], hue]
-
-  // ---------------------------------------------------------- what a walk can build
-  // The extractable set, as one mass: the walk's own terms, and every node of every
-  // class the walk puts within reach. Classes and not representatives, because the
-  // set *is* a set of classes -- which is also what makes the point of the slide
-  // visible, since the two walks that meet reach the same classes but for one, and
-  // two masses that differ by one lobe say that where two masses of different shapes
-  // would not.
-  //
-  // They are joined by the graph's own edges between covered nodes, and by a neck
-  // between members of one class. The layout keeps an edge from passing behind a box
-  // it does not end at, so a neck along one cannot swallow a node not in the set.
-  def blob_pad = 18.0
-  def blob_neck = 34.0
-  fun blob_nodes(row :~ List) :: List:
-    def walk :~ List = row[2]
-    for values(acc :~ List = walk) ([key, c, _] in chain_graph :~ List):
-      if (row[1] :~ List).contains(c) && !acc.contains(key) | acc ++ [key] | acc
-  fun blob_links(row :~ List) :: List:
-    def covered :~ List = blob_nodes(row)
-    def args :~ Map = chain_args_of(chain_graph)
-    def down:
-      for values(acc :~ List = []) (key in covered):
-        for values(acc :~ List = acc) (a in args[key] :~ List):
-          for values(acc :~ List = acc) ([k2, c2, _] in chain_graph :~ List):
-            if c2 == a && covered.contains(k2) | acc ++ [[key, k2]] | acc
-    // and the members of one class to each other, which is the one join the graph
-    // has no edge for
-    for values(acc :~ List = down) ([k1, c1, _] in chain_graph :~ List):
-      for values(acc :~ List = acc) ([k2, c2, _] in chain_graph :~ List):
-        if c1 == c2 && k1 != k2 && covered.contains(k1) && covered.contains(k2)
-        | acc ++ [[k1, k2]]
-        | acc
-  // A mass carries its own colour, so that one press can show two of them: the set
-  // the table already had and the set the walk that just arrived reaches. The two
-  // are nested, and each is laid at half strength, so where both reach the colours
-  // mix and where only the bigger does its own colour shows -- which is the whole
-  // difference between the two entries, and the reason both are kept.
-  fun blob_marks(row :~ List) :: List:
-    def hue = branch_blob(branch(row[2] :~ List))
-    (for List (k in blob_nodes(row)): [#'blob, k, hue])
-      ++ (for List ([f, t] in blob_links(row)): [#'blink, f, t, hue])
-
-  fun smooth(u :: Real) :: Real:
-    def v = math.max(0.0, math.min(1.0, u))
-    v * v * (3.0 - 2.0 * v)
-  fun marks_of(f :: Frame, tag) :: List:
-    for List (e :~ List in f.edges): keep_when e[0] == tag; e.rest
-  // the masses a frame shows, in the order they are to be drawn
-  fun hues_of(f :: Frame) :: List:
-    for values(acc :~ List = []) (m :~ List in marks_of(f, #'blob)):
-      if acc.contains(m[1]) | acc | acc ++ [m[1]]
-
-  // The mass is drawn by the press rather than by either frame, because what has to
-  // happen between two presses is that it *grows*: a shape that arrives as a second
-  // pict can only dissolve into place. Each piece new to this press swells from
-  // nothing, and the ones further from the mass that is already there start later, so
-  // it runs outwards from the walk instead of blinking on all at once.
-  fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
-    // a piece of a mass is a colour and a node, so that two masses can be in flight
-    // at once without either one's growth being confused for the other's
-    def was :~ List = for List (m :~ List in marks_of(a, #'blob)): [m[1], m[0]]
-    def now :~ List = for List (m :~ List in marks_of(b, #'blob)): [m[1], m[0]]
-    def links :~ List = marks_of(a, #'blink) ++ marks_of(b, #'blink)
-    fun reach_dist(item :~ List) :: Real:
-      def [cx, cy] = middle(away, item[1])
-      for values(d :~ Real = 1.0e9) (o :~ List in was):
-        def [ox, oy] = middle(away, o[1])
-        math.min(d, math.sqrt((cx - ox) * (cx - ox) + (cy - oy) * (cy - oy)))
-    def coming :~ List: for List (k in now): keep_when !was.contains(k); k
-    def far: for values(m :~ Real = 1.0) (k in coming): math.max(m, reach_dist(k))
-    def size :~ Map:
-      for values(m :~ Map = {}) (item in now ++ was):
-        def f:
-          cond
-          | was.contains(item) && now.contains(item): 1.0
-          | now.contains(item):
-              def start = 0.5 * (if far > 0.0 | reach_dist(item :~ List) / far | 0.0)
-              smooth((t - start) / math.max(0.05, 1.0 - start))
-          | ~else: smooth(1.0 - t)
-        m ++ { item: f }
-    fun at(hue, key) :: Real:
-      if size.has_key([hue, key]) | (size[[hue, key]] :~ Real) | 0.0
-    // the frame this press lands on says the order, so the press ends on the picture
-    // the still after it draws; a set on its way out goes after them
-    def order :~ List:
-      for values(acc :~ List = hues_of(b)) (h in hues_of(a)):
-        if acc.contains(h) | acc | acc ++ [h]
-    // one set, as a flat mass in its own colour: its pieces drawn opaque, so that
-    // where they overlap each other is no darker, and the whole faded once
-    fun mass_of(hue) :: pc.Pict:
-      pc.dc(fun (target :: draw.DC, dx, dy):
-              target.save()
-              target.brush := draw.Brush(~color: hex_color(hue))
-              // the necks first, so a node's own blob is drawn over where they meet
-              target.pen := draw.Pen(~color: hex_color(hue),
-                                     ~width: blob_neck * dp_scale,
-                                     ~cap: #'round, ~join: #'round)
-              for ([f, tk, h] in links):
-                skip_when h != hue
-                def anchor = if at(hue, f) >= at(hue, tk) | f | tk
-                def other = if anchor == f | tk | f
-                def u = math.min(at(hue, f), at(hue, tk))
-                skip_when u <= 0.02
-                def [ax, ay] = middle(away, anchor)
-                def [ox, oy] = middle(away, other)
-                def path = draw.Path()
-                path.move_to([dx + ax, dy + ay])
-                path.line_to([dx + ax + (ox - ax) * u, dy + ay + (oy - ay) * u])
-                target.path(path)
-              target.pen := draw.Pen(~color: hex_color(hue), ~width: 0, ~cap: #'round)
-              for (item :~ List in size.keys()):
-                skip_when item[0] != hue
-                def f = (size[item] :~ Real)
-                skip_when f <= 0.02
-                def [cx, cy] = middle(away, item[1])
-                def [w, h] = node_size(item[1])
-                def bw = (w + 2 * blob_pad) * dp_scale * f
-                def bh = (h + 2 * blob_pad) * dp_scale * f
-                def path = draw.Path()
-                path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
-                                       math.min(bw, bh) * 0.45)
-                target.path(path)
-              target.restore(),
-            ~width: slide_width, ~height: slide_height)
-    for values(q :~ pc.Pict = layer) (hue in order):
-      put(q, mass_of(hue).alpha(blob_alpha, ~composite: #true), 0.0, 0.0)
-
-  // ------------------------------------------------------------------- the words
-  // What the whole slide is an instance of, said first: in the margin left of the
-  // graph, where the code box was, and up for the whole of the stepping, which is
-  // read against it.
-  def idea_at = [100.0, 300.0]
-  def key_idea:
-    def words:
-      // Short lines rather than small ones: the margin is 500 wide.
-      prose_stack([[["Key idea:", #'bold]],
-                   [["keep ", #'plain], ["multiple", #'bold]],
-                   [["statewalks", #'plain]],
-                   [["per e-class", #'plain]]])
-    // the face over the words, not beside them: the margin is taller than it is wide
-    def content: robot_says(#'idea, words, ~sep: 12.0, ~above: #true, ~scale: 0.85)
-    { #'idea: [make_bubble(~color: talk_green, ~padding: 24.0, content),
-               idea_at[0], idea_at[1], band_callout] }
-  // And the optimization on the key idea, said once the class that holds two walks
-  // is up and before their sets are shown: not every walk that reaches a class is
-  // worth keeping, only one per set. Right of the graph, level with the key idea,
-  // and up for the rest of the slide like it.
-  def distinct:
-    def words:
-      prose_stack([[["Optimization:", #'bold]],
-                   [["collapse by unique", #'plain]],
-                   [["extractable set", #'plain]]])
-    { #'distinct: [make_bubble(~color: talk_green, ~padding: 24.0, words),
-                   1440.0, 300.0, band_callout] }
   // What the whole slide is after, said at the return as soon as the graph is up: a
   // term out of the root class that one state walk reaches the whole of. It stays
   // up to the end, pointing at the return wherever the return stands -- which, for
   // the press that lays the answer out as a tree, is somewhere else.
   // The body stands in the corner left of the graph's last row, three short lines
-  // so that it fits between the bubble about the width and the row's first state,
-  // clear of the slide's bottom edge and of the bubbles on the right; for the tree,
-  // whose return is over there, it stands on the right instead, in two lines.
-  fun want_at(spots :~ Map, ~body: body :~ List = [530.0, 890.0],
-              ~lines: lines :~ List = [[["Want:", #'bold]],
-                                       [["extraction using", #'plain]],
-                                       [["a single state walk", #'plain]]]) :: Map:
+  // so that it fits under the bubble about the width and left of the row's first
+  // state, clear of the slide's bottom edge and of the bubbles on the right. It
+  // stands there for the whole slide; only its spike follows the return.
+  def want_body = [440.0, 820.0]
+  fun want_at(spots :~ Map) :: Map:
     def [rx, ry] = spots[#'ret] :~ List
     { #'want: [bubble_at(as_pict(chain_plain[#'ret]).scale(dp_scale), ~spot: [rx, ry],
-                         ~body: body, ~color: talk_blue, ~content: prose_stack(lines)),
+                         ~body: want_body, ~color: talk_blue,
+                         ~content: prose_stack([[["Want:", #'bold]],
+                                                [["extraction using", #'plain]],
+                                                [["a single state walk", #'plain]]])),
                0.0, 0.0, band_callout] }
   def want = want_at(away)
   // the three of them, for every frame after all are up
-  def said = key_idea ++ distinct ++ want
-
-  // The last word. The algorithm's cost is in the statewalk width `k` (paper,
-  // Section 6): how many walks a class ends up holding, which on this graph is two,
-  // for the class the two writes meet in -- so the bubble points at that class, the
-  // one filled in both colours. The measured mean width across the benchmarks is
-  // 33.15, which is the claim: the parameter the bound is in stays small. The bound
-  // itself is left to the paper. It stands in the margin left of the graph, where
-  // the key idea stood, and reaches across to the class.
-  def in_practice:
-    def words:
-      prose_stack([[["statewalk width ", #'bold_italic], ["(", #'bold],
-                    ["k", #'bold_italic], [")", #'bold]],
-                   [["is low in practice!", #'bold]]])
-    def [region, rx, ry, _] = (regions_at(away) :~ Map)[#'memory_class]
-    { #'practice: [bubble_at(region, ~spot: [rx, ry], ~body: [120.0, 760.0],
-                             ~color: talk_green,
-                             ~content: robot_says(#'smile, words, ~sep: 12.0, ~above: #true,
-                                                  ~scale: 0.85)),
-                   0.0, 0.0, band_callout] }
+  // the key idea stays to the end; what was wanted goes once it has been found
+  def said = key_idea
 
   // --------------------------------------------------------------------- the presses
   // The pointer the other extractions use, on the class being considered. It stands
@@ -372,36 +424,17 @@ fun slide_dp():
                 (if right | x + w * dp_scale + 20.0 | x - point_w - 20.0),
                 y + (h * dp_scale - point_h) / 2, band_above] }
 
-  // One press per term the walk grows by, in the order a reader would try them:
-  // everything the first write opens up, and then everything the second does, so
-  // that the two arrive at the same class one after the other rather than
-  // interleaved. The last of them is the point of the slide.
-  def order:
-    [[#'s0],
-     [#'s0, #'us], [#'s0, #'us, #'s3],
-     [#'s0, #'u1], [#'s0, #'u1, #'s1],
-     [#'s0, #'u1, #'s1, #'u2], [#'s0, #'u1, #'s1, #'u2, #'s2]]
-  fun row_for(walk :~ List) :: List:
-    for values(found :~ List = []) (row :~ List in rows):
-      if (row[2] :~ List) == walk | row | found
-  // what the table holds once the first `n` of those have been taken
-  fun stored(n :: Int) :: List:
-    for values(acc :~ List = []) (i in 0..n):
-      for values(acc :~ List = acc) (row :~ List in rows_along((order :~ List)[i] :~ List)):
-        if acc.contains(row) | acc | acc ++ [row]
-
-  // `~walks` are the rows whose walks are drawn along the graph's edges, and `~sets`
-  // the rows whose extractable sets are drawn, in that order -- listed later is drawn
+  // `~walks` are the dp_rows whose walks are drawn along the graph's edges, and `~sets`
+  // the dp_rows whose extractable sets are drawn, in that order -- listed later is drawn
   // later. The stepping shows walks and the classes they fill; the sets come only
   // once there are two walks in one class to compare.
   fun beat(shown :~ List,
            ~walks: walks :~ List = [], ~sets: sets :~ List = [],
            ~point: point = #false,
-           ~idea: idea :: Boolean = #false, ~distinct: told :: Boolean = #false) :: Frame:
+           ~idea: idea :: Boolean = #false) :: Frame:
     Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away) ++ want
                     ++ (if point == #false | {} | pointer_at(point))
-                    ++ (if idea | key_idea | {})
-                    ++ (if told | distinct | {}),
+                    ++ (if idea | key_idea | {}),
           ~edges: chain_edges(4)
                     ++ List.append(& for List (row :~ List in walks): walk_edges(row))
                     ++ List.append(& for List (row :~ List in sets): blob_marks(row)))
@@ -410,23 +443,19 @@ fun slide_dp():
     beat(stored(i + 1), ~walks: [row_for(walk)], ~idea: #true,
          ~point: walk[walk.length() - 1])
 
-  def w_root_a = [#'s0, #'us, #'s3, #'ret]
-  def w_root_b = [#'s0, #'u1, #'s1, #'u2, #'s2, #'ret]
-  def all_stored:
-    def more = rows_along(w_root_a) ++ rows_along(w_root_b)
-    for values(acc :~ List = stored((order :~ List).length())) (row :~ List in more):
-      if acc.contains(row) | acc | acc ++ [row]
 
   // Where the answer goes once it is on its own. Placed by hand: the graph puts the
   // two members of the value class at opposite ends of a row, and an answer that
   // takes the far one has its `return` reaching back across the state it also takes,
   // straight through that node's label. Nine nodes on their own can be a tree.
+  // a little right of centre, so that its return is clear of the bubble that
+  // points at it from the left
   def term_spots:
-    { #'x: [905.0, 250.0], #'one: [1065.0, 250.0],
-      #'a: [720.0, 400.0], #'xp: [930.0, 400.0], #'s0: [1170.0, 400.0],
-      #'us: [865.0, 560.0],
-      #'v3: [790.0, 720.0], #'s3: [1030.0, 720.0],
-      #'ret: [865.0, 880.0] }
+    { #'x: [1005.0, 250.0], #'one: [1165.0, 250.0],
+      #'a: [820.0, 400.0], #'xp: [1030.0, 400.0], #'s0: [1270.0, 400.0],
+      #'us: [965.0, 560.0],
+      #'v3: [890.0, 720.0], #'s3: [1130.0, 720.0],
+      #'ret: [965.0, 880.0] }
   fun term_edges(term :~ List) :: List:
     def taken:
       for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
@@ -438,86 +467,192 @@ fun slide_dp():
       [e[0], e[1], taken[c]]
   def answer = chain_dp_term(r_best)
 
-  // The last word of all: the kind of answer this is. A hard problem with a
-  // parameter that stays small in practice is what a parameterized algorithm is for,
-  // and this one is one. Right of the graph, under the bubble about distinct sets.
-  def parameterized:
+  chain_slide(
+    dp_page,
+    entitled(
+      [// the title the divider wrote, and nothing else yet: the show cuts to it
+       Frame(),
+       // the example's graph, written out in the middle of the slide with nothing
+       // else on it: the program and the rule that made it were the section before
+       Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
+       // what is wanted of it, at the return
+       Frame(~picts: picts_at(away, {}) ++ regions_at(away) ++ want, ~edges: chain_edges(4)),
+       // the idea, to read the stepping against
+       beat([], ~idea: #true),
+       // the pickaxe, on the class the first walk ends in: extraction is what the
+       // stepping is for
+       beat([], ~idea: #true, ~point: #'us),
+       // then the walks, one press per term the table grows by, each filling the
+       // class it reaches in its colour: the write the rule added and the state it
+       // leaves -- not the walk that is the argument state alone, a puzzle before it
+       // is an example, though that row is in the table all the same -- then the
+       // program's own first write, the state it leaves, its second write and the
+       // state that leaves
+       step(1), step(2), step(3), step(4), step(5), step(6),
+       // That last state is a class the table already had a walk for, and it is filled
+       // in both colours to say so. What the two of them reach, and when one of them
+       // can be let go, is the slide after this. The root is reached both ways too, so
+       // there are two answers to choose between.
+       beat(all_stored, ~point: #'ret, ~idea: #true),
+       // The cheaper of them, and the term it stands for. The value the `return` takes
+       // is the one this walk's write returned -- on this walk there is no other.
+       Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away)
+                       ++ green_at(away, answer) ++ said,
+             ~edges: chain_edges(4) ++ walk_edges(r_best)),
+       // and then just that term, laid out as the tree it is, the bubble at the return
+       // following it there
+       Frame(~picts: green_at(term_spots, answer) ++ key_idea,
+             ~edges: term_edges(answer)),
+       // and back to the graph as the table left it, every class filled by the walks
+       // that reach it: the term's nodes go back to their places and take their
+       // colours, and the rest writes in around them
+       Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said,
+             ~edges: chain_edges(4)),
+       // and what finding the term cost, which is the section's whole claim, said of
+       // the class that holds two walks -- the one place on this graph the width is
+       // more than one
+       Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
+                       ++ in_practice,
+             ~edges: chain_edges(4)),
+       // and what kind of answer that makes this
+       Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
+                       ++ in_practice ++ parameterized,
+             ~edges: chain_edges(4))],
+      dp_titled(dp_title)),
+    ~stage: blob_stage, ~stage_band: band_below)
+
+// -------------------------------------------------------------------------------------
+// slide_collapse: when two walks at one class can be one.
+//
+// The slide before this keeps a walk per extractable set and leaves it at that. This
+// one says what the table is really keeping them apart for. The two walks that meet
+// at the memory class reach sets that differ by exactly one node: the value the
+// program's second write returns, which nothing reads. Take that away -- make the
+// write a write, and not an operation that hands a value back -- and the two sets are
+// the same set. One walk will do, and the class goes back to one colour.
+def collapse_title = "Collapsing Statewalks"
+fun slide_collapse():
+  // the value the program's second write returns, and nobody reads
+  def dead = #'v2
+  // that write once it returns nothing: an `update` hands back a value and a memory,
+  // and one that hands back only the memory is a `write`
+  fun write_node(fill :: String) :: pc.Pict:
+    graph_node(~width: (chain_box :~ Map)[#'u2] :~ Real, ~height: 64.0, ~adj: "33349",
+               ~line: stateful_hex, ~line_width: 4.0, ~fill: fill,
+               ~label: node_label("write"))
+  // the graph, with that change made or not
+  fun picts_of(~fills: fills :~ Map, ~written: written :: Boolean) :: Map:
+    def base :~ Map = picts_at(away, fills)
+    for values(m :~ Map = {}) (key in base.keys()):
+      skip_when written && key == dead
+      cond
+      | written && key == #'u2:
+          def [_, x, y] = base[key] :~ List
+          def fill :: String = if fills.has_key(#'u2) | (fills[#'u2] :~ List)[0] | node_white
+          m ++ { key: [write_node(fill).scale(dp_scale), x, y] }
+      | ~else: m ++ { key: base[key] }
+  fun edges_of(written :: Boolean) :: List:
+    if !written
+    | chain_edges(4)
+    | for List (e :~ List in chain_edges(4)): skip_when e[1] == dead || e[2] == dead; e
+  fun set_marks(row :~ List, ~written: written :: Boolean) :: List:
+    for List (m :~ List in blob_marks(row)):
+      skip_when written && (m[1] == dead || (m[0] == #'blink && m[2] == dead))
+      m
+
+  // What the table holds at the end of the slide before, and the same with the two
+  // walks at the memory class down to one: a class with only one walk left is drawn
+  // in that walk's colour alone.
+  def stored_fills :~ Map = fills_of(all_stored)
+  def one_fills :~ Map:
+    for values(m :~ Map = {}) (k in stored_fills.keys()):
+      def v :~ List = stored_fills[k]
+      m ++ { k: (if v.length() > 1 | [branch_a_fill] | v) }
+  // the two walks that meet at the memory class
+  def w_a = r_a
+  def w_b = r_b
+
+  // ------------------------------------------------------------------- the words
+  // What the slide is for, in the margin left of the graph, and up throughout.
+  def optimization:
     def words:
-      prose_stack([[["parameterized", #'bold_italic]],
-                   [["algorithms", #'bold_italic]],
-                   [["provide practical", #'plain]],
-                   [["solutions to", #'plain]],
-                   [["NP-hard problems", #'plain]]])
-    // written out rather than popped: the last word of the section, said slowly
-    { #'wand: [make_bubble(~color: talk_green, ~padding: 24.0, ~text: #'write,
-                           pc.stack(~sep: 12.0, ~horiz: #'center, wand(~size: 110.0), words)),
-               1440.0, 560.0, band_callout] }
+      prose_stack([[["Optimization:", #'bold]],
+                   [["collapse by unique", #'plain]],
+                   [["extractable set", #'plain]]])
+    { #'optimization: [make_bubble(~color: talk_green, ~padding: 24.0, words),
+                       100.0, 200.0, band_callout] }
+  // and what an extractable set is, right of the graph: said once the word has been
+  // used and before the first one is drawn
+  def definition:
+    def words:
+      prose_stack([[["extractable set", #'bold_italic], [":", #'plain]],
+                   [["nodes we could extract", #'plain]],
+                   [["for a given ", #'plain], ["state walk", #'bold]]])
+    { #'definition: [make_bubble(~color: talk_blue, ~padding: 24.0, words),
+                     1440.0, 240.0, band_callout] }
+  // and what the two sets come to, said of the class they are both stored at: the
+  // same bubble before the change and after it. Low in the left margin, so that its
+  // spike runs in under `v3` to the class rather than across it.
+  fun verdict(head :: String, rest :: String) :: Map:
+    def [region, rx, ry, _] = (regions_at(away) :~ Map)[#'memory_class] :~ List
+    { #'verdict: [bubble_at(region, ~spot: [rx, ry], ~body: [150.0, 830.0],
+                            ~color: talk_blue,
+                            ~content: prose_stack([[[head, #'bold]], [[rest, #'plain]]])),
+                  0.0, 0.0, band_callout] }
+  def differ = verdict("different", "extractable sets")
+  def same = verdict("same", "extractable set")
+  // and what that buys, once the class is down to one colour
+  def kept_one:
+    { #'kept: [make_bubble(~color: talk_green, ~padding: 24.0,
+                           prose_stack([[["store just one", #'plain]],
+                                        [["state walk", #'bold]]])),
+               1440.0, 640.0, band_callout] }
+
+  // --------------------------------------------------------------------- the presses
+  fun beat(~fills: fills :~ Map = stored_fills, ~written: written :: Boolean = #false,
+           ~walks: walks :~ List = [], ~sets: sets :~ List = [],
+           ~over: over :~ Map = {}) :: Frame:
+    Frame(~picts: picts_of(~fills: fills, ~written: written) ++ regions_at(away) ++ over,
+          ~edges: edges_of(written)
+                    ++ List.append(& for List (row :~ List in walks): walk_edges(row))
+                    ++ List.append(& for List (row :~ List in sets): set_marks(row, ~written: written)))
 
   chain_slide(
-    as_pict(canvas),
-    [// the title the divider wrote, and nothing else yet: the show cuts to it
-     Frame(),
-     // the example's graph, written out in the middle of the slide with nothing
-     // else on it: the program and the rule that made it were the section before
-     Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
-     // what is wanted of it, at the return
-     Frame(~picts: picts_at(away, {}) ++ regions_at(away) ++ want, ~edges: chain_edges(4)),
-     // the idea, to read the stepping against
-     beat([], ~idea: #true),
-     // the pickaxe, on the class the first walk ends in: extraction is what the
-     // stepping is for
-     beat([], ~idea: #true, ~point: #'us),
-     // then the walks, one press per term the table grows by, each filling the
-     // class it reaches in its colour: the write the rule added and the state it
-     // leaves -- not the walk that is the argument state alone, a puzzle before it
-     // is an example, though that row is in the table all the same -- then the
-     // program's own first write, the state it leaves, its second write and the
-     // state that leaves
-     step(1), step(2), step(3), step(4), step(5), step(6),
-     // That last state is a class the table already had a walk for, and the class is
-     // now filled in both colours. The refinement of the idea, then; then the first
-     // walk to reach that class again, with the set it reaches; then the set the
-     // second reaches, drawn over it: the same, but for the one lobe, so the two are
-     // not interchangeable and both are kept.
-     beat(stored((order :~ List).length()),
-          ~walks: [row_for((order :~ List)[6] :~ List)],
-          ~point: #'s2, ~idea: #true, ~distinct: #true),
-     beat(stored((order :~ List).length()),
-          ~walks: [row_for((order :~ List)[6] :~ List), row_for((order :~ List)[2] :~ List)],
-          ~sets: [row_for((order :~ List)[2] :~ List)],
-          ~point: #'s3, ~idea: #true, ~distinct: #true),
-     beat(stored((order :~ List).length()),
-          ~walks: [row_for((order :~ List)[6] :~ List), row_for((order :~ List)[2] :~ List)],
-          ~sets: [row_for((order :~ List)[6] :~ List), row_for((order :~ List)[2] :~ List)],
-          ~point: #'s2, ~idea: #true, ~distinct: #true),
-     // The root is reached both ways too, for the same reason, so there are two
-     // answers to choose between. The two bubbles stay up from here to the end.
-     beat(all_stored, ~point: #'ret, ~idea: #true, ~distinct: #true),
-     // The cheaper of them, and the term it stands for. The value the `return` takes
-     // is the one this walk's write returned -- on this walk there is no other.
-     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away)
-                     ++ green_at(away, answer) ++ said,
-           ~edges: chain_edges(4) ++ walk_edges(r_best)),
-     // and then just that term, laid out as the tree it is, the bubble at the return
-     // following it there
-     Frame(~picts: green_at(term_spots, answer) ++ key_idea ++ distinct
-                     ++ want_at(term_spots, ~body: [1300.0, 880.0],
-                                ~lines: [[["Want: ", #'bold], ["extraction using", #'plain]],
-                                         [["a single state walk", #'plain]]]),
-           ~edges: term_edges(answer)),
-     // and back to the graph as the table left it, every class filled by the walks
-     // that reach it: the term's nodes go back to their places and take their
-     // colours, and the rest writes in around them
-     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said,
+    dp_page,
+    // It opens on the picture the slide before it ends with, which is where it takes
+    // over: the show cuts, and the first press changes the words at the top and takes
+    // the last slide's remarks away.
+    [Frame(~picts: picts_of(~fills: stored_fills, ~written: #false) ++ regions_at(away)
+                     ++ key_idea ++ in_practice ++ parameterized ++ dp_titled(dp_title),
            ~edges: chain_edges(4)),
-     // and what finding the term cost, which is the section's whole claim, said of
-     // the class that holds two walks -- the one place on this graph the width is
-     // more than one
-     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
-                     ++ in_practice,
-           ~edges: chain_edges(4)),
-     // and what kind of answer that makes this
-     Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
-                     ++ in_practice ++ parameterized,
-           ~edges: chain_edges(4))],
+     & entitled(
+         [// the graph on its own again, under the title this slide is about
+          beat(),
+          // what the table could do about a class with two walks in it
+          beat(~over: optimization),
+          // and what the sets it would compare are
+          beat(~over: optimization ++ definition),
+          // the walk the rule's write opens up, and every pure node it can build
+          beat(~over: optimization ++ definition, ~walks: [w_a], ~sets: [w_a]),
+          // and the walk through both of the program's writes, which reaches all of
+          // that and one node more: the value the second write returns
+          beat(~over: optimization ++ definition, ~walks: [w_a, w_b], ~sets: [w_a, w_b]),
+          // which is why the table keeps both
+          beat(~over: optimization ++ definition ++ differ,
+               ~walks: [w_a, w_b], ~sets: [w_a, w_b]),
+          // Then the one change that settles it: nothing reads that value, so the
+          // write need not return it -- and with it gone the two sets are one set.
+          beat(~written: #true, ~over: optimization ++ definition ++ differ,
+               ~walks: [w_a, w_b], ~sets: [w_a, w_b]),
+          beat(~written: #true, ~over: optimization ++ definition ++ same,
+               ~walks: [w_a, w_b], ~sets: [w_a, w_b]),
+          // so one walk will do, and the classes both of them reached -- the memory
+          // the writes leave, and the root that reads it -- are one colour again
+          beat(~fills: one_fills, ~written: #true,
+               ~over: optimization ++ definition ++ same, ~walks: [w_a], ~sets: [w_a]),
+          // which is the whole of what the optimization is for
+          beat(~fills: one_fills, ~written: #true,
+               ~over: optimization ++ definition ++ same ++ kept_one,
+               ~walks: [w_a], ~sets: [w_a])],
+         dp_titled(collapse_title))],
     ~stage: blob_stage, ~stage_band: band_below)

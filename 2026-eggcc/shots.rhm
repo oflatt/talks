@@ -22,12 +22,49 @@ export:
 // how tall each one is drawn in the list; the width follows from what is cut out
 def shot_h = 160.0
 def shot_line = draw.Color(170, 170, 170)
+def shot_pad = 22.0
 
-// `mk` is the slide, `at` which of its presses, and the rectangle is in slide
-// coordinates -- the same numbers the slide itself is written in.
-fun shot(mk, ~at: at :: Int, ~from: from :~ List, ~size: size :~ List) :: pc.Pict:
+// Where a slide actually draws something, inside the region given: the box of every
+// pixel that is not the page's own white. Measured rather than written down, so that
+// a shot shows the whole of what it is a shot of however the slide it comes from is
+// laid out -- a rectangle by hand goes stale the moment a bubble moves, and what it
+// leaves out is a shot with its words cut through.
+fun content_box(p :: pc.Pict, ~within: within :~ List) :: List:
+  def k = 0.25                       // measured small: a shot is 160 tall in the end
+  def q = p.scale(k)
+  def w = math.exact(math.ceiling(q.width))
+  def h = math.exact(math.ceiling(q.height))
+  def bm = draw.Bitmap([w, h])
+  q.draw(bm.make_dc())
+  def px = bm.argb_pixels()
+  def x0 = math.max(0, math.exact(math.floor((within[0] :~ Real) * k)))
+  def y0 = math.max(0, math.exact(math.floor((within[1] :~ Real) * k)))
+  def x1 = math.min(w, math.exact(math.ceiling((within[2] :~ Real) * k)))
+  def y1 = math.min(h, math.exact(math.ceiling((within[3] :~ Real) * k)))
+  recur go(x = x0, y = y0, lo_x = w, lo_y = h, hi_x = -1, hi_y = -1):
+    cond
+    | y >= y1:
+        if hi_x < 0
+        | within
+        | [lo_x / k, lo_y / k, (hi_x + 1) / k, (hi_y + 1) / k]
+    | x >= x1: go(x0, y + 1, lo_x, lo_y, hi_x, hi_y)
+    | ~else:
+        def i = 4 * (y * w + x)
+        if px[i + 1] < 246 || px[i + 2] < 246 || px[i + 3] < 246
+        | go(x + 1, y, math.min(lo_x, x), math.min(lo_y, y), math.max(hi_x, x), math.max(hi_y, y))
+        | go(x + 1, y, lo_x, lo_y, hi_x, hi_y)
+
+// `mk` is the slide, `at` which of its presses, and `within` the part of the slide
+// the shot is of, in slide coordinates -- the whole of it below the title, or one
+// side of it where the other side is not what the section was about. What is drawn
+// in there decides the window; the region only says where to look.
+fun shot(mk, ~at: at :: Int, ~within: within :~ List) :: pc.Pict:
   def whole :~ pc.Pict = as_pict(mk())
   def one = whole.snapshot(if at < 0 | whole.duration + at | at, 1.0)
+  def [x0, y0, x1, y1] = content_box(one, ~within: within)
+  def from = [math.max(0.0, (x0 :~ Real) - shot_pad), math.max(0.0, (y0 :~ Real) - shot_pad)]
+  def size = [math.min(slide_width - from[0], (x1 :~ Real) - from[0] + shot_pad),
+              math.min(slide_height - from[1], (y1 :~ Real) - from[1] + shot_pad)]
   def cut = crop_pict(one, ~at: from, ~size: size)
   def k = shot_h / (size[1] :~ Real)
   def small :~ pc.Pict = cut.scale(k)
@@ -35,19 +72,20 @@ fun shot(mk, ~at: at :: Int, ~from: from :~ List, ~size: size :~ List) :: pc.Pic
              pc.rectangle(~width: small.width, ~height: small.height,
                           ~fill: #false, ~line: shot_line, ~rounded: -0.06))
 
+// everything a slide draws under its title, which is what most of these are of
+def below_title = [0.0, 190.0, slide_width, slide_height]
+
 // One per section, in the order the outline lists them. The last has nowhere to be
 // shown -- there is no divider after the talk ends -- but it is here so that the
 // list and the sections stay the same length.
 def section_shots :~ List:
   [// who uses e-graphs, which is what the first section is for
-   shot(slide_2, ~at: -1, ~from: [30.0, 175.0], ~size: [1878.0, 865.0]),
-   // the extraction that reads a memory twice, and what it is called. Starts right
-   // of the code box, which is the half of that slide the reminder is not about.
-   shot(slide_fork, ~at: 12, ~from: [1110.0, 190.0], ~size: [810.0, 810.0]),
-   // the two statewalks that reach one class, and the two sets they reach. The
-   // graph on that slide is scaled down and moved right, so the rectangle is its
-   // own, not the one `chain_pos` is written in -- cut to the graph's actual edges,
-   // since a shot that clips a row of nodes reads as a picture with pieces missing.
-   shot(slide_dp, ~at: 10, ~from: [592.0, 190.0], ~size: [770.0, 856.0]),
+   shot(slide_2, ~at: -1, ~within: below_title),
+   // the extraction that reads a memory twice, and what it is called. Only the
+   // graph: the code box and the rule beside it are the half of that slide the
+   // reminder is not about.
+   shot(slide_fork, ~at: 13, ~within: [1000.0, 190.0, slide_width, slide_height]),
+   // the two statewalks that reach one class, and the two sets they reach
+   shot(slide_collapse, ~at: 6, ~within: below_title),
    // and the numbers: the performance chart with every series on it
-   shot(slide_perf, ~at: -2, ~from: [170.0, 230.0], ~size: [1620.0, 720.0])]
+   shot(slide_perf, ~at: -2, ~within: below_title)]

@@ -12,10 +12,12 @@ import:
   draw
 
 export:
+  author_lines
+  talk_title_lines
   slide_1
   slide_2
   slide_20
-  slide_questions
+  team
   useful_title
 
 // -------------------------------------------------------------------------------------
@@ -57,17 +59,17 @@ fun title_canvas(): slide_canvas(
              ~insets: insets(3.6, 3.6, 3.6, 3.6),
              para(
                   run(
-                      "Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
+                      author_lines[0],
                       ~font: prose_font, ~size: 46.0)),
              para(
-                  run("Chandrakana Nandi, Eli Rosenthal, Zachary Tatlock, Haobin Ni",
+                  run(author_lines[1],
                       ~font: prose_font, ~size: 46.0)))),
   // Efficient Extraction from Effectful E-Graphs (id 90)
   at(95.0, 202.755, ~name: "Efficient Extraction from Effectful E-Graphs",
      textbox(~width: 1730.0, ~height: 366.0, ~anchor: #'bottom, ~autofit: #'shrink,
              ~insets: insets(4.0, 4.0, 4.0, 4.0),
              para(~line_spacing: pair(#'percent, 0.8),
-                  run("Efficient Extraction from Effectful E-Graphs",
+                  run(talk_title_lines[0] +& " " +& talk_title_lines[1],
                       ~font: prose_font, ~size: 116.0, ~bold: #true,
                       ~spacing: -3.0)))),
   // unknown.png (2) (id 91)
@@ -113,23 +115,33 @@ def names_band:
                          ~fill: draw.Color(255, 255, 255, band_alpha), ~line: #false),
       0.0, band_full - band_top)
 
+// The talk's own title, as the two lines it is written on.
+def talk_title_lines = ["Efficient Extraction from", "Effectful E-Graphs"]
+
 // The faces along the bottom of the title, left to right, spread evenly across the
 // slide now that the group's logo has gone from beside them, and up from where
 // Keynote had them so that the marks and the names under them have room. Each is
 // `[x, who, file, crop]`.
 def photo_y = 648.0
 def photo_pitch = 216.0
+// who is on the deck, in the order the names are written, with the photo of each
+// and how it is cropped. The summary slide lays the same faces out its own way.
+def team:
+  [["Oliver Flatt", "image11.png", #false],
+   ["Anjali Pal", "image3.png", #false],
+   ["Yihong Zhang", "image6.png", #false],
+   ["Ryan Tjoa", "image8.png", [0.0, 0.0, 0.0, 0.093]],
+   ["Kirsten Graham", "image7.png", [0.0, 0.123, 0.0, 0.123]],
+   ["Chandrakana Nandi", "image4.png", [0.0, 0.02, 0.0, 0.02]],
+   ["Eli Rosenthal", "image12.png", #false],
+   ["Alex Fischman", "image5.png", [0.0, 0.052, 0.0, 0.198]],
+   ["Zachary Tatlock", "image9.png", #false]]
+// and everyone's name, as the two lines they are written on
+def author_lines:
+  ["Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
+   "Chandrakana Nandi, Eli Rosenthal, Zachary Tatlock, Haobin Ni"]
 def photo_row:
-  for List ([who, file, crop] in [["Oliver Flatt", "image11.png", #false],
-                                  ["Anjali Pal", "image3.png", #false],
-                                  ["Yihong Zhang", "image6.png", #false],
-                                  ["Ryan Tjoa", "image8.png", [0.0, 0.0, 0.0, 0.093]],
-                                  ["Kirsten Graham", "image7.png", [0.0, 0.123, 0.0, 0.123]],
-                                  ["Chandrakana Nandi", "image4.png", [0.0, 0.02, 0.0, 0.02]],
-                                  ["Eli Rosenthal", "image12.png", #false],
-                                  ["Alex Fischman", "image5.png", [0.0, 0.052, 0.0, 0.198]],
-                                  ["Zachary Tatlock", "image9.png", #false]],
-            i in 0..):
+  for List ([who, file, crop] in team, i in 0..):
     [40.0 + i * photo_pitch, who, file, crop]
 def affiliation:
   { "Oliver Flatt": [#'plse], "Anjali Pal": [#'plse], "Yihong Zhang": [#'plse],
@@ -296,15 +308,5 @@ fun slide_20():
   staged(base, [stage_1])
 
 
-// -------------------------------------------------------------------------------------
-// slide_questions: the title slide again, at the end, with the robot asking for them.
-//
-// It calls `title_canvas` rather than repeating it, so the deck cannot end on a title
-// that has drifted from the one it opened with, and the whole slide is one `fade_in`:
-// the room has seen this picture already, and the only new thing on it is the question.
-fun slide_questions():
-  staged(title_canvas(),
-         [put(blank_slide,
-              make_bubble(~color: talk_green, prose([["Questions?", #'bold]])).scale(1.3),
-              // the one empty corner: clear of the title, the faces and the logos
-              1280.0, 130.0)])
+// The talk ends on the summary, which brings the faces and the question back
+// itself -- see `summary.rhm`.

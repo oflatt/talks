@@ -38,6 +38,7 @@ import:
   "workflow.rhm" open
   "dp.rhm" open
   "shots.rhm" open
+  "summary.rhm" open
   "backup.rhm" open
 
 export:
@@ -59,10 +60,11 @@ export:
   slide_41
   slide_nphard
   slide_dp
+  slide_collapse
   slide_eval_setup
   slide_cdf
   slide_perf
-  slide_questions
+  slide_summary
   slide_raytracer
   slide_compile_times
   slide_made
@@ -93,6 +95,8 @@ glide_slides all_slides:
    // the bad news, and the proof is for whoever asks.
    divider(2, ~shots: section_shots, ~next: dp_title),
    in_section(2, slide_dp),
+   // and when the table can keep one walk where it kept two
+   in_section(2, slide_collapse),
    // 4 -- the numbers. Every plot is in this section, `slide_34` included: it is a
    // measurement rather than a step of the algorithm, and it was reading as the end
    // of the section before this one.
@@ -100,8 +104,9 @@ glide_slides all_slides:
    // what the evaluation runs on, walked through on one program, before the numbers
    in_section(3, slide_eval_setup),
    in_section(3, slide_cdf), in_section(3, slide_perf),
-   // and out the way we came in
-   slide_questions,
+   // the three pictures the talk turned on, brought back side by side, and then
+   // the picture the talk opened on, with the question
+   slide_summary,
    // the backup slides, for the questions that ask for them
    slide_nphard, slide_raytracer, slide_compile_times, slide_made]
 

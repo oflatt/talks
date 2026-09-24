@@ -1,0 +1,168 @@
+#lang rhombus/and_meta
+// The end of the talk, as one slide: the three pictures it turned on, brought back
+// one at a time, and then the people who did it and the question.
+//
+// Each picture comes up large, its line written under it once it is there, and then
+// shrinks to a pane in a row along the bottom, the line staying its own size and
+// going with it -- so the slide comes to hold the three of them side by side: what
+// was wanted, what stood in the way, and what got round it. The pictures are the
+// slides themselves, at rest where each one ended, so a slide that changes brings
+// its own reminder with it.
+//
+// Then the title slide's backdrop fades up behind all three, the faces come back in
+// a grid over it with everyone's name under them, and the question pops. The talk
+// opened on that picture and ends on it, with what happened in between along the
+// bottom.
+
+import:
+  lib("glide-pptx/runtime.rhm") open
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  "backdrop.rhm" open
+  "opening.rhm" open
+  "workflow.rhm" open
+  "dp.rhm" open
+  "write.rhm".write
+  "write.rhm".faded
+  "write.rhm".popped
+  pict as pc
+  draw
+
+export:
+  slide_summary
+
+// a slide as it ends, at the width given, in a thin frame
+def shot_line = draw.Color(170, 170, 170)
+fun ended(mk) :: pc.Pict:
+  def whole :~ pc.Pict = as_pict(mk())
+  whole.snapshot(whole.duration - 1, 1.0)
+fun framed(shot :: pc.Pict, w :: Real) :: pc.Pict:
+  def small :~ pc.Pict = shot.scale(w / shot.width)
+  pc.overlay(small,
+             pc.rectangle(~width: small.width, ~height: small.height,
+                          ~fill: #false, ~line: shot_line, ~line_width: 2.0, ~rounded: -0.03))
+
+// where a picture stands while it is being looked at, and where it goes after
+def big_w = 830.0
+def big_x = (slide_width - big_w) / 2
+def big_y = 200.0
+def big_label_y = 144.0
+def pane_w = 480.0
+def pane_y = 762.0
+def pane_gap = (slide_width - 3 * pane_w) / 4
+def pane_xs = for List (i in 0..3): pane_gap + i * (pane_w + pane_gap)
+def pane_label_y = 708.0
+
+fun label(head :: String, rest :: String) :: pc.Pict:
+  pc.beside(~vert: #'bottom,
+            prose_text(head, ~size: 44.0, ~bold: #true),
+            prose_text(rest, ~size: 44.0))
+
+// ------------------------------------------------------------------ the faces
+// The grid they come back in: two rows over the panes, the wider one on top, each
+// row centred. The names go under the grid, on the two lines they are written on.
+def face_w = 128.0
+def face_gap = 44.0
+def face_rows = [5, 4]
+def face_top = 232.0
+def face_pitch = face_w + 26.0
+def team_grid :~ List:
+  def (out, _):
+    for values(acc :~ List = [], i :~ Int = 0) (n in face_rows, r in 0..):
+      def span = n * face_w + (n - 1) * face_gap
+      def x0 = (slide_width - span) / 2
+      def row:
+        for List (k in 0..n):
+          def [who, file, crop] = (team :~ List)[i + k]
+          [as_pict(image_pict(media(file), face_w, face_w, ~crop: crop)),
+           x0 + k * (face_w + face_gap), face_top + r * face_pitch]
+      values(acc ++ row, i + n)
+  out
+// the talk's own title, over the faces, at a size the top of the slide has room for
+def talk_title_pict:
+  pc.stack(~sep: 4.0, ~horiz: #'center,
+           & for List (line in talk_title_lines :~ List):
+               prose_text(line, ~size: 54.0, ~bold: #true, ~arrive: #'pop))
+def talk_title_y = 46.0
+
+def names_pict:
+  pc.stack(~sep: 6.0, ~horiz: #'center,
+           & for List (line in author_lines :~ List):
+               prose_text(line, ~size: 42.0, ~arrive: #'pop))
+def names_y = face_top + face_rows.length() * face_pitch + 14.0
+
+fun slide_summary():
+  def page = as_pict(page_canvas())
+  def shots:
+    [[label("Want: ", "Effectful E-Graphs"), ended(slide_20)],
+     [label("Problem: ", "Extraction Bottleneck"), ended(slide_41)],
+     [label("Solution: ", "Statewalk DP"), ended(slide_dp)]]
+  // the panes already made, over whatever is behind them
+  fun panes_over(back :: pc.Pict, n :: Int) :: pc.Pict:
+    for values(q :~ pc.Pict = back) ([lab :: pc.Pict, shot] in shots.take(n), i in 0..):
+      def cx = (pane_xs[i] :~ Real) + pane_w / 2
+      put(put(q, framed(shot, pane_w), pane_xs[i], pane_y),
+          lab, cx - lab.width / 2, pane_label_y)
+  fun settled_upto(n :: Int) :: pc.Pict: panes_over(page, n)
+  // One picture coming up large: it fades in where it will be read, and its line is
+  // written under it once it is there -- the picture is what the line is about, so
+  // it arrives first.
+  fun appear(i :: Int) :: pc.Pict:
+    def [lab :: pc.Pict, shot] = shots[i]
+    def layer:
+      put(put(blank_slide, faded(framed(shot, big_w)), big_x, big_y),
+          lab, slide_width / 2 - lab.width / 2, big_label_y)
+    pc.overlay(~horiz: #'left, ~vert: #'top, settled_upto(i), write(layer))
+  // and going to its pane, the line going with it at its own size
+  fun minimize(i :: Int) :: pc.Pict:
+    def [lab :: pc.Pict, shot] = shots[i]
+    def base = settled_upto(i)
+    def px :: Real = pane_xs[i]
+    pc.animate(~extent: 1.0,
+               fun (t):
+                 def s = smooth(t)
+                 def w = lerp(big_w, pane_w, s)
+                 def x = lerp(big_x, px, s)
+                 def y = lerp(big_y, pane_y, s)
+                 def lcx = lerp(slide_width / 2, px + pane_w / 2, s)
+                 def ly = lerp(big_label_y, pane_label_y, s)
+                 put(put(base, framed(shot, w), x, y), lab, lcx - lab.width / 2, ly))
+
+  // Then the picture the talk opened on comes back up behind the three panes, and
+  // the people who did it with it. The backdrop is a wash rather than a thing that
+  // arrives, so it fades where it stands, under the panes; the faces and the names
+  // are written over them in one cascade once there is something to be over.
+  def back = backdrop()
+  def team_layer:
+    def with_title:
+      put(blank_slide, talk_title_pict,
+          (slide_width - talk_title_pict.width) / 2, talk_title_y)
+    def with_faces:
+      for values(q :~ pc.Pict = with_title) ([face, x, y] in team_grid):
+        put(q, popped(as_pict(face)), x, y)
+    put(with_faces, names_pict, (slide_width - names_pict.width) / 2, names_y)
+  def team_w = write(team_layer)
+  def closing_extent = math.max(1.4, team_w.epoch_extent(0))
+  def back_part = 0.34                    // of the press: the backdrop coming up
+  fun closing(t :: Real) :: pc.Pict:
+    def lit = smooth(clamp01(t / back_part))
+    def under = if lit <= 0.0 | page | put(page, back.alpha(lit), 0.0, 0.0).refocus(page)
+    def with_panes = panes_over(under, 3)
+    def said = clamp01((t - back_part * 0.6) / (1.0 - back_part * 0.6))
+    if said <= 0.0
+    | with_panes
+    | pc.overlay(~horiz: #'left, ~vert: #'top, with_panes, team_w.snapshot(0, said))
+  def closed = closing(1.0)
+  // and the question, in the room the grid leaves at the top. The bubble is written,
+  // which traces and fills its shell and pops the word in after it: the bubble
+  // itself is not animated, it carries how each of its pieces arrives.
+  def question:
+    def b :~ pc.Pict = make_bubble(~color: talk_green, prose([["Questions?", #'bold]])).scale(1.3)
+    put(blank_slide, b, slide_width - b.width - 90.0, 64.0)
+
+  pc.switch(page,
+            appear(0), minimize(0),
+            appear(1), minimize(1),
+            appear(2), minimize(2),
+            pc.animate(~extent: closing_extent, ~bend: fun (x): x, closing),
+            pc.overlay(~horiz: #'left, ~vert: #'top, closed, write(question)))

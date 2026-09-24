@@ -110,10 +110,20 @@ fun code_parts() :: Map:
       def op = code(" = update(")
       def arg1 = code("a")
       def arg_comma = code(", ")
-      // the first write stores the variable; the second stores one more than it,
-      // which is what makes the two writes cost different amounts to perform
+      // The first write stores the variable; the second stores one more than it,
+      // which is what makes the two writes cost different amounts to perform. That
+      // `+` is a node of the graph like any other and the `1` it takes is another,
+      // so the two of them are pieces of their own; the `x` is the one the line
+      // above already put there, and stays where it is written.
+      def wrote_x = code("x")
+      def wrote_op = code("+")
+      def wrote_one = code("1")
       def wrote:
-        if i == 1 | [code("x")] | [code("x"), code("+"), code("1")]
+        if i == 1 | [wrote_x] | [wrote_x, wrote_op, wrote_one]
+      def wrote_segs:
+        if i == 1
+        | [[#'wrote, [wrote_x]]]
+        | [[#false, [wrote_x]], [#'wrote, [wrote_op]], [#'wrote_one, [wrote_one]]]
       def omega_in = greek("ω")
       def omega_in_sub = if i == 1 | [] | [code_sub(to_string(i - 1))]
       def close = code(")")
@@ -125,11 +135,11 @@ fun code_parts() :: Map:
          [#false, [code(")")]],
          [#'op, [op]],
          [#'arg1, [arg1]],
-         [#false, [arg_comma]],
-         [#'wrote, wrote],
-         [#false, [code(", ")]],
-         [#'state_in, [omega_in] ++ omega_in_sub],
-         [#false, [close]]]
+         [#false, [arg_comma]]]
+          ++ wrote_segs
+          ++ [[#false, [code(", ")]],
+              [#'state_in, [omega_in] ++ omega_in_sub],
+              [#false, [close]]]
       {#'plain: popped(pc.beside(~vert: #'bottom, v, v_sub, op, arg1, arg_comma,
                                  & wrote, close)),
        #'states: popped(segs_pict(segs)),

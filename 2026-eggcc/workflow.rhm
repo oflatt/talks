@@ -13,9 +13,8 @@ import:
   pict as pc
   draw
   "write.rhm".popped
-  "steps.rhm".steps_frame
+  "steps.rhm".corner_frame
   "steps.rhm".steps_wire
-  "steps.rhm".steps_at
   "steps.rhm".step_edges
 
 export:
@@ -308,55 +307,52 @@ fun flow_callout(page :: pc.Pict, target :~ List,
 // the middle of the slide. The picture fades once the camera is well inside the box.
 fun slide_40():
   def page = titled(flow_title, ~tag: "Pure workflow title", ~nudge: [0.0, 0.0])
-  def scene = workflow_scene(~section: 0, ~bare: #true)
-  def steps = (flow_steps :~ List).length()
-  // It opens empty, so that the first stage is written on a press like the rest.
-  def stages = [Frame(), & for List (k in 1..steps + 1): workflow_frame(scene, flow_keys(~upto: k))]
-  def world = magic_still(blank_slide, stages.last, ~wire: workflow_wire)
-  // What the zoom lands on: the three steps, drawn the way the next slide draws
-  // them, on the page and on a layer of their own. The layer is in the coordinates
-  // of the landing, so under the camera it is drawn scaled by `s / zoom` with the
-  // slide's middle carried to where the box's centre is now: at the start it is a
-  // speck at the centre of the box, and at the end it is the landing itself.
-  def landed = magic_still(page, steps_frame, ~wire: steps_wire)
-  def steps_layer = magic_still(blank_slide, steps_frame, ~wire: steps_wire)
-  def [bx, by] = flow_egraph_at
-  def [bw, bh] = flow_egraph_size
-  def c = [bx + bw / 2, by + bh / 2]
-  def mid = [slide_width / 2, slide_height / 2]
-  def zoom = slide_width / bw
-  // a pict on the page, and the page's box kept: a thing placed part way off the
-  // slide would otherwise grow the box
-  fun place(q :: pc.Pict, p :: pc.Pict, x :: Real, y :: Real) :: pc.Pict:
-    put(q, p, x, y).refocus(page)
-  fun going_in(t :: Real) :: pc.Pict:
-    cond
-    | t >= 1.0: landed
-    | ~else:
-        def camera = smooth(clamp01(t))
-        def s = math.expt(zoom, camera)
-        def cx = lerp(c[0], mid[0], camera)
-        def cy = lerp(c[1], mid[1], camera)
-        // the workflow, growing away and fading once the camera is well in
-        def gone = smooth(clamp01((camera - 0.3) / 0.7))
-        def under:
-          if gone >= 1.0
-          | page
-          | block:
-              def big = if s == 1.0 | world | world.scale(s)
-              place(page, (if gone > 0.0 | big.alpha(1.0 - gone) | big),
-                    (0.0 - c[0]) * s + cx, (0.0 - c[1]) * s + cy)
-        // and the three steps inside the box, growing with it and coming up as the
-        // picture round them goes
-        def k = s / zoom
-        def shown = smooth(clamp01((camera - 0.15) / 0.45))
-        def small = steps_layer.scale(k)
-        (if shown <= 0.0
-         | under
-         | place(under, (if shown >= 1.0 | small | small.alpha(shown)),
-                 cx - mid[0] * k, cy - mid[1] * k)).clip()
-  pc.switch(magic_slide(page, stages, ~wire: workflow_wire),
-            pc.animate(~extent: 1.8, ~bend: fun (x): x, going_in))
+  // The three stages, big, across the middle of the page: what goes in, what is run
+  // over it, and what comes back out, with the rules that are run feeding into the
+  // middle one from below. Each is one pict rather than a box with a body placed on
+  // it, because the press that ends this slide carries each of them up to the corner
+  // the next slide keeps them in, and a thing that travels has to be one thing.
+  def card_w = 400.0
+  def card_h = 160.0
+  def rules_h = 340.0
+  def mid_y = 520.0
+  def card_gap = 150.0
+  def row_x:
+    def left = (slide_width - (3 * card_w + 2 * card_gap)) / 2
+    for List (i in 0..3): left + i * (card_w + card_gap)
+  fun card(label :: String, ~width: w :: Real, ~height: h :: Real,
+           ~body: body :: maybe(pc.Pict) = #false) :: pc.Pict:
+    def name = prose_text(label, ~size: 36.0, ~bold: #true)
+    as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
+                        (if body | pc.stack(~sep: 18.0, ~horiz: #'center, name, body) | name)))
+  fun standing(key, p :: pc.Pict, x :: Real, h :: Real) :: Map:
+    { [#'step, key]: [p, x, mid_y - h / 2, band_above] }
+  def c_program = standing(#'program, card("Initial Program", ~width: card_w, ~height: card_h),
+                           row_x[0], card_h)
+  def c_rules = standing(#'rules, card("Run Rules", ~width: card_w, ~height: rules_h,
+                                       ~body: flow_gear),
+                         row_x[1], rules_h)
+  def c_extract = standing(#'extract, card("Extract", ~width: card_w, ~height: card_h),
+                           row_x[2], card_h)
+  def c_opt:
+    { #'opt: [card("Optimization Rules", ~width: card_w + 80.0, ~height: card_h),
+              row_x[1] - 40.0, 830.0, band_above] }
+  def e_in = (step_edges(3) :~ List)[0]
+  def e_out = (step_edges(3) :~ List)[1]
+  def e_feed = [#'feed, #'opt, [#'step, #'rules]]
+
+  // A stage a press, and then the three of them going up into the corner: the rules
+  // and the gear have said what they had to say and go, and each box that stays
+  // travels to the place the next slide keeps it, taking its arrows with it.
+  def stages:
+    [Frame(),
+     Frame(~picts: c_program),
+     Frame(~picts: c_program ++ c_rules, ~edges: [e_in]),
+     Frame(~picts: c_program ++ c_rules ++ c_opt, ~edges: [e_in, e_feed]),
+     Frame(~picts: c_program ++ c_rules ++ c_opt ++ c_extract, ~edges: [e_in, e_out, e_feed]),
+     corner_frame]
+  magic_slide(page, stages, ~wire: steps_wire,
+              ~extent_of: fun (i): if i == stages.length() - 1 | 1.5 | 1.0)
 
 // -------------------------------------------------------------------------------------
 // slide_41: the same workflow, once the program has effects.
@@ -405,7 +401,7 @@ fun slide_41():
   // on the IR box.
   def bad_head:
     robot_says(#'frown,
-               prose_stack([[["Bad news:", #'bold]], [["NP-Hard problem!", #'bold]]]),
+               prose_stack([[["Bottleneck:", #'bold]], [["NP-Hard Problem!", #'bold]]]),
                ~sep: 12.0, ~scale: 0.62)
   def bad_pad = 20.0
   def bad_body = [1330.0, 240.0]
@@ -423,6 +419,10 @@ fun slide_41():
     magic_slide(page,
                 [workflow_frame(pure, flow_all),
                  workflow_frame(effectful, flow_all),
+                 // the dataflow IR, and then what makes it one: two presses, since
+                 // the box appearing is what happened and the bubble is what to
+                 // make of it
+                 workflow_frame(with_ir, ir_keys, ~ir: #true),
                  workflow_frame(with_ir, ir_keys, ~ir: #true, ~over: threading),
                  // and what comes out divides the same way: the program in the
                  // dataflow IR, and then back in the original

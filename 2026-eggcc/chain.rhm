@@ -63,7 +63,7 @@ def chain_point_x = 1760.0
 // than a number inside the drawing code: the boxes below are built from it, and
 // `graph_layout.py` reads it to pack the rows.
 def chain_box:
-  { #'a: 64.0, #'x: 64.0, #'one: 64.0, #'xp: 116.0,
+  { #'a: 64.0, #'x: 64.0, #'one: 64.0, #'xp: 64.0,
     #'s0: 64.0, #'s1: 64.0, #'s2: 64.0, #'s3: 64.0,
     #'v1: 64.0, #'v2: 64.0, #'v3: 64.0,
     #'u1: 180.242, #'u2: 180.242, #'us: 180.242, #'ret: 180.242 }
@@ -101,9 +101,9 @@ fun chain_nodes(~picked: picked :: List = [],
   // `return` takes a state as well as a value, so it is one of the stateful ones
   {#'ret: node(#'ret, stateful_hex, 4.0, node_label("return")),
    #'a: leaf(#'a, "a"), #'x: leaf(#'x, "x"), #'one: leaf(#'one, "1"),
-   // the value the second write stores, and the reason the two writes cost
-   // different amounts to perform
-   #'xp: node(#'xp, "000000", 3.0, node_label("x+1")),
+   // the operator the second write's value is built with -- it takes `x` and the
+   // `1` beside it -- and the reason the two writes cost different amounts
+   #'xp: node(#'xp, "000000", 3.0, node_label("+")),
    #'s0: state(#'s0, 0), #'s1: state(#'s1, 1),
    #'s2: state(#'s2, 2), #'s3: state(#'s3, 3),
    #'v1: value(#'v1, 1), #'v2: value(#'v2, 2), #'v3: value(#'v3, 3),
@@ -361,7 +361,7 @@ fun chain_dp_fills(rows :~ List) :: Map:
 def chain_rows: [210.0, 300.0, 460.0, 556.0, 652.0, 748.0, 844.0]
 def chain_pos:
   { #'x: [1332.1, 0], #'one: [1466.1, 0],
-    #'a: [1150.6, 1], #'xp: [1287.6, 1], #'s0: [1476.6, 1],
+    #'a: [1150.6, 1], #'xp: [1313.6, 1], #'s0: [1476.6, 1],
     #'u1: [1474.8, 2],
     #'us: [1112.6, 3], #'s1: [1535.9, 3],
     #'v3: [1096.8, 4], #'v1: [1311.1, 4], #'u2: [1460.1, 4],

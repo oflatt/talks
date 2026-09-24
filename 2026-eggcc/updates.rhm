@@ -301,12 +301,10 @@ fun update_opening() :: Map:
       p.ellipse([0.0, 0.0, d, d])
       written_shape(p, ~width: d, ~height: d, ~fill: pale(color), ~line: color,
                     ~line_width: border_width)
-    fun label(a :: String, b :: String) :: pc.Pict:
-      pc.stack(~sep: 2.0, ~horiz: #'center,
-               prose_text(a, ~size: 30.0, ~bold: #true, ~arrive: #'pop),
-               prose_text(b, ~size: 30.0, ~bold: #true, ~arrive: #'pop))
-    def outer_words = label("dataflow IR", "equivalence")
-    def inner_words = label("original IR", "equivalence")
+    fun label(a :: String) :: pc.Pict:
+      prose_text(a, ~size: 32.0, ~bold: #true, ~arrive: #'pop)
+    def outer_words = label("dataflow IR")
+    def inner_words = label("original IR")
     def ix = (ow - iw) / 2
     def iy = ow - iw - gap
     def picture:
@@ -397,7 +395,9 @@ fun update_opening() :: Map:
                  put(blank_slide, p, x, y))
   def aside_w = writer(aside_layer)
   def clearing:
-    pc.animate(~extent: math.max(1.2, unwrite_pace * extent_for(aside_w.total)),
+    // quicker than the pace a sentence is unwritten at: this is the slide being
+    // cleared, not something being said
+    pc.animate(~extent: math.max(0.9, 0.55 * unwrite_pace * extent_for(aside_w.total)),
                ~bend: fun (x): x,
                fun (t): put(with_states, aside_w.frame(1.0 - t), 0.0, 0.0))
 
@@ -462,8 +462,9 @@ fun egraph_frames(parts :~ Map) :: List:
   def line_targets:
     [{ #'value: #'v1, #'state: #'s1, #'op: #'u1,
        #'arg1: #'a, #'wrote: #'x, #'state_in: #'s0 },
-     // the second line brings the value it writes, which is a term of its own
-     { #'value: #'v2, #'state: #'s2, #'op: #'u2, #'wrote: #'xp },
+     // the second line brings the value it writes, which is a term of its own: the
+     // `+` that builds it and the `1` it adds
+     { #'value: #'v2, #'state: #'s2, #'op: #'u2, #'wrote: #'xp, #'wrote_one: #'one },
      { #'op: #'ret }]
 
   // where the box draws line `k`, from the same measurements `code_pict` uses
