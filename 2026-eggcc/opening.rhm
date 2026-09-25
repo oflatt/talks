@@ -14,6 +14,7 @@ import:
 export:
   author_lines
   talk_title_lines
+  more_box
   slide_1
   slide_2
   slide_20
@@ -124,18 +125,21 @@ def talk_title_lines = ["Efficient Extraction from", "Effectful E-Graphs"]
 // `[x, who, file, crop]`.
 def photo_y = 648.0
 def photo_pitch = 216.0
-// who is on the deck, in the order the names are written, with the photo of each
-// and how it is cropped. The summary slide lays the same faces out its own way.
+// who is on the deck, the speaker first and then the order the names are written,
+// with the photo of each and how it is cropped. The summary slide lays the same
+// faces out its own way. The files came out of Keynote numbered, not named: the
+// speaker's, Yihong's and Zach's are matched against the group's own headshots,
+// Chandrakana's and Eli's were checked by eye, and the rest are by elimination.
 def team:
-  [["Oliver Flatt", "image11.png", #false],
-   ["Anjali Pal", "image3.png", #false],
-   ["Yihong Zhang", "image6.png", #false],
-   ["Ryan Tjoa", "image8.png", [0.0, 0.0, 0.0, 0.093]],
-   ["Kirsten Graham", "image7.png", [0.0, 0.123, 0.0, 0.123]],
+  [["Oliver Flatt", "image7.png", [0.0, 0.123, 0.0, 0.123]],
+   ["Anjali Pal", "image11.png", #false],
+   ["Yihong Zhang", "image3.png", #false],
+   ["Ryan Tjoa", "image6.png", #false],
+   ["Kirsten Graham", "image8.png", [0.0, 0.0, 0.0, 0.093]],
    ["Chandrakana Nandi", "image4.png", [0.0, 0.02, 0.0, 0.02]],
    ["Eli Rosenthal", "image12.png", #false],
-   ["Alex Fischman", "image5.png", [0.0, 0.052, 0.0, 0.198]],
-   ["Zachary Tatlock", "image9.png", #false]]
+   ["Zachary Tatlock", "image5.png", [0.0, 0.052, 0.0, 0.198]],
+   ["Alex Fischman", "image9.png", #false]]
 // and everyone's name, as the two lines they are written on
 def author_lines:
   ["Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
@@ -210,6 +214,9 @@ fun caption(lines :~ List, r :: Int, c :: Int) :: List:
 fun under(s :: String, r :: Int, c :: Int) :: List:
   def word = prose_text(s, ~size: label_size, ~arrive: #'pop)
   [word, slot_mid(c) - word.width / 2, box_top[r] + box_h + 8.0]
+// the last slot's box, where "…and more!" goes: the summary slide puts what might
+// come next in it
+def more_box = [slot_left(4), box_top[1], box_w, box_h]
 // the logos, each in its slot
 def use_logos:
   { #'float: in_box(fitted("image17.png", 558.478, 250.198), 0, 0),

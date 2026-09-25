@@ -14,9 +14,67 @@ import:
   draw
 
 export:
+  slide_opts
   slide_raytracer
   slide_compile_times
   slide_made
+
+// -------------------------------------------------------------------------------------
+// slide_opts: what eggcc optimizes, against what LLVM does that it does not -- for
+// the question of why the extracted programs are not always as fast as LLVM's.
+//
+// The left is the papers' own list: the expressivity table against Peggy in the ICFP
+// paper, and the implementation section of the OOPSLA one. The right is what the
+// author responses owned up to when the reviewers asked why LLVM's code was still
+// faster: memory that stays in memory, unrolling only where the count is known,
+// allocations that are never reused, inlining to a fixed depth, and peepholes.
+fun slide_opts():
+  def page = titled("eggcc vs LLVM Optimizations", ~tag: "Optimizations title")
+  def line_size = 32.0
+  def rule_line = draw.Color(170, 170, 170)
+  fun heading(s :: String, color) :: pc.Pict:
+    prose_text(s, ~size: 40.0, ~bold: #true, ~color: color, ~arrive: #'pop)
+  fun subheading(s :: String) :: pc.Pict:
+    prose_text(s, ~size: line_size, ~bold: #true, ~arrive: #'pop)
+  fun listed(lines :~ List) :: pc.Pict:
+    pc.stack(~sep: 6.0, ~horiz: #'left,
+             & for List (s in lines): prose_text("• " +& s, ~size: line_size, ~arrive: #'pop))
+  // a heading with a list under it
+  fun column(p :: pc.Pict, head :: pc.Pict, body :: pc.Pict, x :: Real, y :: Real) :: pc.Pict:
+    put(put(p, head, x, y), body, x, y + head.height + 16.0)
+  def optimizations:
+    ["redundant load elimination", "load-after-store forwarding",
+     "dead loop deletion", "loop invariant code motion",
+     "conditional invariant code motion", "loop unswitching",
+     "conditional splitting", "loop strength reduction",
+     "loop unrolling", "flow-sensitive constant folding",
+     "if conversion", "function inlining (two levels)",
+     "redundant branch elimination", "peephole optimizations"]
+  def analyses:
+    ["interval analysis", "pointer analysis (simple)",
+     "loop count analysis", "loop invariant analysis", "purity analysis"]
+  def missing:
+    ["scalar promotion of memory", "generalized loop unrolling",
+     "stack coloring (reuse of allocations)", "aggressive inlining",
+     "loop peeling", "branch hoisting", "if-true specialization",
+     "many peepholes, e.g. a − (a/2)·2 → a & 1"]
+  def top = 190.0
+  def left_x = 95.0
+  def mid_x = 660.0
+  def rule_x = 1170.0
+  def right_x = 1220.0
+  def has = heading("eggcc implements", talk_green)
+  def lacks = heading("Missing, vs LLVM", talk_red)
+  def ours:
+    column(column(put(blank_slide, has, left_x, top),
+                  subheading("optimizations"), listed(optimizations), left_x, top + has.height + 24.0),
+           subheading("analyses"), listed(analyses), mid_x, top + has.height + 24.0)
+  def theirs:
+    column(put(blank_slide,
+               pc.rectangle(~width: 3.0, ~height: 760.0, ~fill: rule_line, ~line: #false),
+               rule_x, top),
+           lacks, listed(missing), right_x, top)
+  staged(page, [ours, theirs])
 
 // -------------------------------------------------------------------------------------
 // slide_raytracer: eggcc on a program too big to draw -- the raytracer benchmark,

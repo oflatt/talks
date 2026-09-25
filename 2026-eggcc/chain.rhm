@@ -47,6 +47,7 @@ export:
   chain_root
   chain_safe
   chain_slide
+  chain_wire_specs
   chain_press
   chain_spots
   chain_spots_upto

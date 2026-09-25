@@ -62,6 +62,7 @@ export:
   small_prose
   staged
   titled
+  title_face
   title_text
   title_x
   title_y

@@ -15,7 +15,6 @@ import:
 export:
   slide_nphard
   nphard_title
-  np_bare_chain
 
 // the title, named once: the divider before this slide writes it as its outline goes up
 def nphard_title = "Effect-Safe Extraction is NP-Hard"
@@ -213,71 +212,6 @@ def np_picked_keys:
     ++ (for List (clause :~ List in np_members, c in 0..):
           [#'g, c, np_pick_member(clause)])
     ++ [[#'root]]
-
-// The chain of assignments on its own, for the bad-news panel on the workflow
-// slide: the operators labelled `b₁`, `¬b₁`, `b₂`, ... and nothing else labelled,
-// and the state classes drawn -- the two states either assignment of a variable
-// leaves are one class, which is what lets a walk go on down the chain whichever
-// it took -- but no clause classes: what is seen is the one thing the panel says,
-// that a walk down the chain takes one of each pair, which is a truth assignment.
-// Drawn from the same positions as the proof, on a layer of its own size.
-fun np_bare_chain() :: pc.Pict:
-  def keys:
-    for List ([key, _, _, _, _, _] in np_nodes):
-      keep_when [#'arg, #'op, #'st].contains((key :~ List)[0])
-      key
-  def left = for values(m :~ Real = 1.0e9) (k in keys): math.min(m, (np_at[k] :~ List)[0])
-  def top = for values(m :~ Real = 1.0e9) (k in keys): math.min(m, (np_at[k] :~ List)[1])
-  def right:
-    for values(m :~ Real = 0.0) (k in keys):
-      def [x, _, w] = np_at[k] :~ List
-      math.max(m, x + w)
-  def bottom = for values(m :~ Real = 0.0) (k in keys): math.max(m, (np_at[k] :~ List)[1] + np_h)
-  fun box(key :~ List) :: pc.Pict:
-    def [_, _, w] = np_at[key] :~ List
-    def node = as_pict(graph_node(~width: w, ~height: np_h, ~adj: "33878",
-                                  ~line: stateful_hex, ~line_width: 4.0, ~fill: node_white))
-    if key[0] == #'op
-    | // the box's word about its corners kept on the labelled box, for the arrows
-      pc.overlay(node, node_label((if key[2] == 1 | "¬b" | "b") +& np_sub[(key[1] :~ Int) + 1],
-                                  ~size: 40.0)).set_metadata(node.metadata())
-    | node
-  def picts = for values(m :~ Map = {}) (k in keys): m ++ { k: box(k) }
-  // An edge on a lane of its own -- the box round its two ends, with ghosts of them
-  // to aim at -- so that `write` draws it from its tail as it does the graphs' edges,
-  // rather than fading it in. Laundered ghosts, since the nodes themselves are on
-  // the layer too and a pict found twice is one the walk cannot place.
-  fun lane(a, b) :: List:
-    def [ax, ay, aw] = np_at[a] :~ List
-    def [bx, by, bw] = np_at[b] :~ List
-    def margin = 8.0
-    def x0 = math.min(ax, bx) - margin
-    def y0 = math.min(ay, by) - margin
-    def x1 = math.max(ax + aw, bx + bw) + margin
-    def y1 = math.max(ay, by) + np_h + margin
-    fun ghost_of(k) :: pc.Pict:
-      def p :~ pc.Pict = picts[k]
-      p.launder().ghost().set_metadata(p.metadata())
-    def ga = ghost_of(a)
-    def gb = ghost_of(b)
-    def board = put(put(pc.blank(~width: x1 - x0, ~height: y1 - y0), ga, ax - x0, ay - y0),
-                    gb, bx - x0, by - y0)
-    [drawn_arrow(~on: board, ga, gb, ~color: keynote_blue, ~line_width: 6, ~gap: 4),
-     x0 - left, y0 - top]
-  // the classes under the nodes: each variable's two states, one grey tube
-  def classed:
-    for values(q :~ pc.Pict = pc.blank(~width: right - left, ~height: bottom - top)) (v in 0..np_vars):
-      def [tube, x, y] = eclass_region(np_middle([#'st, v, 0]), np_middle([#'st, v, 1]),
-                                       ~dash: state_class)
-      put(q, tube, (x :~ Real) - left, (y :~ Real) - top)
-  def placed:
-    for values(q :~ pc.Pict = classed) (k in keys):
-      def [x, y, _] = np_at[k] :~ List
-      put(q, picts[k], x - left, y - top)
-  for values(q :~ pc.Pict = placed) (e :~ List in np_edge_list(~picked: #false)):
-    skip_when e[0] != #'state || !keys.contains(e[1]) || !keys.contains(e[2])
-    def [line, x, y] = lane(e[1], e[2])
-    put(q, line, x, y)
 
 // The slide. The formula, then what the proof is going to do with it, then the
 // chain of assignments, a clause class at a time, the root, and last the thing the

@@ -28,7 +28,7 @@ export:
   with_steps
 
 def step_keys = [#'program, #'rules, #'extract]
-def step_names = { #'program: "Initial Program", #'rules: "Run Rules", #'extract: "Extract" }
+def step_names = { #'program: "Insert Program", #'rules: "Run Rules", #'extract: "Extract" }
 def step_w = 330.0
 def step_h = 64.0
 // The same box in both places, so that lighting one is a change of colour and not a
@@ -43,9 +43,12 @@ def step_plain:
   for values(m :~ Map = {}) (k in step_keys): m ++ { k: step_box(step_names[k], ~lit: #false) }
 def step_lit:
   for values(m :~ Map = {}) (k in step_keys): m ++ { k: step_box(step_names[k], ~lit: #true) }
-// where they stand once they are out of the way: the top right corner, clear of the
-// title on its left and of anything the slide draws below
-def step_corner = for List (i in 0..3): [1560.0, 96.0 + 104.0 * i]
+// Where they stand once they are out of the way: the top right corner, clear of the
+// title on its left and of anything the slide draws below. Far enough in that the
+// workflow slide's own cards, which are wider than these and travel here, still land
+// wholly on the page -- a pict placed past the edge grows the page's box, and every
+// other thing on it shifts to make room.
+def step_corner = for List (i in 0..3): [1480.0, 96.0 + 104.0 * i]
 
 // the three of them in the corner, `lit` filled gold
 fun steps_at(~lit: lit = #false, ~upto: upto :: Int = 3) :: Map:

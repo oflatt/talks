@@ -191,6 +191,11 @@ under a later version of them. Once the talk is given, the general parts --
 `write.rhm`, `ink.rhm`, `magicmove.rhm`, the bubbles, arrows and outline of
 `slidehelpers.rhm` -- are to be lifted into a Rhombus package for the next talk;
 `theme.rhm`, `egraph.rhm` and the slide files are this deck's.
+- The deck is written against one commit of rhombus-glide, named in the Makefile as
+  `GLIDE_COMMIT`. `glide-pptx` is a *link* to the checkout at `GLIDE_SRC`, so the
+  checkout is what runs: `make check-deps` says whether it is at that commit, `make`
+  and `make show` warn if it is not, and `make deps` sets a fresh machine up. Bump the
+  pin when the deck starts to depend on something newer in glide.
 
 ## 10. Checking a change
 

@@ -22,7 +22,6 @@ import:
   "write.rhm".arriving
   "write.rhm".pop_frame
   "write.rhm".current_draw
-  "write.rhm".written_shape
   pict as pc
   draw
 
@@ -289,31 +288,6 @@ fun update_opening() :: Map:
                           ~content: prose_stack([[["central challenge:", #'bold]],
                                                  [["unavoidable in the e-graph!", #'plain]]])),
                     0.0, 0.0, band_callout] }
-  // And what the challenge comes to, as a picture: every program the original IR
-  // calls equivalent, the dataflow IR does too, and it calls more equivalent besides
-  // -- one circle inside a bigger one, on the empty right of the slide.
-  def venn_over:
-    def ow = 460.0
-    def iw = 270.0
-    def gap = 30.0
-    fun disc(d :: Real, color) :: pc.Pict:
-      def p = draw.Path()
-      p.ellipse([0.0, 0.0, d, d])
-      written_shape(p, ~width: d, ~height: d, ~fill: pale(color), ~line: color,
-                    ~line_width: border_width)
-    fun label(a :: String) :: pc.Pict:
-      prose_text(a, ~size: 32.0, ~bold: #true, ~arrive: #'pop)
-    def outer_words = label("dataflow IR")
-    def inner_words = label("original IR")
-    def ix = (ow - iw) / 2
-    def iy = ow - iw - gap
-    def picture:
-      put(put(put(put(pc.blank(~width: ow, ~height: ow), disc(ow, talk_blue), 0.0, 0.0),
-                  disc(iw, talk_green), ix, iy),
-              // the outer's words in the band over the inner circle
-              outer_words, (ow - outer_words.width) / 2, (iy - outer_words.height) / 2),
-          inner_words, ix + (iw - inner_words.width) / 2, iy + (iw - inner_words.height) / 2)
-    { #'venn: [picture, 1450.0, 330.0, band_callout] }
   def nonlinear_over:
     { #'nonlinear: [aimed(~at: [box_right - 4.0, second_write_y + copy_dy],
                           ~body: [body_x, 475.0 + copy_dy], ~color: talk_red,
@@ -342,8 +316,6 @@ fun update_opening() :: Map:
     Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
                     ++ equivalent_over ++ nonlinear_over ++ challenge_over,
           ~edges: orig_edges ++ copy_edges(~red: #true))
-  def f_venn:
-    Frame(~picts: f_challenge.picts ++ venn_over, ~edges: f_challenge.edges)
   fun press(a :: Frame, b :: Frame) :: pc.Pict:
     magic_press(with_states, a, b, ~wire: ref_wire, ~edge_band: band_wires)
 
@@ -389,10 +361,7 @@ fun update_opening() :: Map:
                layer_of(linear_over, #'linear), copy_layer,
                arrows_layer(copy_ends, copy_edges(~red: #true)),
                layer_of(equivalent_over, #'equivalent), layer_of(nonlinear_over, #'nonlinear),
-               layer_of(challenge_over, #'challenge),
-               block:
-                 def [p, x, y, _] = venn_over[#'venn] :~ List
-                 put(blank_slide, p, x, y))
+               layer_of(challenge_over, #'challenge))
   def aside_w = writer(aside_layer)
   def clearing:
     // quicker than the pace a sentence is unwritten at: this is the slide being
@@ -406,9 +375,8 @@ fun update_opening() :: Map:
   // which and a bubble says that is linear; a copy of the program comes up; it is
   // rewritten, its arrows swinging; a bubble says it is the same program, a red one
   // says how it differs as the two arrows reading one memory turn red, and another
-  // red one says the e-graph cannot help but hold it, and a picture on the right
-  // says the same of the two IRs' equivalences; and everything over the program is
-  // unwritten, leaving the program alone under its title
+  // red one says the e-graph cannot help but hold it; and everything over the
+  // program is unwritten, leaving the program alone under its title
   { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
                       pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain_plain))
                         .refocus(plain),
@@ -421,7 +389,6 @@ fun update_opening() :: Map:
                       press(f_forked, f_equivalent),
                       press(f_equivalent, f_nonlinear),
                       press(f_nonlinear, f_challenge),
-                      press(f_challenge, f_venn),
                       clearing),
     #'title: title, #'code: code_states, #'parts: parts }
 
@@ -515,7 +482,7 @@ fun egraph_frames(parts :~ Map) :: List:
                                           #'idea,
                                           pc.stack(~sep: 2.0, ~horiz: #'center,
                                                    small_prose("Redundant"),
-                                                   small_prose("update")),
+                                                   small_prose("write")),
                                           ~sep: 6.0, ~above: #true,
                                           ~scale: 0.58)),
                     0.0, 0.0, band_callout] }

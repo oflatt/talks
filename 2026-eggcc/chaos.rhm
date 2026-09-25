@@ -1,0 +1,130 @@
+#lang rhombus/and_meta
+// A worst-case e-graph, drawn to look the part: a chain of state classes, each split
+// across several writes and joined again below them, so the state walks fork and
+// meet all the way down; and on either side of the writes, pure terms built on
+// them, in classes of their own, that the next writes read -- the shape of the
+// hardness proof's graph, with every label the same square `f` but the argument
+// state, which is the one `ω`: what it is a picture of is the shape, not any one
+// node in it.
+//
+// Laid out in three lanes, the writes and states down the middle and the pure terms
+// down either side, with every edge running to the row above it, so that no arrow
+// has to cross a node on its way (and none passes within twenty pixels of one, in
+// the frame's own units).
+//
+// Handed out as frame picts and edge specs rather than as one drawing, so that a
+// slide writes it the way it writes its own graphs: every node on the press that
+// brings it, every arrow drawn from its tail.
+
+import:
+  "slidehelpers.rhm" open
+  "theme.rhm" open
+  "egraph.rhm" open
+  "magicmove.rhm" open
+  pict as pc
+  draw
+
+export:
+  chaos_parts
+  chaos_wire
+
+def nd = 64.0
+def pitch = 120.0
+def width = 1144.0
+
+// Every node: its key, its column, its row, and whether it carries a state. It has
+// the shape of the hardness proof's graph, twice over: a chain of writes down the
+// middle, each layer's writes reading one state of the class above and leaving
+// states that are one class; and on either side, pure terms, each reading a write of
+// the layer above, the ones on a side one class -- distinct terms, on distinct
+// writes, one of them on two. Every write reads a pure term and a state, every pure
+// term reads writes, and the root reads a pure term from each side and a state: the
+// colours alternate all the way up, and the only leaf is the argument state.
+//
+// Laid out by hand and not on a grid: the writes of a layer are spaced unevenly, a
+// state sits a little off from the write that left it, the writes below reach across
+// one another for their states, one reads a pure term from the far side, and the
+// last layer has one pure term on its right rather than two -- so it looks like what
+// it is, a graph nobody drew for a reader, rather than a lattice.
+def chaos_nodes:
+  [[[#'w], 560.0, 0, #true],
+   [[#'b, 1, 0], 380.0, 1, #true], [[#'b, 1, 1], 540.0, 1, #true], [[#'b, 1, 2], 740.0, 1, #true],
+   [[#'l, 1, 0], 0.0, 2, #false], [[#'l, 1, 1], 200.0, 2, #false], [[#'s, 1, 0], 420.0, 2, #true], [[#'s, 1, 1], 600.0, 2, #true], [[#'s, 1, 2], 730.0, 2, #true], [[#'r, 1, 0], 900.0, 2, #false], [[#'r, 1, 1], 1080.0, 2, #false],
+   [[#'b, 2, 0], 340.0, 3, #true], [[#'b, 2, 1], 500.0, 3, #true], [[#'b, 2, 2], 700.0, 3, #true],
+   [[#'l, 2, 0], 40.0, 4, #false], [[#'l, 2, 1], 260.0, 4, #false], [[#'s, 2, 0], 380.0, 4, #true], [[#'s, 2, 1], 480.0, 4, #true], [[#'s, 2, 2], 700.0, 4, #true], [[#'r, 2, 0], 880.0, 4, #false], [[#'r, 2, 1], 1080.0, 4, #false],
+   [[#'b, 3, 0], 420.0, 5, #true], [[#'b, 3, 1], 640.0, 5, #true], [[#'b, 3, 2], 840.0, 5, #true],
+   [[#'l, 3, 0], 20.0, 6, #false], [[#'l, 3, 1], 240.0, 6, #false], [[#'s, 3, 0], 460.0, 6, #true], [[#'s, 3, 1], 600.0, 6, #true], [[#'s, 3, 2], 840.0, 6, #true], [[#'r, 3, 0], 1000.0, 6, #false],
+   [[#'root], 620.0, 7, #true]]
+// the classes: each layer's states, and each layer's pure terms on either side
+def chaos_classes:
+  [[[#'l, 1, 0], [#'l, 1, 1]],
+   [[#'s, 1, 0], [#'s, 1, 2]],
+   [[#'r, 1, 0], [#'r, 1, 1]],
+   [[#'l, 2, 0], [#'l, 2, 1]],
+   [[#'s, 2, 0], [#'s, 2, 2]],
+   [[#'r, 2, 0], [#'r, 2, 1]],
+   [[#'l, 3, 0], [#'l, 3, 1]],
+   [[#'s, 3, 0], [#'s, 3, 2]]]
+// the edges, from a node to what it is built from: a state's in the blue that
+// carries one, a value's in black
+def chaos_edges:
+  [// three writes read the argument state
+   [[#'b, 1, 0], [#'w], #true], [[#'b, 1, 1], [#'w], #true], [[#'b, 1, 2], [#'w], #true],
+   // and leave states, in one class, each a little off from its write
+   [[#'s, 1, 0], [#'b, 1, 0], #true], [[#'s, 1, 1], [#'b, 1, 1], #true], [[#'s, 1, 2], [#'b, 1, 2], #true],
+   // pure terms on those writes, a class on each side, one of them on two writes
+   [[#'l, 1, 0], [#'b, 1, 0], #false], [[#'l, 1, 1], [#'b, 1, 1], #false], [[#'r, 1, 0], [#'b, 1, 1], #false], [[#'r, 1, 0], [#'b, 1, 2], #false], [[#'r, 1, 1], [#'b, 1, 2], #false],
+   // the next writes read a pure term -- the middle one reads one from each side -- and a state of the class above, crossing over
+   [[#'b, 2, 0], [#'l, 1, 0], #false], [[#'b, 2, 1], [#'l, 1, 1], #false], [[#'b, 2, 1], [#'r, 1, 0], #false], [[#'b, 2, 2], [#'r, 1, 0], #false], [[#'b, 2, 0], [#'s, 1, 0], #true], [[#'b, 2, 1], [#'s, 1, 2], #true], [[#'b, 2, 2], [#'s, 1, 1], #true],
+   // and leave states
+   [[#'s, 2, 0], [#'b, 2, 0], #true], [[#'s, 2, 1], [#'b, 2, 1], #true], [[#'s, 2, 2], [#'b, 2, 2], #true],
+   // pure terms on those
+   [[#'l, 2, 0], [#'b, 2, 0], #false], [[#'l, 2, 1], [#'b, 2, 1], #false], [[#'r, 2, 0], [#'b, 2, 1], #false], [[#'r, 2, 0], [#'b, 2, 2], #false], [[#'r, 2, 1], [#'b, 2, 2], #false],
+   // and again, the last write off to the right
+   [[#'b, 3, 0], [#'l, 2, 1], #false], [[#'b, 3, 1], [#'r, 2, 0], #false], [[#'b, 3, 2], [#'r, 2, 1], #false], [[#'b, 3, 0], [#'s, 2, 0], #true], [[#'b, 3, 1], [#'s, 2, 1], #true], [[#'b, 3, 2], [#'s, 2, 2], #true],
+   [[#'s, 3, 0], [#'b, 3, 0], #true], [[#'s, 3, 1], [#'b, 3, 1], #true], [[#'s, 3, 2], [#'b, 3, 2], #true],
+   // the right side down to a single pure term this time
+   [[#'l, 3, 0], [#'b, 3, 0], #false], [[#'l, 3, 1], [#'b, 3, 1], #false], [[#'r, 3, 0], [#'b, 3, 1], #false], [[#'r, 3, 0], [#'b, 3, 2], #false],
+   // and the root, reading a pure term from each side and a state of the last class
+   [[#'root], [#'l, 3, 1], #false], [[#'root], [#'r, 3, 0], #false], [[#'root], [#'s, 3, 1], #true]]
+
+fun chaos_parts(~at: at :~ List, ~width: want_w :: Real, ~height: want_h :: Real) :: List:
+  def rows = for values(m :~ Int = 0) ([_, _, row, _] in chaos_nodes): math.max(m, row)
+  def height = rows * pitch + nd
+  def k = math.min(want_w / width, want_h / height)
+  // centred in the room it is given, so it sits under its label
+  def x0 = (at[0] :~ Real) + (want_w - width * k) / 2
+  fun place(x :: Real, row :: Int) :: List:
+    [x0 + x * k, (at[1] :~ Real) + row * pitch * k]
+  def spots:
+    for values(m :~ Map = {}) ([key, x, row, _] in chaos_nodes): m ++ { key: place(x, row) }
+  // the nodes: all the one square, the ones that carry a state blue and thick
+  fun box(~stateful: stateful :: Boolean, ~label: label :: String) :: pc.Pict:
+    as_pict(graph_node(~width: nd, ~height: nd, ~adj: "33878",
+                       ~line: (if stateful | stateful_hex | "000000"),
+                       ~line_width: (if stateful | 4.0 | 3.0), ~fill: node_white,
+                       ~label: node_label(label, ~size: 40.0))).scale(k)
+  def picts:
+    for values(m :~ Map = {}) ([key, _, _, stateful] in chaos_nodes):
+      m ++ { [#'chaos, key]: [box(~stateful: stateful, ~label: (if key == [#'w] | "ω" | "f")),
+                              & spots[key], band_nodes] }
+  fun middle(key) :: List:
+    def [x, y] = spots[key] :~ List
+    [x + nd * k / 2, y + nd * k / 2]
+  def classes:
+    for values(m :~ Map = {}) ([from, to] in chaos_classes, i in 0..):
+      def dash = if (from :~ List)[0] == #'s | state_class | value_class
+      def [tube, x, y] = eclass_region(middle(from), middle(to), ~dash: dash,
+                                       ~thickness: (nd + 2 * eclass_pad) * k)
+      m ++ { [#'chaos, #'class, i]: [tube, x, y, band_below] }
+  def edges:
+    for List ([from, to, stateful] in chaos_edges):
+      [#'chaos_edge, [#'chaos, from], [#'chaos, to],
+       (if stateful | keynote_blue | "black"), (if stateful | 6.0 | 3.0) * k]
+  [classes ++ picts, edges]
+
+// the wire that draws those edges; anything else is left to whoever else draws
+fun chaos_wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+  for values(q :~ pc.Pict = layer) (e :~ List in es):
+    skip_when e[0] != #'chaos_edge
+    arrow(~on: q, at[e[1]], at[e[2]], ~color: e[3], ~line_width: e[4], ~gap: 4)

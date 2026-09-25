@@ -897,12 +897,16 @@ def outline_palette:
 fun hue_of(i :: Int, n :: Int) :: draw.Color:
   outline_palette[i mod outline_palette.length()]
 
-// `hl` is how lit this one is, 0 to 1.
-fun outline_disc(i :: Int, n :: Int, hl :: Real) :: Pict:
+// `hl` is how lit this one is, 0 to 1. `~font` is the face the numeral is set in,
+// handed in rather than read here: a disc is rebuilt on every frame of a press, from
+// inside the press's own callback, and `current_font()` read there is whatever the
+// show has at that moment and not the face the outline was built under -- which is
+// how the numerals came to change font mid-press.
+fun outline_disc(i :: Int, n :: Int, hl :: Real, ~font: face :: draw.Font) :: Pict:
   def hue = hue_of(i, n)
   def rr = outline_r * (1.0 + 0.18 * hl)
   def num:
-    def b = text("" +& (i + 1), ~font: current_font() with (weight = #'bold))
+    def b = text("" +& (i + 1), ~font: face with (weight = #'bold))
     b.scale(outline_r * 0.86 / b.height * (1.0 + 0.12 * hl))
   def core = overlay(circle(~size: rr * 2, ~fill: hue, ~line: #false),
                      num.colorize(draw.Color(255, 255, 255)))
@@ -1083,6 +1087,8 @@ fun outline_to_header(items :: List.of(String),
                       ~next: next :: maybe(Pict) = #false,
                       ~extent: extent :: Real = 1.0) :: Pict:
   def n = items.length()
+  // the face everything here is set in, read once, now, under the caller's choice
+  def face = current_font()
   // only the sections already behind us have one to show
   def shots:
     cond
@@ -1099,7 +1105,7 @@ fun outline_to_header(items :: List.of(String),
   // move matches on
   // the widest label at its lit size, so every layout below is the same width
   def lab_w = 1.08 * (for values(m :~ Real = 0.0) (q :~ Pict in written): math.max(m, q.width))
-  def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
+  def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0), ~font: face)
   def labels = for List (i in 0..n):
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
   def full = outline_layout(discs, labels, ~current: 1.0 * at, ~canvas: canvas, ~color: color,
@@ -1126,7 +1132,8 @@ fun outline_to_header(items :: List.of(String),
                                            lab.ghost(),
                                            (writers[i] :~ Writer).frame(clamp01(rv)))
                       def ds = for List (i in 0..n):
-                                 outline_disc(i, n, (if i == at | clamp01((p - 0.84) / 0.16) | 0.0))
+                                 outline_disc(i, n, (if i == at | clamp01((p - 0.84) / 0.16) | 0.0),
+                                              ~font: face)
                       outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
                                      ~canvas: canvas, ~color: color, ~label_width: lab_w,
                                      ~shots: shots, ~disc_prog: prog))
@@ -1138,7 +1145,7 @@ fun outline_to_header(items :: List.of(String),
         // built from its own settled discs and labels, so that the two layouts
         // share the picts the move matches on.
         def prev = math.max(0, at - 1)
-        def discs0 = for List (i in 0..n): outline_disc(i, n, (if i == prev | 1.0 | 0.0))
+        def discs0 = for List (i in 0..n): outline_disc(i, n, (if i == prev | 1.0 | 0.0), ~font: face)
         def labels0 = for List (i in 0..n):
                         outline_label(written[i], written_lit[i], (if i == prev | 1.0 | 0.0))
         def head0 = header_layout(discs0, labels0, ~at: prev, ~canvas: canvas,
@@ -1156,7 +1163,7 @@ fun outline_to_header(items :: List.of(String),
                     | block:
                         def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
                         def ds = for List (i in 0..n):
-                                   outline_disc(i, n, clamp01(1.0 - absr(cur - i)))
+                                   outline_disc(i, n, clamp01(1.0 - absr(cur - i)), ~font: face)
                         def ls = for List (i in 0..n):
                                    outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
                         outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
@@ -1204,10 +1211,11 @@ fun section_header(items :: List.of(String),
                    ~canvas: canvas :: Pict,
                    ~color: color = talk_blue) :: Pict:
   def n = items.length()
+  def face = current_font()
   def line_color = as_color(color)
   def written = for List (s in items): outline_plain(s, ~color: draw.Color(0, 0, 0))
   def written_lit = for List (s in items): outline_plain(s, ~color: line_color)
-  def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0))
+  def discs = for List (i in 0..n): outline_disc(i, n, (if i == at | 1.0 | 0.0), ~font: face)
   def labels = for List (i in 0..n):
                  outline_label(written[i], written_lit[i], (if i == at | 1.0 | 0.0))
   header_layout(discs, labels, ~at: at, ~canvas: canvas, ~color: color)

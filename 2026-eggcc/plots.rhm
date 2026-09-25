@@ -37,7 +37,7 @@ export:
 def plot_line = draw.Color(40, 40, 40)
 def plot_grid = draw.Color(205, 205, 205)
 def ours_color = draw.Color(0, 176, 80)          // eggcc
-def llvm_color = draw.Color(20, 20, 20)          // LLVM-O0-O0
+def llvm_color = draw.Color(20, 20, 20)          // LLVM-O0
 def gone_color = draw.Color(235, 45, 45)         // the solver gave up
 def link_color = draw.Color(150, 150, 150)
 def axis_face = draw.Font(~name: prose_font, ~size: 34.0)
@@ -141,7 +141,7 @@ fun perf_chart(~ours: ours :: Real = 1.0, ~llvm: llvm :: Real = 1.0,
       def lab :~ pc.Pict = axis_text(to_string(math.exact(v)))
       put(q, lab, perf_x - 16.0 - lab.width, perf_y + perf_yv(v) - lab.height / 2)
   def y_label:
-    (axis_text("Time Relative To LLVM-O3-O0") :~ pc.Pict).rotate(math.pi / 2)
+    (axis_text("Time Relative To LLVM-O3") :~ pc.Pict).rotate(math.pi / 2)
   def x_label :~ pc.Pict = axis_text("Polybench Benchmark Suite, sorted by eggcc")
   def base:
     put(put(put(with_ticks,
@@ -151,10 +151,10 @@ fun perf_chart(~ours: ours :: Real = 1.0, ~llvm: llvm :: Real = 1.0,
   // the baseline is named whatever else is on the chart: it is the thing the whole
   // axis is relative to, so it is not one of the series that arrive
   def named:
-    def lab :~ pc.Pict = axis_text("LLVM-O3-O0").colorize(link_color)
+    def lab :~ pc.Pict = axis_text("LLVM-O3").colorize(link_color)
     put(base, lab, perf_x + perf_w + 34.0, perf_y + perf_yv(1.0) - lab.height / 2)
   perf_name(perf_name(perf_name(named, "eggcc", ours_color, 2.6, ours),
-                      "LLVM-O0-O0", llvm_color, 6.4, llvm),
+                      "LLVM-O0", llvm_color, 6.4, llvm),
             "solvers, timed out", gone_color, 9.9, solver)
 
 // Where benchmark `i`'s eggcc dot is, in slide coordinates, for a bubble to point at.

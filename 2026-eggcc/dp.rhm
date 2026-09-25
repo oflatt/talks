@@ -10,11 +10,18 @@ import:
   "egraph.rhm" open
   "chain.rhm" open
   "apply.rhm" open
+  "chaos.rhm" open
+  "write.rhm".Arrival
+  "write.rhm".arriving
+  "write.rhm".write
+  "write.rhm".writer
   pict as pc
   draw
 
 export:
   collapse_title
+  give_up_title
+  slide_give_up
   slide_collapse
   slide_dp
   dp_title
@@ -162,6 +169,8 @@ fun walk_edges(row :~ List) :: List:
 // not end at, so a neck along one cannot swallow a node not in the set.
 def blob_pad = 18.0
 def blob_neck = 34.0
+// how much of a press a set laid over another takes to come up
+def cover_span = 0.6
 fun blob_nodes(row :~ List) :: List:
   for values(acc :~ List = []) ([key, c, _] in chain_graph :~ List):
     if (row[1] :~ List).contains(c) && !chain_eff_class(c) && !acc.contains(key)
@@ -204,6 +213,11 @@ fun hues_of(f :: Frame) :: List:
 // pict can only dissolve into place. Each piece new to this press swells from
 // nothing, and the ones further from the mass that is already there start later, so
 // it runs outwards from the walk instead of blinking on all at once.
+//
+// Except where there is a mass there already: a set that arrives over another one
+// is the same set and more, and what a reader should see is the second colour
+// laid over the first -- so the pieces it has in common with what is there come at
+// full size and the whole fades up over them, and only what is new to it grows.
 fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
   // a piece of a mass is a colour and a node, so that two masses can be in flight
   // at once without either one's growth being confused for the other's
@@ -216,15 +230,30 @@ fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
       def [ox, oy] = middle(away, o[1])
       math.min(d, math.sqrt((cx - ox) * (cx - ox) + (cy - oy) * (cy - oy)))
   def coming :~ List: for List (k in now): keep_when !was.contains(k); k
+  // the pieces of an arriving set that lie over one already drawn, and the sets
+  // that have any: those are laid over what is there rather than grown
+  def covered :~ List = for List (o :~ List in was): o[1]
+  def covering :~ List = for List (k :~ List in coming): keep_when covered.contains(k[1]); k
+  def taking_over :~ List:
+    for values(acc :~ List = []) (k :~ List in covering):
+      if acc.contains(k[0]) | acc | acc ++ [k[0]]
+  // A set that is being let go goes as a whole, and a whole set fades out where it
+  // lies rather than contracting: shrunk piece by piece it plays its own arrival
+  // backwards, and whatever is under it comes out from behind it as it goes -- which
+  // reads as the set that stays growing all over again.
+  def leaving :~ List:
+    for List (h in hues_of(a)): keep_when !hues_of(b).contains(h); h
   def far: for values(m :~ Real = 1.0) (k in coming): math.max(m, reach_dist(k))
   def size :~ Map:
     for values(m :~ Map = {}) (item in now ++ was):
       def f:
         cond
         | was.contains(item) && now.contains(item): 1.0
+        | covering.contains(item): 1.0
         | now.contains(item):
             def start = 0.5 * (if far > 0.0 | reach_dist(item :~ List) / far | 0.0)
             smooth((t - start) / math.max(0.05, 1.0 - start))
+        | leaving.contains((item :~ List)[0]): 1.0
         | ~else: smooth(1.0 - t)
       m ++ { item: f }
   fun at(hue, key) :: Real:
@@ -272,7 +301,13 @@ fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
             target.restore(),
           ~width: slide_width, ~height: slide_height)
   for values(q :~ pc.Pict = layer) (hue in order):
-    put(q, mass_of(hue).alpha(blob_alpha, ~composite: #true), 0.0, 0.0)
+    def fade:
+      cond
+      | leaving.contains(hue): smooth(1.0 - t)
+      | taking_over.contains(hue): smooth(math.min(1.0, t / cover_span))
+      | ~else: 1.0
+    skip_when fade <= 0.0
+    put(q, mass_of(hue).alpha(blob_alpha * fade, ~composite: #true), 0.0, 0.0)
 
 // One press per term the walk grows by, in the order a reader would try them:
 // everything the first write opens up, and then everything the second does, so
@@ -318,31 +353,38 @@ def key_idea:
              idea_at[0], idea_at[1], band_callout] }
 def idea_bubble :: pc.Pict = (key_idea[#'idea] :~ List)[0]
 
-// The last word. The algorithm's cost is bounded by the statewalk width `k` (paper,
-// Section 6): how many walks a class ends up holding, which on this graph is two,
-// for the class the two writes meet in -- so the bubble points at that class, the
-// one filled in both colours. The measured mean width across the benchmarks is
-// 33.15, which is the claim: the parameter the bound is in stays small. The bound
-// itself is left to the paper. It stands in the margin right of the graph, which
-// is the empty side, and reaches down to the class.
-def in_practice:
+// What the algorithm's cost comes to. The good news: the time is bounded by how
+// many walks the table holds (paper, Section 6) -- which on this graph is two, for
+// the class the two writes meet in, so the bubble points at that class, the one
+// filled in both colours. The bad news, in red under it: in general that number is
+// exponential. Both in the margin right of the graph, which is the empty side; what
+// keeps the number small in practice is the slide after this one.
+def good_news:
   def words:
-    prose_stack([[["time bounded by", #'bold]],
-                 [["statewalk width ", #'bold_italic], ["(", #'bold],
-                  ["k", #'bold_italic], [")", #'bold]],
-                 [["is low in practice!", #'bold]]])
+    prose_stack([[["Good news:", #'bold]],
+                 [["time bounded by", #'plain]],
+                 [["number of statewalks!", #'plain]]])
   def [region, rx, ry, _] = (regions_at(away) :~ Map)[#'memory_class]
-  { #'practice: [bubble_at(region, ~spot: [rx, ry], ~body: [1440.0, 190.0],
-                           ~color: talk_green,
-                           // the face over the words: the margin is taller than wide
-                           ~content: robot_says(#'smile, words, ~sep: 12.0, ~above: #true,
-                                                ~scale: 0.85)),
-                 0.0, 0.0, band_callout] }
+  { #'good: [bubble_at(region, ~spot: [rx, ry], ~body: [1440.0, 190.0],
+                       ~color: talk_green,
+                       // the face over the words: the margin is taller than wide
+                       ~content: robot_says(#'smile, words, ~sep: 12.0, ~above: #true,
+                                            ~scale: 0.85)),
+             0.0, 0.0, band_callout] }
+def bad_news:
+  def words:
+    prose_stack([[["Bad news:", #'bold]],
+                 [["exponential number", #'plain]],
+                 [["of statewalks", #'plain]]])
+  { #'bad: [make_bubble(~color: talk_red, ~padding: 24.0,
+                        robot_says(#'frown, words, ~sep: 12.0, ~above: #true, ~scale: 0.85)),
+            1440.0, 590.0, band_callout] }
 
-
-// The last word of all: the kind of answer this is. A hard problem with a
-// parameter that stays small in practice is what a parameterized algorithm is for,
-// and this one is one. Right of the graph, which is the empty side of the slide.
+// The last word of all, at the end of the collapsing: the kind of answer this is. A
+// hard problem with a parameter that stays small in practice is what a parameterized
+// algorithm is for, and this one is one. In the margin left of the graph, the wand
+// beside its words so that it fits under the bubble about the optimization and over
+// the one about the two sets.
 def parameterized:
   def words:
     prose_stack([[["parameterized", #'bold_italic]],
@@ -352,16 +394,45 @@ def parameterized:
                  [["NP-hard problems", #'plain]]])
   // written out rather than popped: the last word of the section, said slowly
   { #'wand: [make_bubble(~color: talk_green, ~padding: 24.0, ~text: #'write,
-                         pc.stack(~sep: 12.0, ~horiz: #'center, wand(~size: 110.0), words)),
-             1440.0, 570.0, band_callout] }
+                         pc.beside(~sep: 16.0, ~vert: #'center, wand(~size: 100.0), words)),
+             100.0, 470.0, band_callout] }
 
 
-// The title, as a piece of the slide rather than of the page: the slide after
-// this one opens on this one's last picture and changes the words, which it can
-// only do if they are drawn like everything else.
+// The example's graph, in the middle of the slide with nothing else on it. The
+// slide before the algorithm's carries it here and the algorithm's opens on it.
+def dp_graph_frame:
+  Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4))
+// where that graph's own ink sits on the page, for a slide that has to move it
+def dp_graph_box :~ List:
+  for values(b :~ List = [1.0e9, 1.0e9, -1.0e9, -1.0e9]) (key in away.keys()):
+    def [x, y] = (away :~ Map)[key] :~ List
+    def [w, h] = node_size(key)
+    [math.min(b[0], x), math.min(b[1], y),
+     math.max(b[2], x + w * dp_scale), math.max(b[3], y + h * dp_scale)]
+
+// the term the algorithm comes back with, which is also the one extraction should
+// have found on the example: what the slide before the algorithm's lights up
+def dp_answer :~ List = chain_dp_term(r_best)
+
+// The title, as a piece of the slide rather than of the page: a slide after this one
+// opens on its last picture and changes the words, which it can only do if they are
+// drawn like everything else. Each title is keyed by its own words, so a press that
+// changes them has one thing to take away and another to bring; the old fades out
+// over the press and the new waits until it is most of the way gone before it comes
+// up, so the two are never both legible at once.
 def dp_page = as_pict(page_canvas())
 fun dp_titled(t :: String) :: Map:
-  { #'title: [title_text(t), title_x, title_y, band_callout] }
+  def words = pc.text(t, ~font: title_face)
+  def coming:
+    arriving(words,
+             Arrival(fun (n :: Real):
+                       def u = clamp01((n - 0.55) / 0.45)
+                       cond
+                       | u >= 1.0: words
+                       | u <= 0.0: words.ghost()
+                       | ~else: words.alpha(smooth(u)),
+                     0.6, ~kind: #'fade))
+  { [#'title, t]: [coming, title_x, title_y, band_callout] }
 fun entitled(frames :~ List, over :~ Map) :: List:
   for List (f :: Frame in frames): Frame(~picts: f.picts ++ over, ~edges: f.edges)
 
@@ -420,9 +491,11 @@ fun slide_dp():
     def [x, y] = (away :~ Map)[key] :~ List
     def [w, h] = node_size(key)
     def right = point_side.has_key(key)
+    // over the bubbles: the pickaxe is what the press is about, and a bubble that
+    // reaches across the class it stands at would otherwise hide it
     { #'point: [(if right | dp_point_left | dp_point_right),
                 (if right | x + w * dp_scale + 20.0 | x - point_w - 20.0),
-                y + (h * dp_scale - point_h) / 2, band_above] }
+                y + (h * dp_scale - point_h) / 2, band_callout + 1] }
 
   // `~walks` are the dp_rows whose walks are drawn along the graph's edges, and `~sets`
   // the dp_rows whose extractable sets are drawn, in that order -- listed later is drawn
@@ -470,11 +543,9 @@ fun slide_dp():
   chain_slide(
     dp_page,
     entitled(
-      [// the title the divider wrote, and nothing else yet: the show cuts to it
-       Frame(),
-       // the example's graph, written out in the middle of the slide with nothing
-       // else on it: the program and the rule that made it were the section before
-       Frame(~picts: picts_at(away, {}) ++ regions_at(away), ~edges: chain_edges(4)),
+      [// the graph in the middle of the slide, where the slide before this one
+       // carried it: the show cuts to it
+       dp_graph_frame,
        // what is wanted of it, at the return
        Frame(~picts: picts_at(away, {}) ++ regions_at(away) ++ want, ~edges: chain_edges(4)),
        // the idea, to read the stepping against
@@ -512,11 +583,11 @@ fun slide_dp():
        // the class that holds two walks -- the one place on this graph the width is
        // more than one
        Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
-                       ++ in_practice,
+                       ++ good_news,
              ~edges: chain_edges(4)),
        // and what kind of answer that makes this
        Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away) ++ said
-                       ++ in_practice ++ parameterized,
+                       ++ good_news ++ bad_news,
              ~edges: chain_edges(4))],
       dp_titled(dp_title)),
     ~stage: blob_stage, ~stage_band: band_below)
@@ -586,10 +657,10 @@ fun slide_collapse():
   def definition:
     def words:
       prose_stack([[["extractable set", #'bold_italic], [":", #'plain]],
-                   [["nodes we could extract", #'plain]],
+                   [["e-classes we could extract", #'plain]],
                    [["for a given ", #'plain], ["state walk", #'bold]]])
     { #'definition: [make_bubble(~color: talk_blue, ~padding: 24.0, words),
-                     1440.0, 240.0, band_callout] }
+                     1370.0, 240.0, band_callout] }
   // and what the two sets come to, said of the class they are both stored at: the
   // same bubble before the change and after it. Low in the left margin, so that its
   // spike runs in under `v3` to the class rather than across it.
@@ -601,12 +672,13 @@ fun slide_collapse():
                   0.0, 0.0, band_callout] }
   def differ = verdict("different", "extractable sets")
   def same = verdict("same", "extractable set")
-  // and what that buys, once the class is down to one colour
-  def kept_one:
-    { #'kept: [make_bubble(~color: talk_green, ~padding: 24.0,
-                           prose_stack([[["store just one", #'plain]],
-                                        [["state walk", #'bold]]])),
-               1440.0, 640.0, band_callout] }
+  // and the answer to the bad news the slide before ended on, said of the class that
+  // was just collapsed: the number of walks stays small where it matters
+  def few:
+    def [region, rx, ry, _] = (regions_at(away) :~ Map)[#'memory_class] :~ List
+    { #'few: [bubble_at(region, ~spot: [rx, ry], ~body: [1440.0, 820.0], ~color: talk_green,
+                        ~content: prose([["few in practice", #'bold]])),
+              0.0, 0.0, band_callout] }
 
   // --------------------------------------------------------------------- the presses
   fun beat(~fills: fills :~ Map = stored_fills, ~written: written :: Boolean = #false,
@@ -623,7 +695,7 @@ fun slide_collapse():
     // over: the show cuts, and the first press changes the words at the top and takes
     // the last slide's remarks away.
     [Frame(~picts: picts_of(~fills: stored_fills, ~written: #false) ++ regions_at(away)
-                     ++ key_idea ++ in_practice ++ parameterized ++ dp_titled(dp_title),
+                     ++ key_idea ++ good_news ++ bad_news ++ dp_titled(dp_title),
            ~edges: chain_edges(4)),
      & entitled(
          [// the graph on its own again, under the title this slide is about
@@ -650,9 +722,92 @@ fun slide_collapse():
           // the writes leave, and the root that reads it -- are one colour again
           beat(~fills: one_fills, ~written: #true,
                ~over: optimization ++ definition ++ same, ~walks: [w_a], ~sets: [w_a]),
-          // which is the whole of what the optimization is for
+          // and, of that class, the answer to the bad news: the number stays small
           beat(~fills: one_fills, ~written: #true,
-               ~over: optimization ++ definition ++ same ++ kept_one,
+               ~over: optimization ++ definition ++ same ++ few,
+               ~walks: [w_a], ~sets: [w_a]),
+          // which is what kind of answer this whole section is
+          beat(~fills: one_fills, ~written: #true,
+               ~over: optimization ++ definition ++ same ++ few ++ parameterized,
                ~walks: [w_a], ~sets: [w_a])],
          dp_titled(collapse_title))],
     ~stage: blob_stage, ~stage_band: band_below)
+
+
+// -------------------------------------------------------------------------------------
+// slide_give_up: the worst case beside the graph a compiler sees.
+//
+// The section before this one ends on the bad news, and the answer to it is that the
+// graphs the hardness lives in are not the graphs anyone compiles. On the left, a
+// tangle: state walks that fork and meet, fork and meet, all the way down, through a
+// crowd of writes reaching back up to the inputs. On the right, the graph the last
+// section actually built -- and the term that should come out of it, lit up to say
+// that it is not hard to see. Then the left goes and the right moves into the middle
+// of the slide, which is where the algorithm's slide has it: that slide is cut to from
+// this one.
+def give_up_title = "Give Up?"
+
+fun slide_give_up():
+  def here = dp_titled(give_up_title)
+  def there = dp_titled(dp_title)
+  // Where the two of them stand. The graph keeps the size it has on the slide after
+  // this one and only moves, so the press between the two slides is a move and not a
+  // second drawing of the same picture.
+  def split_x = 900.0
+  def said_y = 986.0
+  def right_shift = [332.0, -70.0]
+  def right_spots :~ Map:
+    for values(m :~ Map = {}) (key in (away :~ Map).keys()):
+      def [x, y] = (away :~ Map)[key] :~ List
+      m ++ { key: [x + (right_shift[0] :~ Real), y + (right_shift[1] :~ Real)] }
+  def right_graph = picts_at(right_spots, {}) ++ regions_at(right_spots)
+  def right_cx:
+    def [x0, _, x1, _] = dp_graph_box
+    ((x0 :~ Real) + (x1 :~ Real)) / 2 + (right_shift[0] :~ Real)
+
+  fun verdict(s :: String, color) :: pc.Pict:
+    prose_text(s, ~size: 46.0, ~bold: #true, ~color: color, ~arrive: #'pop)
+  def said_left = verdict("Worst Case E-Graph", talk_red)
+  def said_right = verdict("Realistic E-Graph", talk_green)
+  // The tangle, as pieces rather than as one finished drawing: every node of it
+  // writes on the press that brings it and every arrow draws itself, the way the
+  // graph beside it does.
+  def [proof_picts :: Map, proof_edges :: List]:
+    chaos_parts(~at: [40.0, 200.0], ~width: split_x - 80.0, ~height: 740.0)
+  // the term extraction should find, lit on the graph where it stands
+  def right_lit = right_graph ++ green_at(right_spots, dp_answer)
+  def sat = { #'sat: [said_left, (split_x - said_left.width) / 2, said_y, band_above] }
+  def real = { #'real: [said_right, right_cx - said_right.width / 2, said_y, band_above] }
+  def rule:
+    { #'rule: [pc.rectangle(~width: 3.0, ~height: 800.0,
+                            ~fill: draw.Color(190, 190, 190), ~line: #false),
+               split_x, 190.0, band_below] }
+
+  // one wire for both halves: the tangle's own arrows, and the graph's
+  fun wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
+    def rest = for List (e :~ List in es): skip_when e[0] == #'chaos_edge; e
+    chain_wire_specs(chaos_wire(layer, es, at), rest, at)
+  magic_slide(
+    dp_page,
+    [// the title, and nothing else yet
+     Frame(~picts: here),
+     // the tangle
+     Frame(~picts: here ++ proof_picts, ~edges: proof_edges),
+     // which is what that graph is, said in red under it
+     Frame(~picts: here ++ proof_picts ++ sat, ~edges: proof_edges),
+     // and beside it, the graph the section before this one built
+     Frame(~picts: here ++ proof_picts ++ sat ++ rule ++ right_graph,
+           ~edges: proof_edges ++ chain_edges(4)),
+     // which is what *that* graph is
+     Frame(~picts: here ++ proof_picts ++ sat ++ rule ++ right_graph ++ real,
+           ~edges: proof_edges ++ chain_edges(4)),
+     // and the term that should come out of it, lit along with the walk that finds
+     // it: not hard to see. Then the light goes, so that what moves is the graph.
+     Frame(~picts: here ++ proof_picts ++ sat ++ rule ++ right_lit ++ real,
+           ~edges: proof_edges ++ chain_edges(4) ++ walk_edges(r_best)),
+     Frame(~picts: here ++ proof_picts ++ sat ++ rule ++ right_graph ++ real,
+           ~edges: proof_edges ++ chain_edges(4)),
+     // and then the left goes and the right moves into the middle, under the title the
+     // slide after this one carries
+     Frame(~picts: there ++ dp_graph_frame.picts, ~edges: dp_graph_frame.edges)],
+    ~wire: wire, ~edge_band: band_wires)

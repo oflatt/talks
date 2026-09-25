@@ -59,6 +59,7 @@ export:
   slide_update_story
   slide_41
   slide_nphard
+  slide_give_up
   slide_dp
   slide_collapse
   slide_eval_setup
@@ -68,6 +69,7 @@ export:
   slide_raytracer
   slide_compile_times
   slide_made
+  slide_opts
 
 // The macro keeps this as an ordinary list for the show and snapshot script,
 // while recording the undecorated source slide behind each section wrapper for
@@ -93,7 +95,10 @@ glide_slides all_slides:
    // 3 -- the algorithm, on the example the section before this one was about. The
    // NP-hardness proof is among the backups: the workflow slide before this ends on
    // the bad news, and the proof is for whoever asks.
-   divider(2, ~shots: section_shots, ~next: dp_title),
+   // No divider here: the section turns over on the strip at the top and the talk
+   // keeps going. The graph the proof builds beside the graph a compiler sees, and
+   // the second of them carried into the middle for the algorithm to work on.
+   in_section(2, slide_give_up),
    in_section(2, slide_dp),
    // and when the table can keep one walk where it kept two
    in_section(2, slide_collapse),
@@ -108,7 +113,7 @@ glide_slides all_slides:
    // the picture the talk opened on, with the question
    slide_summary,
    // the backup slides, for the questions that ask for them
-   slide_nphard, slide_raytracer, slide_compile_times, slide_made]
+   slide_nphard, slide_opts, slide_raytracer, slide_compile_times, slide_made]
 
 module main:
   // `show_slides` shows each slide through `staged_slide`, the same one the
