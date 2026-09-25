@@ -324,7 +324,13 @@ fun slide_eval_setup():
         // is wider than the box a shorter one fits
         graph_node(~width: w, ~height: ev_h, ~adj: "33878",
                    ~line: color, ~line_width: if color == stateful_hex | 4.0 | 3.0,
-                   ~fill: fill, ~label: node_label(text, ~size: (if text.length() > 5 | 30.0 | 40.0)))
+                   ~fill: fill,
+                   // a projection's brackets reach the edges of its box at the size
+                   // a letter sits in comfortably, so those are set smaller
+                   ~label: node_label(text, ~size: (cond
+                                                    | text.length() > 5: 30.0
+                                                    | text.length() > 0 && text[0] == Char"[": 32.0
+                                                    | ~else: 40.0)))
   fun drawings(~fill: fill :: String) :: Map:
     for values(m :~ Map = {}) ([key, text, color, w, _, _, kind] in ev_nodes):
       m ++ { key: node(color, w, text, kind, ~fill: fill) }
@@ -376,9 +382,8 @@ fun slide_eval_setup():
     def target = pc.blank(~width: en[2], ~height: en[3])
     { [#'says]: [bubble_at(target, ~spot: [en[0], en[1]], ~body: [400.0, 905.0],
                            ~color: talk_blue,
-                           ~content: prose_stack([[["finds the ", #'plain],
-                                                   ["lowest set bit", #'bold]],
-                                                  [["of ", #'plain], ["a", #'bold_italic]]])),
+                           ~content: prose([["finds the ", #'plain], ["lowest set bit", #'bold],
+                                            [" of ", #'plain], ["a", #'bold_italic]])),
                  0.0, 0.0, band_callout] }
   // the program eggcc emits, right of the graph and clear of the one-liner's nodes
   def opt:

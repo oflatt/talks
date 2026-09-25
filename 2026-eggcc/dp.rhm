@@ -388,7 +388,7 @@ def bad_news:
 def parameterized:
   def words:
     prose_stack([[["parameterized", #'bold_italic]],
-                 [["algorithms", #'bold_italic]],
+                 [["algorithms", #'bold_italic], [" can", #'plain]],
                  [["provide practical", #'plain]],
                  [["solutions to", #'plain]],
                  [["NP-hard problems", #'plain]]])

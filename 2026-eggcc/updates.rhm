@@ -80,7 +80,7 @@ fun update_opening() :: Map:
   def (fx, _) = pc.Find.right(parts[#'frame]).in(plain)
   def body_x = fx + 40.0
   def explain_body = [body_x, 150.0]
-  def omega_body = [body_x, 330.0]
+  def omega_body = [body_x, 320.0]
   // where line 0 ends on `page`, in the form named: the point the spikes aim at
   fun line_end(form, page :: pc.Pict) :: List:
     def line :~ pc.Pict = ((parts[#'lines] :~ List)[0] :~ Map)[form]
@@ -265,11 +265,13 @@ fun update_opening() :: Map:
   def first_write_y = code_y + code_inset + code_row + code_row / 2
   def second_write_y = code_y + code_inset + code_row * 2 + code_row / 2
   def explained = { #'explain: [explain_states, 0.0, 0.0, band_callout] }
+  // clear of the bottom of the bubble about ω, which the one about linearity sat on
+  def linear_y = 500.0
   def with_omega = explained ++ { #'omega: [omega_bubble, 0.0, 0.0, band_callout] }
   def linear_over:
     // a band above the other bubbles: its spike runs up past the one about ω, and
     // is to be seen doing so
-    { #'linear: [aimed(~at: [box_right - 4.0, second_write_y], ~body: [body_x, 475.0],
+    { #'linear: [aimed(~at: [box_right - 4.0, second_write_y], ~body: [body_x, linear_y],
                        ~content: prose([["uses memory ", #'plain], ["linearly", #'bold]])),
                  0.0, 0.0, band_callout + 1] }
   def equivalent_over:
@@ -286,11 +288,11 @@ fun update_opening() :: Map:
     { #'challenge: [aimed(~at: [under_x, under_y - 4.0], ~body: [under_x - 270.0, under_y + 28.0],
                           ~color: talk_red,
                           ~content: prose_stack([[["central challenge:", #'bold]],
-                                                 [["unavoidable in the e-graph!", #'plain]]])),
+                                                 [["non-linear programs unavoidable in the e-graph!", #'plain]]])),
                     0.0, 0.0, band_callout] }
   def nonlinear_over:
     { #'nonlinear: [aimed(~at: [box_right - 4.0, second_write_y + copy_dy],
-                          ~body: [body_x, 475.0 + copy_dy], ~color: talk_red,
+                          ~body: [body_x, linear_y + copy_dy], ~color: talk_red,
                           ~content: prose([["uses memory ", #'plain], ["non-linearly", #'bold]])),
                     0.0, 0.0, band_callout + 1] }
   def f_states = Frame(~picts: explained)

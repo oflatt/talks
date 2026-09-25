@@ -14,8 +14,8 @@
 // a word to a line, small, and the one becomes the other on the way down, word by
 // word.
 //
-// The fourth is not a slide but a blank page that two compilers come up on, each
-// with a question mark: this one, and then the verified one beside it.
+// The fourth is not a slide but a blank page that three compilers come up on: this
+// one, and then two that might be next, each of those with a question mark.
 //
 // The title slide's backdrop is behind all of it from the start; at the end the
 // talk's title comes back on one line over the panes with the faces in one row
@@ -114,12 +114,12 @@ fun beside_pane(pieces :~ List, i :: Int) :: List:
   stack_at(pieces, pane_x(i) - label_gap, pane_y(i) + pane_h / 2)
 
 // ------------------------------------------------------------- what comes next
-// Two compilers with a question mark each, on a page of their own: this one, and the
-// verified one. Each logo at its own proportions, scaled to a size that fills its
-// half of the page with the mark beside it.
+// Three compilers on a page of their own: this one, and then two that might be
+// next, each of those with a question mark, stepping up and down across the page. Each logo at its own proportions,
+// scaled to fill its third of the page, with the mark beside it where there is one.
 def page_white = pc.rectangle(~width: slide_width, ~height: slide_height,
                               ~fill: "white", ~line: #false)
-def big_question = prose_text("?", ~size: 300.0, ~bold: #true)
+def big_question = prose_text("?", ~size: 220.0, ~bold: #true)
 fun logo(file :: String, w :: Real, h :: Real) :: pc.Pict:
   as_pict(image_pict(media(file), w, h))
 // a logo at the size its file has
@@ -127,11 +127,17 @@ fun logo_file(file :: String) :: pc.Pict:
   def bm = rktdraw.#{read-bitmap}(media(file))
   logo(file, rktclass.#{dynamic-send}(bm, #'#{get-width}),
        rktclass.#{dynamic-send}(bm, #'#{get-height}))
+// every logo is fitted to the one box, so the three read as the same size: the
+// round ones fill it, the wordmark spans it
+def mark_box = 440.0
+fun fitted(mark :: pc.Pict) :: pc.Pict:
+  mark.scale(math.min(mark_box / mark.width, mark_box / mark.height))
 fun asking(mark :: pc.Pict) :: pc.Pict:
-  def fitted = mark.scale(math.min(600.0 / mark.width, 560.0 / mark.height))
-  pc.beside(~sep: 30.0, ~vert: #'center, fitted, big_question)
-// the eggcc logo, cut out of the patch's proof sheet
-def eggcc_asked = asking(logo("eggcc.png", 912.0, 912.0))
+  pc.beside(~sep: 22.0, ~vert: #'center, fitted(mark), big_question)
+fun alone(mark :: pc.Pict) :: pc.Pict: fitted(mark)
+// the eggcc logo, cut out of the patch's proof sheet, with no question about it
+def eggcc_alone = alone(logo("eggcc.png", 912.0, 912.0))
+def openssl_asked = asking(logo("openssl.png", 1200.0, 326.0))
 // CompCert's, from `media/compcert.png` once there is one, and until then its name
 // the way its site writes it: in capitals, in a geometric face, in a dark blue
 def compcert_mark:
@@ -139,16 +145,29 @@ def compcert_mark:
   | logo_file("compcert.png")
   | pc.text("COMPCERT", ~font: draw.Font(~name: "URW Gothic", ~size: 72.0))
       .colorize(draw.Color(0x25, 0x31, 0x83))
-def compcert_asked = asking(compcert_mark)
-// the page, with the first on it by `first` and the second by `second`
-fun next_page(first :: Real, second :: Real) :: pc.Pict:
-  fun laid(base :: pc.Pict, q :: pc.Pict, cx :: Real, a :: Real) :: pc.Pict:
+// the mark on its own does not say whose it is, so its name goes under it
+def compcert_named:
+  pc.stack(~sep: 14.0, ~horiz: #'center, fitted(compcert_mark),
+           prose_text("CompCert", ~size: 56.0, ~bold: #true))
+def compcert_asked = pc.beside(~sep: 22.0, ~vert: #'center, compcert_named, big_question)
+// the page, with each of the three on it by as much as `first`, `second` and
+// `third` say: this compiler low on the left, the verified one higher in the
+// middle, and the library low on the right, the way a path is walked
+def low_y = 700.0
+def high_y = 380.0
+fun next_page(first :: Real, second :: Real, third :: Real) :: pc.Pict:
+  fun laid(base :: pc.Pict, q :: pc.Pict, cx :: Real, cy :: Real, a :: Real) :: pc.Pict:
     cond
     | a <= 0.0: base
-    | ~else:
-        put(base, (if a >= 1.0 | q | q.alpha(a)), cx - q.width / 2, (slide_height - q.height) / 2)
-  laid(laid(page_white, eggcc_asked, slide_width / 4, first),
-       compcert_asked, 3 * slide_width / 4, second)
+    | ~else: put(base, (if a >= 1.0 | q | q.alpha(a)), cx - q.width / 2, cy - q.height / 2)
+  // spaced evenly across the page, whatever each comes to
+  def gap = (slide_width - eggcc_alone.width - compcert_asked.width - openssl_asked.width) / 4
+  def cx1 = gap + eggcc_alone.width / 2
+  def cx2 = cx1 + eggcc_alone.width / 2 + gap + compcert_asked.width / 2
+  def cx3 = cx2 + compcert_asked.width / 2 + gap + openssl_asked.width / 2
+  laid(laid(laid(page_white, eggcc_alone, cx1, low_y, first),
+            compcert_asked, cx2, high_y, second),
+       openssl_asked, cx3, low_y, third)
 
 // ------------------------------------------------------------------ the faces
 // The row they come back in, under the title, each face the same size.
@@ -176,7 +195,7 @@ fun slide_summary():
     [[label("Want:", ["Effectful", "E-Graphs"]), ended(slide_20)],
      [label("Problem:", ["Extraction", "Bottleneck"]), ended(slide_41)],
      [label("Solution:", ["Statewalk DP"]), ended(slide_dp)],
-     [label("Future:", ["Powerful", "E-Graph", "Optimizers"]), next_page(1.0, 1.0)]]
+     [label("Future:", ["Powerful", "E-Graph", "Optimizers"]), next_page(1.0, 1.0, 1.0)]]
   // the panes already made, over whatever is behind them
   fun panes_over(back :: pc.Pict, n :: Int) :: pc.Pict:
     for values(q :~ pc.Pict = back) ([pieces, shot] in shots.take(n), i in 0..):
@@ -255,23 +274,25 @@ fun slide_summary():
     def b :~ pc.Pict = make_bubble(~color: talk_green, prose([["Questions?", #'bold]])).scale(1.3)
     put(blank_slide, b, slide_width - b.width - 60.0, talk_title_y)
 
-  // the fourth picture's two arrivals: the first compiler on the empty page, and the
-  // second beside it
-  fun first_up() :: pc.Pict:
+  // the fourth picture's three arrivals: this compiler on the empty page, and then
+  // the two that might be next, one at a time
+  fun coming_up(before :: Int) :: pc.Pict:
     def [pieces, _] = shots[3]
     def base = settled_upto(3)
-    pc.animate(~extent: 0.8, fun (t): big_over(base, next_page(smooth(t), 0.0), pieces))
-  fun second_up() :: pc.Pict:
-    def [pieces, _] = shots[3]
-    def base = settled_upto(3)
-    pc.animate(~extent: 0.8, fun (t): big_over(base, next_page(1.0, smooth(t)), pieces))
+    fun by(k :: Int, t :: Real) :: Real:
+      cond
+      | k < before: 1.0
+      | k == before: smooth(t)
+      | ~else: 0.0
+    pc.animate(~extent: 0.8,
+               fun (t): big_over(base, next_page(by(0, t), by(1, t), by(2, t)), pieces))
 
   pc.switch(page,
             appear(0), minimize(0),
             appear(1), minimize(1),
             appear(2), minimize(2),
-            appear(3, ~shot: next_page(0.0, 0.0)),
-            first_up(), second_up(),
+            appear(3, ~shot: next_page(0.0, 0.0, 0.0)),
+            coming_up(0), coming_up(1), coming_up(2),
             minimize(3),
             closing,
             pc.overlay(~horiz: #'left, ~vert: #'top, closed, write(question)))
