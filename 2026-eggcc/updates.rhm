@@ -22,6 +22,7 @@ import:
   "write.rhm".arriving
   "write.rhm".pop_frame
   "write.rhm".current_draw
+  "yarn.rhm" open
   pict as pc
   draw
 
@@ -123,83 +124,30 @@ fun update_opening() :: Map:
   // ------------------------------------------------ who reads which state, and why
   // The point of the state form is that memory is passed along like any other
   // value -- and that is also a freedom: a program in it can read a state that is
-  // not the last one. Arrows over the program say which state each `update` reads,
-  // and the `return` too: each reads the one before it, and a bubble says so. Then
-  // a copy of the program comes up under it and is rewritten so that the second
-  // write reads the state the program was handed rather than the first write's.
-  // That program is equivalent to the original -- the second write overwrites the
-  // first, so the memory it leaves is the same, and both writes return what `a`
-  // held to begin with -- and a bubble says so; and it reads one memory twice, the
-  // two arrows that do turning red, and a red bubble names that. The original stays
-  // up throughout, so the two can be read against each other.
-  //
-  // The arrows run from the letter ω that reads to the letter ω that is read: out
-  // of the top of the one and into the bottom of the other, so that in the program
-  // as written each runs in the gap between its line and the line above rather
-  // than across the words. Their ends are unseen anchors the size of the letter's
-  // own ink, laid over it -- a text pict is as tall as its font, and an arrow that
-  // stops at that box floats clear of the letter. The anchors are keys of the
-  // frame, so the press that rewrites the copy moves them from one ω to the other
-  // and the arrow swings there rather than fading and redrawing.
+  // not the last one. A thread of yarn shows which state each line reads. It comes
+  // out of the memory the program is handed and goes into the `update` that reads
+  // it, passes under that line and comes out of the state the line leaves, and so
+  // on down into the `return`: over the page between the lines and under it through
+  // them, so that it weaves. In the program as written it is one thread, and a
+  // bubble says that is linear. Then a copy of the program comes up under it and is
+  // rewritten so that the second write reads the state the program was handed
+  // rather than the first write's. That program is equivalent to the original --
+  // the second write overwrites the first, so the memory it leaves is the same, and
+  // both writes return what `a` held to begin with -- and a bubble says so. Then the
+  // thread is woven through the copy, and it splits: one strand goes on to the
+  // `return`, and the other goes through the first write and comes out of its state
+  // with nothing to go into -- a frayed end, which turns red as a red bubble names
+  // it. The original stays up throughout, so the two can be read against each other.
   def read_at = [[0, #'state_in], [1, #'state_in], [2, #'state]]
-  def as_written_reads = [#'sig, 0, 1]      // what each reads, in the program as written
-  def forked_reads = [#'sig, #'sig, 1]      // and once it is rewritten
   def omega_glyph :: pc.Pict = (parts[#'header] :~ Map)[#'omega]
   def [ink_x0, ink_y0, ink_x1, ink_y1] = ink_bounds(omega_glyph)
-  fun anchor() :: pc.Pict: pc.blank(~width: ink_x1 - ink_x0, ~height: ink_y1 - ink_y0)
-  // where the ink of the ω that starts the piece `[pict, x, y]` is
-  fun letter_at(piece :~ List) :: List:
+  // the box round the ink of the ω that starts the piece `[pict, x, y]`
+  fun omega_box(piece :~ List) :: List:
     def [p :: pc.Pict, x, y] = piece
-    [x + ink_x0, y + p.height - omega_glyph.height + ink_y0]
-  // The anchors of one program's arrows: `[from, i]` over the ω line `i` reads
-  // with -- the pieces in `uses`, `[pict, x, y]` each -- and `[read, i]` over the ω
-  // it reads, named by `reads`. The anchor picts are handed in, so that the same
-  // ones stand in every frame and a press moves them.
-  fun arrow_ends(prog :~ Map, ~uses: uses :~ List, ~reads: reads :~ List,
-                 ~from: from_tag, ~read: read_tag,
-                 ~from_picts: fps :~ List, ~read_picts: rps :~ List) :: Map:
-    def defs = { #'sig: code_piece_at(prog, #'sig, #'omega),
-                 0: code_piece_at(prog, 0, #'state), 1: code_piece_at(prog, 1, #'state) }
-    for values(m :~ Map = {}) (i in 0..3):
-      def [fx, fy] = letter_at(uses[i])
-      def [rx, ry] = letter_at(defs[reads[i]])
-      m ++ { [from_tag, i]: [fps[i], fx, fy, band_below],
-             [read_tag, i]: [rps[i], rx, ry, band_below] }
-  // The arrows: `[#'ref, from, read, dx, red]`. `dx` lands the head a little off
-  // the letter's middle, so that two arrows reading one ω do not put their heads on
-  // one another; `red` is how far from blue to red the arrow is, which the press
-  // that turns one red draws as one arrow changing colour.
-  def head_dx = [-4.0, 6.0, 0.0]
-  fun ref_edges(~from: from_tag, ~read: read_tag, ~red: reds :~ List) :: List:
-    for List (i in 0..3): [#'ref, [from_tag, i], [read_tag, i], head_dx[i], reds[i]]
-  fun mix(t :: Real) :: draw.Color:
-    def a :: draw.Color = keynote_blue
-    def b :: draw.Color = talk_red
-    fun ch(x, y): math.exact(math.round(x + (y - x) * t))
-    draw.Color(ch(a.red, b.red), ch(a.green, b.green), ch(a.blue, b.blue))
-  fun draw_ref(q :: pc.Pict, at :~ Map, from_key, read_key, dx :: Real, red :: Real) :: pc.Pict:
-    arrow(~on: q, at[from_key], at[read_key], ~line_width: 3, ~color: mix(red),
-          ~from_at: pc.Find.top(as_pict(at[from_key]), ~dy: -2.0),
-          ~to_at: pc.Find.bottom(as_pict(at[read_key]), ~dx: dx, ~dy: 3.0))
-  fun ref_wire(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
-    for values(q :~ pc.Pict = layer) (e :~ List in es):
-      cond
-      | e[0] == #'ref: draw_ref(q, at, e[1], e[2], e[3], e[4])
-      // the arrow turning red: the same ends, the colour `e[3]` of the way over
-      | e[0] == #'morph:
-          def gone :~ List = e[1]
-          def new :~ List = e[2]
-          draw_ref(q, at, new[1], new[2], new[3],
-                   gone[4] + (new[4] - gone[4]) * smooth(e[3]))
-      | ~else: q
-
-  // the program as written, on the page: its arrows have fixed ends
+    def lx = x + ink_x0
+    def ly = y + p.height - omega_glyph.height + ink_y0
+    [lx, ly, lx + ink_x1 - ink_x0, ly + ink_y1 - ink_y0]
   def orig_uses = for List ([k, role] in read_at): code_piece_at(parts, k, role)
-  def orig_ends:
-    arrow_ends(parts, ~uses: orig_uses, ~reads: as_written_reads, ~from: #'from, ~read: #'read,
-               ~from_picts: (for List (i in 0..3): anchor()),
-               ~read_picts: (for List (i in 0..3): anchor()))
-  def orig_edges = ref_edges(~from: #'from, ~read: #'read, ~red: [0.0, 0.0, 0.0])
 
   // The copy, under the original, from pieces of its own so that its ωs are things
   // the press can find and change. The ωs it reads with stand in holes in its code,
@@ -236,27 +184,160 @@ fun update_opening() :: Map:
         def other :: pc.Pict = rewritten[i]
         [other, x + (p.width - other.width) / 2, y + p.height - other.height]
       | u
-  def c_from_picts = for List (i in 0..3): anchor()
-  def c_read_picts = for List (i in 0..3): anchor()
   fun copy_picts(~forked: forked :: Boolean) :: Map:
     def uses = if forked | copy_uses_forked | copy_uses_written
-    // the copy's own pieces read their states in the copy, `copy_dy` lower
-    def ends:
-      arrow_ends(copy_parts, ~uses: (for List (u :~ List in uses): [u[0], u[1], u[2] - copy_dy]),
-                 ~reads: (if forked | forked_reads | as_written_reads),
-                 ~from: #'c_from, ~read: #'c_read,
-                 ~from_picts: c_from_picts, ~read_picts: c_read_picts)
-    def lowered_ends:
-      for values(m :~ Map = {}) (key in ends.keys()):
-        def [p, x, y, band] = ends[key] :~ List
-        m ++ { key: [p, x, y + copy_dy, band] }
     { #'copy: [copy_code, code_x, code_y + copy_dy, band_nodes] }
       ++ (for values(m :~ Map = {}) (u :~ List in uses, i in 0..):
             m ++ { [#'c_use, i]: [u[0], u[1], u[2], band_flight] })
-      ++ lowered_ends
-  // the copy's arrows, the two that read one memory red once `~red` says so
-  fun copy_edges(~red: red :: Boolean) :: List:
-    ref_edges(~from: #'c_from, ~read: #'c_read, ~red: (if red | [1.0, 1.0, 0.0] | [0.0, 0.0, 0.0]))
+
+  // ------------------------------------------------------------------ the yarn
+  // Where a thread goes into a letter and comes out of one: just over it and just
+  // under it, clear of its ink, and its middle.
+  fun cx_of(b :~ List) :: Real: ((b[0] :~ Real) + b[2]) / 2
+  fun over_of(b :~ List) :: List: [cx_of(b), (b[1] :~ Real) - 5.0]
+  fun under_of(b :~ List) :: List: [cx_of(b), (b[3] :~ Real) + 5.0]
+  fun middle_of(b :~ List) :: List: [cx_of(b), ((b[1] :~ Real) + b[3]) / 2]
+  fun towards(p :~ List, q :~ List, t :: Real) :: List:
+    [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]
+  fun straight(from :~ List, to :~ List) :: List:
+    [from, towards(from, to, 1.0 / 3.0), towards(from, to, 2.0 / 3.0), to]
+  fun over_leg(c :~ List) :: List: leg(#'over, & c)
+  fun under_leg(c :~ List) :: List: leg(#'under, & c)
+  // Down out of a letter into the gap under its line, and along the gap at `lane`
+  // to over a letter further right and down into it: two legs, the first turning
+  // from down to along so that the thread clears whatever hangs below its line
+  // before it sets off.
+  fun drop_to(from :~ List, to :~ List, lane :: Real) :: List:
+    def turn = [(from[0] :~ Real) + 16.0, lane]
+    [[from, [from[0], lane - 4.0], [(from[0] :~ Real) + 4.0, lane], turn],
+     [turn, [(turn[0] :~ Real) + ((to[0] :~ Real) - turn[0]) * 0.35, lane], [to[0], lane], to]]
+  // under a line, from over one letter to over another to its left: down into the
+  // line, along it, and back up
+  fun beneath(from :~ List, to :~ List) :: List:
+    [from, [from[0], (from[1] :~ Real) + 18.0], [to[0], (to[1] :~ Real) + 18.0], to]
+  // over a line, from one point on it to another: up into the gap above and down
+  fun arching(from :~ List, to :~ List) :: List:
+    [from, [from[0], (from[1] :~ Real) - 22.0], [to[0], (to[1] :~ Real) - 22.0], to]
+  // where an `update` begins on its line: over the `u`, on the line's `x`-height
+  fun update_at(piece :~ List, row_top :: Real) :: List:
+    def [p :: pc.Pict, x, y] = piece
+    def cw = p.width / " = update(".length()
+    [x + 3.5 * cw, row_top - 5.0]
+  // where line 0 ends, which the copy's thread goes round on its way to line 1
+  def line0_right = line_end(#'states, with_states)[0] - 8.0
+  // How far along its run to the first write the copy's thread splits: a little
+  // before it goes down into the write, so that the two strands leave it side by
+  // side.
+  def split_at = 0.6
+  // One program's thread, from the boxes of its six ωs -- the memory it is handed,
+  // the one the first write reads and the one it leaves, the same for the second,
+  // and the one the `return` reads -- and where its two `update`s begin. In each
+  // line the thread goes into the ω the `update` reads, under the arguments and
+  // under the `update` itself, up out of the start of it, over into the ω it
+  // leaves, and through that and on: memory into an `update`, and out of it as the
+  // next. `~split` is for the copy, whose second write reads the memory the
+  // program is handed: its thread splits.
+  fun threads(s :~ List, a0 :~ List, d0 :~ List, a1 :~ List, d1 :~ List, r :~ List,
+              u0 :~ List, u1 :~ List, ~split: split :: Boolean) :: List:
+    fun gap(above :~ List, below :~ List) :: Real: ((above[3] :~ Real) + below[1]) / 2
+    def start = under_leg(straight(middle_of(s), under_of(s)))
+    def [turn0, run0] = drop_to(under_of(s), over_of(a0), gap(s, a0))
+    fun write_line(a :~ List, u :~ List, d :~ List) :: List:
+      [under_leg(beneath(over_of(a), u)), over_leg(arching(u, over_of(d))),
+       under_leg(straight(over_of(d), under_of(d)))]
+    // the gap between the two writes holds two threads in the program as written:
+    // the one going on to the second write high in it, and the second write's own
+    // arch low in it
+    def [turn1, run1] = drop_to(under_of(d0), over_of(a1), gap(d0, a1) - 9.0)
+    def [turn2, run2] = drop_to(under_of(d1), over_of(r), gap(d1, r))
+    def finish = [over_leg(turn2), over_leg(run2), under_leg(straight(over_of(r), middle_of(r)))]
+    cond
+    | !split:
+        [strand([start, over_leg(turn0), over_leg(run0), & write_line(a0, u0, d0),
+                 over_leg(turn1), over_leg(run1), & write_line(a1, u1, d1), & finish])]
+    | ~else:
+        def [trunk, first_in] = split_cubic(& run0, split_at)
+        // the strand that goes on: from the split along the gap past the end of
+        // line 0, and down round it into the second write
+        def f :~ List = (first_in :~ List)[0]
+        def heading :~ List = (first_in :~ List)[1]
+        def lane = (f[1] :~ Real)
+        def w = [line0_right + 36.0, lane]
+        def on1 = [f, towards(f, heading, 2.2), [w[0] - 50.0, lane], w]
+        def on2 = [w, [w[0] + 24.0, lane], [cx_of(a1), (over_of(a1)[1] :~ Real) - 34.0], over_of(a1)]
+        def lead = [start, over_leg(turn0), over_leg(trunk)]
+        def live = strand(lead ++ [over_leg(on1), over_leg(on2), & write_line(a1, u1, d1), & finish])
+        // and the strand that splits off: into the first write, out of the state it
+        // leaves, and down and back into the gap under it, where it frays
+        def du :~ List = under_of(d0)
+        def loose = [du, [du[0], du[1] + 10.0], [du[0] - 6.0, du[1] + 17.0],
+                     [du[0] - 24.0, du[1] + 18.0]]
+        def dead = strand([over_leg(first_in), & write_line(a0, u0, d0), over_leg(loose)],
+                          ~end: #'fray, ~offset: strand_length(strand(lead)))
+        // the split one first, so that it comes out from under the one that goes on
+        [dead, live]
+  fun op_at(prog :~ Map, k :: Int, dy :: Real) :: List:
+    def [p, x, y] = code_piece_at(prog, k, #'op)
+    [p, x, y + dy]
+  def orig_threads:
+    def a0 = omega_box(orig_uses[0])
+    def a1 = omega_box(orig_uses[1])
+    threads(omega_box(code_piece_at(parts, #'sig, #'omega)), a0,
+            omega_box(code_piece_at(parts, 0, #'state)), a1,
+            omega_box(code_piece_at(parts, 1, #'state)), omega_box(orig_uses[2]),
+            update_at(op_at(parts, 0, 0.0), a0[1]), update_at(op_at(parts, 1, 0.0), a1[1]),
+            ~split: #false)
+  def copy_threads:
+    def a0 = omega_box(copy_uses_forked[0])
+    def a1 = omega_box(copy_uses_forked[1])
+    // the rewritten ω is a little narrower than the one it replaced, so the row's
+    // top is read off the first write's, which is unchanged
+    threads(omega_box(lower(code_piece_at(copy_parts, #'sig, #'omega))), a0,
+            omega_box(lower(code_piece_at(copy_parts, 0, #'state))), a1,
+            omega_box(lower(code_piece_at(copy_parts, 1, #'state))),
+            omega_box(copy_uses_forked[2]),
+            update_at(op_at(copy_parts, 0, copy_dy), a0[1]),
+            update_at(op_at(copy_parts, 1, copy_dy), a1[1]),
+            ~split: #true)
+  // how far along a program's thread is all of it, frayed end and all
+  fun all_of(sts :~ List) :: Real:
+    for values(m :~ Real = 0.0) (st in sts): math.max(m, strand_length(st) + 40.0)
+  // A program's threads drawn `upto` along, the one that splits off `red` of the
+  // way to red; the needle with them while they are being drawn out.
+  fun threads_pict(sts :~ List, upto :: Real, red :: Real, ~needle: needle :: Boolean) :: pc.Pict:
+    def last = sts.length() - 1
+    yarn_pict(for List (st in sts, i in 0..):
+                [st, upto, (if i == last | yarn_blue | yarn_color(red)), needle],
+              ~width: slide_width, ~height: slide_height)
+  // A frame says which threads it shows, and how red the split one is:
+  // `[#'yarn, which, red]` among its edges. The press draws them itself, since a
+  // thread being drawn out is a shape that grows, not a pict that arrives: one the
+  // frame before did not have is drawn out from its start over the press, needle
+  // and all, and one whose red changes changes colour where it lies.
+  fun threads_of(f :: Frame) :: Map:
+    for values(m :~ Map = {}) (e :~ List in f.edges):
+      if e[0] == #'yarn | m ++ { e[1]: e[2] } | m
+  fun threads_for(which) :: List: if which == #'orig | orig_threads | copy_threads
+  fun yarn_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
+    def was = threads_of(a)
+    def now = threads_of(b)
+    def drawn:
+      for values(q :~ pc.Pict = layer) (which in now.keys()):
+        def sts = threads_for(which)
+        def whole = all_of(sts)
+        def p:
+          if was.has_key(which)
+          | threads_pict(sts, whole, (was[which] :~ Real) + ((now[which] :~ Real) - was[which]) * t,
+                         ~needle: #false)
+          | threads_pict(sts, whole * t, now[which], ~needle: t < 1.0)
+        put(q, p, 0.0, 0.0)
+    for values(q :~ pc.Pict = drawn) (which in was.keys()):
+      skip_when now.has_key(which)
+      def sts = threads_for(which)
+      put(q, threads_pict(sts, all_of(sts), was[which], ~needle: #false).alpha(1.0 - t), 0.0, 0.0)
+  def no_wire = fun (layer, es, at): layer
+  def orig_yarn = [[#'yarn, #'orig, 0.0]]
+  fun copy_yarn(red :: Real) :: List: [[#'yarn, #'copy, red]]
 
   // the bubbles: the two about the first line, up throughout; one on each program
   // saying how it uses memory, pointing at its box beside the second write; and
@@ -297,52 +378,49 @@ fun update_opening() :: Map:
                     0.0, 0.0, band_callout + 1] }
   def f_states = Frame(~picts: explained)
   def f_omega = Frame(~picts: with_omega)
-  def f_chain = Frame(~picts: with_omega ++ orig_ends, ~edges: orig_edges)
-  def f_linear = Frame(~picts: with_omega ++ orig_ends ++ linear_over, ~edges: orig_edges)
+  def f_chain = Frame(~picts: with_omega, ~edges: orig_yarn)
+  def f_linear = Frame(~picts: with_omega ++ linear_over, ~edges: orig_yarn)
   def f_copy:
-    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #false),
-          ~edges: orig_edges ++ copy_edges(~red: #false))
+    Frame(~picts: with_omega ++ linear_over ++ copy_picts(~forked: #false), ~edges: orig_yarn)
   def f_forked:
-    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true),
-          ~edges: orig_edges ++ copy_edges(~red: #false))
+    Frame(~picts: with_omega ++ linear_over ++ copy_picts(~forked: #true), ~edges: orig_yarn)
   def f_equivalent:
-    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
-                    ++ equivalent_over,
-          ~edges: orig_edges ++ copy_edges(~red: #false))
-  // the two arrows reading one memory turn red as the bubble that names it comes
+    Frame(~picts: with_omega ++ linear_over ++ copy_picts(~forked: #true) ++ equivalent_over,
+          ~edges: orig_yarn)
+  // the thread woven through the copy, splitting
+  def f_woven:
+    Frame(~picts: with_omega ++ linear_over ++ copy_picts(~forked: #true) ++ equivalent_over,
+          ~edges: orig_yarn ++ copy_yarn(0.0))
+  // the strand that split off turns red as the bubble that names it comes
   def f_nonlinear:
-    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
+    Frame(~picts: with_omega ++ linear_over ++ copy_picts(~forked: #true)
                     ++ equivalent_over ++ nonlinear_over,
-          ~edges: orig_edges ++ copy_edges(~red: #true))
+          ~edges: orig_yarn ++ copy_yarn(1.0))
   def f_challenge:
-    Frame(~picts: with_omega ++ orig_ends ++ linear_over ++ copy_picts(~forked: #true)
+    Frame(~picts: with_omega ++ linear_over ++ copy_picts(~forked: #true)
                     ++ equivalent_over ++ nonlinear_over ++ challenge_over,
-          ~edges: orig_edges ++ copy_edges(~red: #true))
-  fun press(a :: Frame, b :: Frame) :: pc.Pict:
-    magic_press(with_states, a, b, ~wire: ref_wire, ~edge_band: band_wires)
+          ~edges: orig_yarn ++ copy_yarn(1.0))
+  // a press drawing a thread out takes its time, so that it can be followed
+  def weave_extent = 2.6
+  fun press(a :: Frame, b :: Frame, ~extent: extent :: Real = 1.0) :: pc.Pict:
+    magic_press(with_states, a, b, ~wire: no_wire, ~edge_band: band_wires,
+                ~stage: yarn_stage, ~stage_band: band_wires, ~extent: extent)
 
   // Then everything the slide put up over the program is taken back the way it
   // came: one layer holding all of it in the order it arrived, unwritten in one
   // press -- so the last thing said goes first and the first bubble last -- and
-  // the arrows retract from their heads as they came. The layer is built by hand
-  // rather than read off a frame, since a press fades what goes and does not
+  // the threads drawn back in from their ends as they came. The layer is built by
+  // hand rather than read off a frame, since a press fades what goes and does not
   // unwrite it, and since the order things were said in is not the order a frame's
   // map holds them.
-  fun arrows_layer(ends :~ Map, edges :~ List) :: pc.Pict:
-    def ghosts:
-      for values(q :~ pc.Pict = blank_slide) (key in ends.keys()):
-        def [p, x, y, _] = ends[key] :~ List
-        put(q, as_pict(p).ghost(), x, y)
-    def at = for values(m :~ Map = {}) (key in ends.keys()): m ++ { key: (ends[key] :~ List)[0] }
-    fun upto(n :: Real) :: pc.Pict:
-      parameterize { current_draw: n }:
-        ref_wire(ghosts, edges, at)
-    def whole = upto(1.0)
+  fun yarn_layer(sts :~ List, red :: Real) :: pc.Pict:
+    def whole_len = all_of(sts)
+    def whole = threads_pict(sts, whole_len, red, ~needle: #false)
     arriving(whole, Arrival(fun (n):
                               cond
                               | n >= 1.0: whole
                               | n <= 0.0: whole.ghost()
-                              | ~else: upto(n),
+                              | ~else: threads_pict(sts, n * whole_len, red, ~needle: #false),
                             0.6, ~kind: #'stroke))
   fun layer_of(over :~ Map, key) :: pc.Pict: (over[key] :~ List)[0]
   // The rewritten copy as one box, its second write's ω set into the line, so that
@@ -353,16 +431,12 @@ fun update_opening() :: Map:
     put(blank_slide,
         code_pict(copy_parts, ~states: #true, ~holes: [[1, #'state_in, rewritten[1]]]),
         code_x, code_y + copy_dy)
-  def copy_ends:
-    for values(m :~ Map = {}) (key in copy_picts(~forked: #true).keys()):
-      keep_when key is_a List && ((key :~ List)[0] == #'c_from || (key :~ List)[0] == #'c_read)
-      m ++ { key: copy_picts(~forked: #true)[key] }
   def aside_layer:
     pc.overlay(~horiz: #'left, ~vert: #'top,
-               explain_states, omega_bubble, arrows_layer(orig_ends, orig_edges),
+               explain_states, omega_bubble, yarn_layer(orig_threads, 0.0),
                layer_of(linear_over, #'linear), copy_layer,
-               arrows_layer(copy_ends, copy_edges(~red: #true)),
-               layer_of(equivalent_over, #'equivalent), layer_of(nonlinear_over, #'nonlinear),
+               layer_of(equivalent_over, #'equivalent), yarn_layer(copy_threads, 1.0),
+               layer_of(nonlinear_over, #'nonlinear),
                layer_of(challenge_over, #'challenge))
   def aside_w = writer(aside_layer)
   def clearing:
@@ -373,23 +447,25 @@ fun update_opening() :: Map:
                fun (t): put(with_states, aside_w.frame(1.0 - t), 0.0, 0.0))
 
   // the page with its title; the code writes itself; a bubble explains a line; the
-  // states move in under it; a second bubble names one; the arrows say who reads
-  // which and a bubble says that is linear; a copy of the program comes up; it is
-  // rewritten, its arrows swinging; a bubble says it is the same program, a red one
-  // says how it differs as the two arrows reading one memory turn red, and another
-  // red one says the e-graph cannot help but hold it; and everything over the
-  // program is unwritten, leaving the program alone under its title
+  // states move in under it; a second bubble names one; a thread is woven through
+  // the program from the memory it is handed to its end, and a bubble says that is
+  // linear; a copy of the program comes up; it is rewritten; a bubble says it is the
+  // same program; the thread is woven through it and splits, one strand frayed at a
+  // state nothing reads; a red bubble says how it differs as that strand turns red,
+  // and another red one says the e-graph cannot help but hold it; and everything over
+  // the program is unwritten, leaving the program alone under its title
   { #'pict: pc.switch(fade_in(canvas, code_layer, ~horiz: #'left, ~vert: #'top),
                       pc.overlay(~horiz: #'left, ~vert: #'top, plain, write(explain_plain))
                         .refocus(plain),
                       moving,
                       press(f_states, f_omega),
-                      press(f_omega, f_chain),
+                      press(f_omega, f_chain, ~extent: weave_extent),
                       press(f_chain, f_linear),
                       press(f_linear, f_copy),
                       press(f_copy, f_forked),
                       press(f_forked, f_equivalent),
-                      press(f_equivalent, f_nonlinear),
+                      press(f_equivalent, f_woven, ~extent: weave_extent),
+                      press(f_woven, f_nonlinear),
                       press(f_nonlinear, f_challenge),
                       clearing),
     #'title: title, #'code: code_states, #'parts: parts }

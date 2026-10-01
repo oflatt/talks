@@ -1,0 +1,296 @@
+#lang rhombus/and_meta
+// Yarn: a thread drawn the way a thread of yarn looks -- a twisted ply, dark at its
+// edges and light along its twists, with a soft shadow under it -- along a path made
+// of cubic legs. A leg is either over the page or under it, and a thread that goes
+// under something is drawn faintly there, the way a stitch is drawn where it passes
+// behind the cloth: so a path that goes over, under and over again weaves.
+//
+// A strand is drawn up to a length along it, so that a press can draw it out from
+// its start, and with a needle at its leading end while it is being drawn. Its far
+// end is either tucked away, or frayed: a thread that stops short, its fibres
+// splaying out.
+
+import:
+  pict as pc
+  draw
+
+export:
+  leg
+  split_cubic
+  strand
+  strand_length
+  yarn_pict
+  yarn_blue
+  yarn_red
+  yarn_color
+
+// ------------------------------------------------------------------- the legs
+// `[kind, p0, p1, p2, p3]`: a cubic from `p0` to `p3`, `#'over` or `#'under`.
+fun leg(kind, p0, p1, p2, p3) :: List: [kind, p0, p1, p2, p3]
+
+fun cubic_at(p0 :~ List, p1 :~ List, p2 :~ List, p3 :~ List, t :: Real) :: List:
+  def u = 1.0 - t
+  def a = u * u * u
+  def b = 3.0 * u * u * t
+  def c = 3.0 * u * t * t
+  def d = t * t * t
+  [a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+   a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1]]
+fun towards(p :~ List, q :~ List, t :: Real) :: List:
+  [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t]
+// The cubic cut at `t`, as the two cubics either side of the cut -- so that two
+// strands can share the first part of a curve exactly and part where it is cut.
+fun split_cubic(p0, p1, p2, p3, t :: Real) :: List:
+  def a = towards(p0, p1, t)
+  def b = towards(p1, p2, t)
+  def c = towards(p2, p3, t)
+  def d = towards(a, b, t)
+  def e = towards(b, c, t)
+  def f = towards(d, e, t)
+  [[p0, a, d, f], [f, e, c, p3]]
+
+// ----------------------------------------------------------------- a strand
+// Its legs sampled into points `[x, y, s, kind]`, `s` the length along it so far.
+// `~offset` is how far along a longer thread this strand starts: a strand that
+// splits off another is drawn out only once the drawing has got as far as the
+// split.
+def per_leg = 40
+fun dist(p :~ List, q :~ List) :: Real:
+  def dx = (q[0] :~ Real) - p[0]
+  def dy = (q[1] :~ Real) - p[1]
+  math.sqrt(dx * dx + dy * dy)
+fun strand(legs :~ List, ~end: end = #'tuck, ~offset: offset :: Real = 0.0) :: Map:
+  def (samples, total, _):
+    for values(acc :~ List = [], s :~ Real = 0.0, last = #false) (lg :~ List in legs):
+      def [kind, p0, p1, p2, p3] = lg
+      for values(acc :~ List = acc, s :~ Real = s, last = last) (i in 0..per_leg + 1):
+        def p :~ List = cubic_at(p0, p1, p2, p3, i / per_leg)
+        def s2 :: Real = if last | s + dist(last, p) | s
+        values(acc ++ [[p[0], p[1], s2, kind]], s2, p)
+  { #'samples: samples, #'length: total, #'end: end, #'offset: offset }
+// how far along the whole thread this strand ends
+fun strand_length(st :~ Map) :: Real: (st[#'length] :~ Real) + (st[#'offset] :~ Real)
+
+// the points up to `upto` along it, the last one cut where `upto` falls
+fun prefix(samples :~ List, upto :: Real) :: List:
+  def (out, _):
+    for values(out :~ List = [], done = #false) (p :~ List in samples):
+      cond
+      | done: values(out, done)
+      | (p[2] :~ Real) <= upto: values(out ++ [p], #false)
+      | out == []: values(out, #true)
+      | ~else:
+          def q :~ List = out[out.length() - 1]
+          def span = (p[2] :~ Real) - q[2]
+          def u = if span > 0.0 | (upto - q[2]) / span | 0.0
+          values(out ++ [[q[0] + (p[0] - q[0]) * u, q[1] + (p[1] - q[1]) * u, upto, p[3]]],
+                 #true)
+  out
+// the points in runs of one kind: `[kind, points]` each, a run sharing the point
+// where it meets the next
+fun runs_of(points :~ List) :: List:
+  for values(acc :~ List = []) (p :~ List in points):
+    cond
+    | acc == []: [[p[3], [p]]]
+    | ~else:
+        def [k, ps :~ List] = acc[acc.length() - 1]
+        if k == p[3]
+        | acc.take(acc.length() - 1) ++ [[k, ps ++ [p]]]
+        | acc ++ [[p[3], [p]]]
+// where the drawing has got to, and which way it is going: `[x, y, tx, ty, kind]`
+fun tip_of(points :~ List) :: maybe(List):
+  cond
+  | points.length() < 2: #false
+  | ~else:
+      def p :~ List = points[points.length() - 1]
+      // a step back far enough to give a direction even if the last is a cut point
+      def back = for values(q = points[points.length() - 2]) (r :~ List in points):
+                   if (p[2] :~ Real) - r[2] >= 3.0 | r | q
+      def q :~ List = back
+      def d = math.max(0.001, dist(q, p))
+      [p[0], p[1], (p[0] - q[0]) / d, (p[1] - q[1]) / d, p[3]]
+
+// ------------------------------------------------------------------ colours
+// A thread's colours from its own: dark at the edges and in the grooves of the
+// twist, light along the twist, and the colour itself between.
+class Palette(core :: draw.Color, dark :: draw.Color, light :: draw.Color)
+fun shade(c :: draw.Color, k :: Real) :: draw.Color:
+  draw.Color(math.exact(math.round(c.red * k)), math.exact(math.round(c.green * k)),
+             math.exact(math.round(c.blue * k)))
+fun tint(c :: draw.Color, k :: Real) :: draw.Color:
+  fun ch(x): math.exact(math.round(x + (255 - x) * k))
+  draw.Color(ch(c.red), ch(c.green), ch(c.blue))
+fun mix(a :: draw.Color, b :: draw.Color, t :: Real) :: draw.Color:
+  fun ch(x, y): math.exact(math.round(x + (y - x) * t))
+  draw.Color(ch(a.red, b.red), ch(a.green, b.green), ch(a.blue, b.blue))
+fun with_alpha(c :: draw.Color, a :: Real) :: draw.Color:
+  draw.Color(c.red, c.green, c.blue, a)
+fun palette_of(c :: draw.Color) :: Palette:
+  Palette(c, shade(c, 0.58), tint(c, 0.55))
+def yarn_blue = draw.Color(22, 72, 238)
+def yarn_red = draw.Color(222, 32, 32)
+// blue, `red` of the way to red
+fun yarn_color(red :: Real) :: draw.Color: mix(yarn_blue, yarn_red, red)
+
+// ------------------------------------------------------------------ drawing
+def thread_w = 9.0
+def twist_every = 6.0
+def under_alpha = 0.2
+
+fun pen(c :: draw.Color, w :: Real) :: draw.Pen:
+  draw.Pen(~color: c, ~width: w, ~cap: #'round, ~join: #'round)
+fun stroke(target :: draw.DC, dx :: Real, dy :: Real, pts :~ List,
+           c :: draw.Color, w :: Real, ~off: off :~ List = [0.0, 0.0]):
+  def path = draw.Path()
+  def p0 :~ List = pts[0]
+  path.move_to([dx + p0[0] + off[0], dy + p0[1] + off[1]])
+  for (p :~ List in pts.rest):
+    path.line_to([dx + p[0] + off[0], dy + p[1] + off[1]])
+  target.pen := pen(c, w)
+  target.brush := draw.Brush.none
+  target.path(path)
+fun segment(target :: draw.DC, dx :: Real, dy :: Real, a :~ List, b :~ List,
+            c :: draw.Color, w :: Real):
+  target.pen := pen(c, w)
+  target.line([dx + a[0], dy + a[1]], [dx + b[0], dy + b[1]])
+
+// A run over the page: its shadow, its dark edge, its body, a light line along one
+// side, and the twist -- a short light stroke across it every few pixels, with a
+// dark groove beside each. The twists sit at fixed lengths along the thread, so as
+// it is drawn out they stay where they are rather than crawling.
+fun draw_over_shadow(target, dx, dy, pts :~ List):
+  stroke(target, dx, dy, pts, draw.Color(10, 10, 40, 0.16), thread_w + 1.5, ~off: [1.6, 2.6])
+fun draw_over(target, dx, dy, pts :~ List, pal :: Palette):
+  stroke(target, dx, dy, pts, pal.dark, thread_w)
+  stroke(target, dx, dy, pts, pal.core, thread_w - 2.6)
+  for (i in 0..pts.length() - 1):
+    def p :~ List = pts[i]
+    def q :~ List = pts[i + 1]
+    def seg = (q[2] :~ Real) - p[2]
+    skip_when seg <= 0.0001
+    def tx = (q[0] - p[0]) / seg
+    def ty = (q[1] - p[1]) / seg
+    def nx = -ty
+    def ny = tx
+    def k0 = math.exact(math.ceiling(p[2] / twist_every))
+    def k1 = math.exact(math.floor((q[2] - 0.0001) / twist_every))
+    for (k in k0..k1 + 1):
+      def u = (k * twist_every - p[2]) / seg
+      def cx = p[0] + (q[0] - p[0]) * u
+      def cy = p[1] + (q[1] - p[1]) * u
+      def hw = thread_w * 0.4
+      def lean = thread_w * 0.3
+      segment(target, dx, dy, [cx + nx * hw - tx * lean, cy + ny * hw - ty * lean],
+              [cx - nx * hw + tx * lean, cy - ny * hw + ty * lean], pal.light, 1.5)
+      segment(target, dx, dy, [cx + nx * hw - tx * lean + tx * 2.3, cy + ny * hw - ty * lean + ty * 2.3],
+              [cx - nx * hw + tx * lean + tx * 2.3, cy - ny * hw + ty * lean + ty * 2.3],
+              pal.dark, 1.0)
+// a run under the page: only a trace of it shows through
+fun draw_under(target, dx, dy, pts :~ List, pal :: Palette):
+  stroke(target, dx, dy, pts, with_alpha(pal.core, under_alpha), thread_w - 1.0)
+
+// The fibres of a thread that stops short, splaying out from its end by `f`.
+def fibre_len = [0.2, 0.9, 0.5, 1.0, 0.4, 0.8, 0.1, 0.6]
+def fibre_curl = [2.0, -3.0, 1.5, -1.0, 2.5, -2.0, 1.0, -2.5]
+fun draw_fray(target, dx, dy, tip :~ List, f :: Real, pal :: Palette):
+  def [ex, ey, tx, ty, _] = tip
+  def nx = -ty
+  def ny = tx
+  for (i in 0..8):
+    def side = (i - 3.5) / 3.5
+    def bx = ex - tx * 4.0 + nx * side * thread_w * 0.36
+    def by = ey - ty * 4.0 + ny * side * thread_w * 0.36
+    def ang = side * 0.8 * f
+    def ux = tx * math.cos(ang) - ty * math.sin(ang)
+    def uy = tx * math.sin(ang) + ty * math.cos(ang)
+    def len = (15.0 + 12.0 * fibre_len[i]) * (0.25 + 0.75 * f)
+    def curl = fibre_curl[i] * f
+    def path = draw.Path()
+    path.move_to([dx + bx, dy + by])
+    def cx = bx + ux * len * 0.55 - uy * curl
+    def cy = by + uy * len * 0.55 + ux * curl
+    path.curve_to([dx + cx, dy + cy], [dx + cx, dy + cy],
+                  [dx + bx + ux * len, dy + by + uy * len])
+    def c:
+      cond
+      | i mod 3 == 0: pal.dark
+      | i mod 3 == 1: pal.core
+      | ~else: pal.light
+    target.pen := pen(c, 1.9)
+    target.brush := draw.Brush.none
+    target.path(path)
+
+// The needle, its eye at the end of the thread, pointing the way it is going.
+def needle_dark = draw.Color(88, 92, 104)
+def needle_body = draw.Color(176, 181, 192)
+def needle_glint = draw.Color(238, 240, 246)
+fun draw_needle(target :: draw.DC, dx, dy, tip :~ List, a :: Real):
+  def [px, py, tx, ty, _] = tip
+  def nx = -ty
+  def ny = tx
+  fun at(along :: Real, across :: Real) :: List:
+    [dx + px + tx * along + nx * across, dy + py + ty * along + ny * across]
+  target.save()
+  target.alpha := math.max(0.0, math.min(1.0, a))
+  for ([c, w] in [[needle_dark, 6.4], [needle_body, 4.6]]):
+    target.pen := pen(c, w)
+    target.line(at(-5.0, 0.0), at(30.0, 0.0))
+    target.pen := pen(c, 1.0)
+    target.brush := draw.Brush(~color: c)
+    target.polygon([at(30.0, w / 2), at(44.0, 0.0), at(30.0, -w / 2)])
+  target.pen := pen(needle_glint, 1.6)
+  target.line(at(-2.5, 0.0), at(3.5, 0.0))
+  target.pen := pen(needle_glint, 1.0)
+  target.line(at(7.0, -1.1), at(30.0, -0.6))
+  target.restore()
+
+// One strand drawn up to `upto` along the whole thread, in the colour `color`, with
+// its needle if `~needle` and the drawing is still going on along it.
+fun draw_strand(target :: draw.DC, dx :: Real, dy :: Real, st :~ Map, upto :: Real,
+                color :: draw.Color, ~needle: needle :: Boolean):
+  def pal = palette_of(color)
+  def own = upto - (st[#'offset] :~ Real)
+  def total :: Real = st[#'length]
+  def pts = prefix(st[#'samples], own)
+  def runs = runs_of(pts)
+  // the trace under the page, then the shadow of everything over it, then the
+  // thread over it
+  for ([k, ps :~ List] in runs):
+    skip_when k != #'under || ps.length() < 2
+    draw_under(target, dx, dy, ps, pal)
+  for ([k, ps :~ List] in runs):
+    skip_when k != #'over || ps.length() < 2
+    draw_over_shadow(target, dx, dy, ps)
+  for ([k, ps :~ List] in runs):
+    skip_when k != #'over || ps.length() < 2
+    draw_over(target, dx, dy, ps, pal)
+  def tip = tip_of(pts)
+  // a frayed end splays once the drawing has reached it
+  def fray_by = 36.0
+  when tip && st[#'end] == #'fray && own >= total
+  | draw_fray(target, dx, dy, tip, math.min(1.0, (own - total) / fray_by), pal)
+  // The needle: plain over the page, faint under it, sinking out of sight in the
+  // last stretch of a tucked thread, and slipping off the end of a frayed one.
+  when needle && tip && own > 0.0
+  | def [_, _, _, _, kind] = tip
+    def seen = if kind == #'under | 0.35 | 1.0
+    cond
+    | own < total:
+        def sink = if st[#'end] == #'tuck | math.min(1.0, (total - own) / 24.0) | 1.0
+        draw_needle(target, dx, dy, tip, seen * sink)
+    | st[#'end] == #'fray && own < total + fray_by:
+        def f = (own - total) / fray_by
+        def [x, y, tx, ty, k] = tip
+        draw_needle(target, dx, dy, [x + tx * 26.0 * f, y + ty * 26.0 * f, tx, ty, k],
+                    seen * (1.0 - f))
+    | ~else: #void
+
+// A layer `w` by `h` with the strands on it: `[strand, upto, color, needle]` each,
+// drawn in the order given.
+fun yarn_pict(strands :~ List, ~width: w :: Real, ~height: h :: Real) :: pc.Pict:
+  pc.dc(fun (target :: draw.DC, dx, dy):
+          target.save()
+          for ([st, upto, color, needle] in strands):
+            draw_strand(target, dx, dy, st, upto, color, ~needle: needle)
+          target.restore(),
+        ~width: w, ~height: h)
