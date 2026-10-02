@@ -113,7 +113,8 @@ fun chaos_parts(~at: at :~ List, ~width: want_w :: Real, ~height: want_h :: Real
     [x + nd * k / 2, y + nd * k / 2]
   def classes:
     for values(m :~ Map = {}) ([from, to] in chaos_classes, i in 0..):
-      def dash = if (from :~ List)[0] == #'s | state_class | value_class
+      // black, every one: a picture of the shape rather than of which class is which
+      def dash = draw.Color(0, 0, 0)
       def [tube, x, y] = eclass_region(middle(from), middle(to), ~dash: dash,
                                        ~thickness: (nd + 2 * eclass_pad) * k)
       m ++ { [#'chaos, #'class, i]: [tube, x, y, band_below] }

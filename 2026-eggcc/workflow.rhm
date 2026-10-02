@@ -25,11 +25,15 @@ export:
 // -- to the corner of the next slide, or into the row beside another -- and a thing
 // that travels has to be one thing.
 def flow_gear = make_gear(~size: 190.0, ~teeth: 11)
+// A line is a string, or `[string, colour]` for one set in a colour of its own.
 fun stage_card(lines :~ List, ~width: w :: Real, ~height: h :: Real,
                ~body: body :: maybe(pc.Pict) = #false) :: pc.Pict:
+  fun line(l) :: pc.Pict:
+    match l
+    | [s :: String, c]: prose_text(s, ~size: 36.0, ~bold: #true, ~color: c)
+    | s: prose_text(s, ~size: 36.0, ~bold: #true)
   def name:
-    pc.stack(~sep: 2.0, ~horiz: #'center,
-             & for List (s in lines): prose_text(s, ~size: 36.0, ~bold: #true))
+    pc.stack(~sep: 2.0, ~horiz: #'center, & for List (l in lines): line(l))
   as_pict(make_bubble(~width: w, ~height: h, ~color: talk_blue, ~padding: 24,
                       (if body | pc.stack(~sep: 18.0, ~horiz: #'center, name, body) | name)))
 
@@ -120,7 +124,9 @@ fun slide_41():
   def c_extract = plain(#'extract, ["Extraction"], 3)
   // the same stage, once it has been taught about effects: the same key, so the press
   // that renames it rewords the card where it stands
-  def c_safe = plain(#'extract, ["Effect-Safe", "Extraction"], 3)
+  // and the word that is new in it in a colour that stands out from the blue card:
+  // the green the effect-safe walk is drawn in, once there is one
+  def c_safe = plain(#'extract, [["Effect-Safe", effect_safe_green], "Extraction"], 3)
   def c_out = plain(#'out, ["Translate to", "Original IR"], 4)
   fun e(from, to) :: List: [#'step, [#'step, from], [#'step, to]]
   def e_in = e(#'in, #'program)

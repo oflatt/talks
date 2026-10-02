@@ -55,6 +55,7 @@ export:
   branch_b_fill
   branch_seed_fill
   walk_a_line
+  effect_safe_green
   walk_b_line
   walk_seed_line
   blob_alpha
@@ -110,6 +111,9 @@ def branch_a_fill = node_green                 // through the write the rule add
 def branch_b_fill = "C9B6E6"                  // through both of the program's writes
 def branch_seed_fill = "DCDCE4"               // and the walk that is only the state
 def walk_a_line = "3C7D24"
+// the same green as a colour this deck sets type in: the word "Effect-Safe" where it
+// first appears, which is the walk extraction takes
+def effect_safe_green = draw.Color(0x3C, 0x7D, 0x24)
 def walk_b_line = "5B3E9A"
 def walk_seed_line = "6E6E82"
 // how strongly a mass of what a walk can build is laid under the graph

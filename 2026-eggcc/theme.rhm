@@ -158,7 +158,7 @@ fun as_pict(q): if q is_a pc.Pict | q | pc.Pict.from_handle(q)
 // The header's discs sit around y 18..50 and the deck's slide titles start at
 // y 64, which is what the disc and text scales in `header_layout` are chosen
 // against. Retitle a slide higher than that and the two will meet.
-def sections = ["Motivation", "An NP-Hard Problem",
+def sections = ["Why Effectful E-Graphs", "An NP-Hard Problem",
                 "Fast Extraction Anyways", "Eggcc, A New Compiler"]
 
 fun section_canvas():

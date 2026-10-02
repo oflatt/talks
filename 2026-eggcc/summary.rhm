@@ -137,7 +137,8 @@ fun asking(mark :: pc.Pict) :: pc.Pict:
 fun alone(mark :: pc.Pict) :: pc.Pict: fitted(mark)
 // the eggcc logo, cut out of the patch's proof sheet, with no question about it
 def eggcc_alone = alone(logo("eggcc.png", 912.0, 912.0))
-def openssl_asked = asking(logo("openssl.png", 1200.0, 326.0))
+// the theorem prover, a wordmark like the library it took the place of
+def lean_asked = asking(logo_file("lean.png"))
 // CompCert's, from `media/compcert.png` once there is one, and until then its name
 // the way its site writes it: in capitals, in a geometric face, in a dark blue
 def compcert_mark:
@@ -152,7 +153,7 @@ def compcert_named:
 def compcert_asked = pc.beside(~sep: 22.0, ~vert: #'center, compcert_named, big_question)
 // the page, with each of the three on it by as much as `first`, `second` and
 // `third` say: this compiler low on the left, the verified one higher in the
-// middle, and the library low on the right, the way a path is walked
+// middle, and the theorem prover low on the right, the way a path is walked
 def low_y = 700.0
 def high_y = 380.0
 fun next_page(first :: Real, second :: Real, third :: Real) :: pc.Pict:
@@ -161,13 +162,13 @@ fun next_page(first :: Real, second :: Real, third :: Real) :: pc.Pict:
     | a <= 0.0: base
     | ~else: put(base, (if a >= 1.0 | q | q.alpha(a)), cx - q.width / 2, cy - q.height / 2)
   // spaced evenly across the page, whatever each comes to
-  def gap = (slide_width - eggcc_alone.width - compcert_asked.width - openssl_asked.width) / 4
+  def gap = (slide_width - eggcc_alone.width - compcert_asked.width - lean_asked.width) / 4
   def cx1 = gap + eggcc_alone.width / 2
   def cx2 = cx1 + eggcc_alone.width / 2 + gap + compcert_asked.width / 2
-  def cx3 = cx2 + compcert_asked.width / 2 + gap + openssl_asked.width / 2
+  def cx3 = cx2 + compcert_asked.width / 2 + gap + lean_asked.width / 2
   laid(laid(laid(page_white, eggcc_alone, cx1, low_y, first),
             compcert_asked, cx2, high_y, second),
-       openssl_asked, cx3, low_y, third)
+       lean_asked, cx3, low_y, third)
 
 // ------------------------------------------------------------------ the faces
 // The row they come back in, under the title, each face the same size.
