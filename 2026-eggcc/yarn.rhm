@@ -252,7 +252,13 @@ fun draw_strand(target :: draw.DC, dx :: Real, dy :: Real, st :~ Map, upto :: Re
   def own = upto - (st[#'offset] :~ Real)
   def total :: Real = st[#'length]
   def pts = prefix(st[#'samples], own)
-  def runs = runs_of(pts)
+  // a run with no length is only its caps, a dot where the drawing has not yet begun
+  def runs:
+    for List (r :~ List in runs_of(pts)):
+      def ps :~ List = r[1]
+      keep_when ps.length() >= 2
+                  && ((ps[ps.length() - 1] :~ List)[2] :~ Real) - (ps[0] :~ List)[2] > 0.5
+      r
   // the trace under the page, then the shadow of everything over it, then the
   // thread over it
   for ([k, ps :~ List] in runs):

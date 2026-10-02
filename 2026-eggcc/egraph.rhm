@@ -28,19 +28,8 @@ export:
   eq_line
   graph_node
   hex_color
-  node_blob
-  node_es_0
-  node_es_1
-  node_es_2
-  node_fork
-  node_green
   node_label
-  node_match
   node_middle
-  node_white
-  state_class
-  stateful_hex
-  value_class
   walk_arrow
 
 // One edge, border to border, with an arrowhead at the end that says what the
@@ -61,24 +50,8 @@ fun chain_wire(q :: pc.Pict, n :~ Map, es :~ List,
 // second thing laid on top, and a translucent wash over the box tints the label
 // along with it.
 //
-// Blue is what says a thing is stateful, as the original deck had it: the state
-// values and the `update`s that thread them carry a blue border, the edges between
-// them are blue, and everything pure is black.
-def node_white = "FFFFFF"
-def node_green = "B7E3A6"                     // what extraction picked
-def node_fork = "F9C4C4"                      // and what it picked twice
-def node_match = "FFE9A3"                     // and what a rule has just matched
-def stateful_hex = "0433FF"
+// The fills and the stateful blue are in the palette, in `slidehelpers.rhm`.
 
-// The two extractable sets the statewalk DP finds on this graph, as fills. They are
-// one hue in two strengths rather than two hues: the sets are nested -- the deeper
-// one is the paler one and `v2` besides -- so deeper reading as *more* is what they
-// mean, and a pair that differs in lightness stays two things under any colour
-// vision. Both are pale enough to read black text.
-def node_blob = "EFE6FA"                      // the mass an extractable set covers
-def node_es_0 = "E9DDF8"                      // what the bare argument state reaches
-def node_es_1 = "C3A9E8"                      // what every walk through one write reaches
-def node_es_2 = "8E6BC4"                      // and that, plus the redundant write's value
 
 // The runtime's `hex` builds the runtime's own colour, which is not the one the
 // drawing library takes; a six-digit fill written for `shape_pict` has to be read
@@ -154,8 +127,6 @@ fun walk_arrow(~facing: facing :: String = "rightArrow",
                 ~width: w, ~height: h, ~fill: hex_color(walk_hex))
 
 
-def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
-def value_class = draw.Color(255, 147, 0)     // v2 ≡ x
 
 // Nodes marked as sharing an e-class: a ring around each, in the class's own
 // colour, drawn over the picture.

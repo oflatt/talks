@@ -216,7 +216,7 @@ def ev_nodes:
    [[#'one], "1", "000000", 64.0, 1230.0, 300.0, #'node],
    [[#'two], "2", "000000", 64.0, 1310.0, 300.0, #'node],
    [[#'a], "a", "000000", 64.0, 1390.0, 300.0, #'node],
-   [[#'inputs], "", "000000", 200.0, 1290.0, 440.0, #'tuple],
+   [[#'inputs], "", "000000", 240.0, 1290.0, 440.0, #'tuple],
    [[#'it0], "", stateful_hex, ev_port, 1215.0, 461.0, #'port],
    [[#'it1], "", "000000", ev_port, 1265.0, 461.0, #'port],
    [[#'it2], "", "000000", ev_port, 1315.0, 461.0, #'port],
@@ -231,7 +231,7 @@ def ev_nodes:
    [[#'b_mul], "×", "000000", 64.0, 815.0, 516.0, #'node],
    [[#'b_div], "/", "000000", 56.0, 905.0, 516.0, #'node],
    [[#'pred], "IsEven", "000000", 120.0, 1000.0, 516.0, #'node],
-   [[#'body_tuple], "", "000000", 300.0, 800.0, 612.0, #'tuple],
+   [[#'body_tuple], "", "000000", 350.0, 800.0, 612.0, #'tuple],
    [[#'bt0], "", "000000", ev_port, 675.0, 633.0, #'port],
    [[#'bt1], "", stateful_hex, ev_port, 737.0, 633.0, #'port],
    [[#'bt2], "", "000000", ev_port, 800.0, 633.0, #'port],
@@ -241,7 +241,9 @@ def ev_nodes:
    [[#'loop], "DoWhile", stateful_hex, 160.0, 1290.0, 700.0, #'node],
    [[#'neg], "Neg", "000000", 90.0, 1490.0, 540.0, #'node],
    [[#'g0], "[0]", stateful_hex, 64.0, 1130.0, 820.0, #'node],
-   [[#'g1], "[1]", "000000", 64.0, 1240.0, 820.0, #'node],
+   // a little right of where the graph's rows would put it: the state edge from the
+   // `print` up to the memory runs past its left side once extraction takes it
+   [[#'g1], "[1]", "000000", 64.0, 1262.0, 820.0, #'node],
    [[#'and], "Bitand", "000000", 140.0, 1460.0, 820.0, #'node],
    [[#'print], "Print", stateful_hex, 130.0, 1220.0, 930.0, #'node]]
 
@@ -306,8 +308,8 @@ fun tuple_node(w :: Real) :: pc.Pict:
                           ~fill: "white", ~line: "black", ~line_width: 3.0)
   def lp = node_label("(", ~size: 44.0)
   def rp = node_label(")", ~size: 44.0)
-  put(put(box, lp, 10.0, (ev_tuple_h - lp.height) / 2),
-      rp, w - 10.0 - rp.width, (ev_tuple_h - rp.height) / 2)
+  put(put(box, lp, 6.0, (ev_tuple_h - lp.height) / 2),
+      rp, w - 6.0 - rp.width, (ev_tuple_h - rp.height) / 2)
 fun port_node(color :: String) :: pc.Pict:
   pc.circle(~size: ev_port, ~fill: hex_color(color), ~line: hex_color(color))
 
@@ -359,8 +361,8 @@ fun slide_eval_setup():
     def box = written_shape(rounded_path(bw, bh, 14.0), ~width: bw, ~height: bh,
                             ~fill: region_fill, ~line: region_line,
                             ~line_width: 2.0, ~style: #'long_dash)
-    def cap = math_text("loop body:  Arg = (σ, lb, 2, a)", ~size: 24.0,
-                        ~color: region_line)
+    def cap = prose_text("loop body:  Arg = (σ, lb, 2, a)", ~size: 24.0,
+                         ~color: region_line)
     // the header in the nodes' band: two things in one band have no order between
     // them, and in the box's band the box was drawn over it
     { [#'body]: [box, bx, by, band_below],
@@ -380,7 +382,9 @@ fun slide_eval_setup():
   def says:
     def en :~ List = cfg_boxes[3]
     def target = pc.blank(~width: en[2], ~height: en[3])
-    { [#'says]: [bubble_at(target, ~spot: [en[0], en[1]], ~body: [400.0, 905.0],
+    // low and off to the right, clear of the arrow that comes down into the same
+    // block from the loop
+    { [#'says]: [bubble_at(target, ~spot: [en[0], en[1]], ~body: [450.0, 965.0],
                            ~color: talk_blue,
                            ~content: prose([["finds the ", #'plain], ["lowest set bit", #'bold],
                                             [" of ", #'plain], ["a", #'bold_italic]])),

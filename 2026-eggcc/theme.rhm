@@ -35,7 +35,6 @@ export:
   frame_box
   greek
   in_section
-  keynote_blue
   math_face
   math_font
   math_text
@@ -225,9 +224,6 @@ fun staged(base_canvas, stages, ~wire: wire = fun (p, k): p):
       wire(pc.overlay(~horiz: #'left, ~vert: #'top, base.ghost(), as_pict(st)), k)
     fade_in(p, extra, ~horiz: #'left, ~vert: #'top)
 
-// Keynote's blue, which the state parts of the e-graph are drawn in: the state
-// nodes' borders and the edges between them. See `chain_wire`.
-def keynote_blue = draw.Color(4, 51, 255)
 
 // Every word the deck draws goes through one of these three, so that it is text
 // that writes itself when a press brings it on: `written_text` carries the glyph

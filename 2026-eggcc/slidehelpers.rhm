@@ -38,15 +38,82 @@ export:
   talk_light_blue
   talk_green
   talk_red
+  keynote_blue
+  stateful_hex
+  node_white
+  node_green
+  node_fork
+  node_match
+  node_blob
+  node_es_0
+  node_es_1
+  node_es_2
+  state_class
+  value_class
+  realistic_green
+  branch_a_fill
+  branch_b_fill
+  branch_seed_fill
+  walk_a_line
+  walk_b_line
+  walk_seed_line
+  blob_alpha
 
 def border_width = 3
 def corner_radius = -0.15            // negative = fraction of the smaller side
 
-// COLORS
+// ------------------------------------------------------------------ the palette
+// Every colour the deck gives a meaning to, in one place, so that a meaning has one
+// colour on every slide it turns up on. Strings are the runtime's hex spelling, for
+// the things the runtime fills; `draw.Color`s are for lines this deck draws itself.
+
+// the bubbles: blue for saying, green for good news, red for bad
 def talk_blue = draw.Color(38, 132, 235)
 def talk_light_blue = talk_blue.scale(2)
 def talk_green = draw.Color("green").scale(0.5)
 def talk_red = draw.Color("red")
+
+// The e-graph. Blue is what says a thing is stateful, as the original deck had it:
+// the state values and the `update`s that thread them carry a blue border, the
+// edges between them are blue, and everything pure is black.
+def keynote_blue = draw.Color(4, 51, 255)
+def stateful_hex = "0433FF"
+def node_white = "FFFFFF"
+def node_green = "B7E3A6"                     // what extraction picked
+def node_fork = "F9C4C4"                      // and what it picked twice
+def node_match = "FFE9A3"                     // and what a rule has just matched
+// the dashed lines that say two nodes are one class: of states, and of values
+def state_class = draw.Color(79, 143, 0)      // ω1 ≡ ω2
+def value_class = draw.Color(255, 147, 0)     // v2 ≡ x
+// words set beside a graph whose classes are drawn: the state class's own green,
+// darkened to read as type, so the words and the dashes are one green
+def realistic_green = draw.Color(56, 104, 0)
+
+// The two extractable sets the statewalk DP finds on this graph, as fills. They are
+// one hue in two strengths rather than two hues: the sets are nested -- the deeper
+// one is the paler one and `v2` besides -- so deeper reading as *more* is what they
+// mean, and a pair that differs in lightness stays two things under any colour
+// vision. Both are pale enough to read black text.
+def node_blob = "EFE6FA"                      // the mass an extractable set covers
+def node_es_0 = "E9DDF8"                      // what the bare argument state reaches
+def node_es_1 = "C3A9E8"                      // what every walk through one write reaches
+def node_es_2 = "8E6BC4"                      // and that, plus the redundant write's value
+
+// The two statewalks out of the argument state on the update example: one through
+// the write the rule added, one through both of the program's writes. Two hues and
+// not two strengths of one: they are two different walks, not more and less of the
+// same thing. The first is extraction's own green -- it is the walk the extraction
+// takes -- and the second purple. The fill is a class the walk reached, and the mass
+// of what it can build; the line is the walk itself, and the border of every node it
+// runs through, a darker shade of the same hue.
+def branch_a_fill = node_green                 // through the write the rule added
+def branch_b_fill = "C9B6E6"                  // through both of the program's writes
+def branch_seed_fill = "DCDCE4"               // and the walk that is only the state
+def walk_a_line = "3C7D24"
+def walk_b_line = "5B3E9A"
+def walk_seed_line = "6E6E82"
+// how strongly a mass of what a walk can build is laid under the graph
+def blob_alpha = 0.75
 
 fun pale(c :: draw.Color) :: draw.Color:
   c.scale(4)
@@ -426,6 +493,10 @@ fun multi_callout(~on: on :: Pict,
                   ~base: half_base :: Real = 15,
                   ~corner_radius: cr :: Real = corner_radius,
                   ~text: text = #'pop,
+                  // how far each spike goes towards what it points at: all the way to
+                  // its edge, or short of it, which is a stubbier spike that points
+                  // rather than touches
+                  ~reach: reach :: Real = 1.0,
                   child :: Pict, ...) :: Pict:
   def line_color = as_color(color)
   def content = bubble_text(stack.left(~sep: 6, child, ...), text)
@@ -511,7 +582,9 @@ fun multi_callout(~on: on :: Pict,
     def tx :~ Real = t[1]
     def ty :~ Real = t[2]
     def s = exit_scale(tg.width / 2, tg.height / 2, fx - tx, fy - ty)
-    [tx + (fx - tx) * s - bx, ty + (fy - ty) * s - by]
+    def ex = tx + (fx - tx) * s
+    def ey = ty + (fy - ty) * s
+    [fx + (ex - fx) * reach - bx, fy + (ey - fy) * reach - by]
   // where a spike's base sits on `on`, given the side it leaves and how far along it
   fun base_at(side, b :: Real) :: List:
     match side
@@ -983,15 +1056,28 @@ fun stadium(color :: draw.Color) :: Pict:
        target.path(p)
        target.restore(),
      ~width: s, ~height: s)
-def outline_spine_bar = stadium(draw.Color(120, 120, 120)).alpha(0.22)
-def outline_walk_bar = stadium(talk_blue)
+// The line the discs are threaded on is a bar per gap, from the edge of one disc to
+// the edge of the next, grey all the way: one line under the discs showed through
+// the dimmed ones, and the part of it already walked, in blue, sat under the first
+// disc as a stub. The bars are built once for the whole talk, so that both layouts
+// draw the same ones and the move between them lays each one down.
+def outline_links :~ List:
+  for List (i in 0..8): stadium(draw.Color(120, 120, 120)).alpha(0.3)
+// how far a bar stops short of the disc it meets
+def outline_link_gap = 3.0
+// a disc's radius at highlight `hl`: the disc itself, not its halo
+fun disc_radius(hl :: Real) :: Real: outline_r * (1.0 + 0.18 * hl)
+// how lit each disc is when the marker is at `current`
+fun lit_of(n :: Int, current :: Real) :: List:
+  for List (i in 0..n): clamp01(1.0 - absr(current - i))
 
 fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
                    ~current: current :: Real, ~canvas: canvas :: Pict,
                    ~color: color = talk_blue,
                    ~label_width: label_width :: maybe(Real) = #false,
                    ~shots: shots :: maybe(List) = #false,
-                   ~disc_prog: disc_prog :: maybe(List) = #false) :: Pict:
+                   ~disc_prog: disc_prog :: maybe(List) = #false,
+                   ~lit: lit :: maybe(List) = #false) :: Pict:
   def n = discs.length()
   def lab_w = label_width
                 || (for values(m :~ Real = 0.0) (p :~ Pict in labels): math.max(m, p.width))
@@ -1006,18 +1092,19 @@ fun outline_layout(discs :: List.of(Pict), labels :: List.of(Pict),
   def h = n * outline_row
   def base = blank(~width: w, ~height: h)
   fun row_cy(i :: Real) :: Real: i * outline_row + outline_row / 2
-  def y0 = row_cy(0.0)
-  def yN = row_cy(1.0 * (n - 1))
-  def spine:
-    place_center(base, outline_spine_bar.scale(1.0, (yN - y0) / outline_bar),
-                 disc_cx, (y0 + yN) / 2)
-  def cc = math.max(0.0, math.min(1.0 * (n - 1), current))
-  def yfill = row_cy(cc)
+  def lits :~ List = lit || lit_of(n, current)
+  // a bar per gap, edge to edge; while the list is being written out the bar comes
+  // with the second of the two discs it joins
   def walked:
-    if yfill - y0 > 0.5
-    | place_center(spine, outline_walk_bar.scale(1.0, (yfill - y0) / outline_bar),
-                   disc_cx, (y0 + yfill) / 2)
-    | spine
+    for values(q :~ Pict = base) (i in 0..n - 1):
+      def top = row_cy(1.0 * i) + disc_radius(lits[i]) + outline_link_gap
+      def bot = row_cy(1.0 * (i + 1)) - disc_radius(lits[i + 1]) - outline_link_gap
+      def a :: Real = if disc_prog | smooth((disc_prog :~ List)[i + 1]) | 1.0
+      cond
+      | bot - top <= 0.5 || a <= 0.0: q
+      | ~else:
+          def bar = (outline_links[i] :~ Pict).scale(1.0, (bot - top) / outline_bar)
+          place_center(q, (if a >= 1.0 | bar | bar.alpha(a)), disc_cx, (top + bot) / 2)
   recur go(i = 0, acc :~ Pict = walked):
     if i >= n
     | overlay(canvas, acc).refocus(canvas)
@@ -1052,21 +1139,17 @@ fun header_layout(discs :: List.of(Pict), labels :: List.of(Pict),
   def n = discs.length()
   def step = outline_r * 2 * ds + 20.0
   def x0 = dx + outline_r * ds
-  def xN = x0 + (n - 1) * step
   def track_h = 7.0
-  def track:
-    place_center(canvas,
-                 outline_spine_bar.scale((xN - x0) / outline_bar,
-                                         track_h / outline_bar),
-                 (x0 + xN) / 2, cy)
+  def lits = lit_of(n, 1.0 * at)
   def walked:
-    def xf = x0 + at * step
-    if xf - x0 > 0.5
-    | place_center(track,
-                   outline_walk_bar.scale((xf - x0) / outline_bar,
-                                          track_h / outline_bar),
-                   (x0 + xf) / 2, cy)
-    | track
+    for values(q :~ Pict = canvas) (i in 0..n - 1):
+      def left = x0 + i * step + disc_radius(lits[i]) * ds + outline_link_gap * ds
+      def right = x0 + (i + 1) * step - disc_radius(lits[i + 1]) * ds - outline_link_gap * ds
+      if right - left <= 0.5
+      | q
+      | place_center(q, (outline_links[i] :~ Pict).scale((right - left) / outline_bar,
+                                                         track_h / outline_bar),
+                     (left + right) / 2, cy)
   recur go(i = 0, acc :~ Pict = walked):
     if i >= n
     | place_left(acc, labels[at].scale(ts), dx + n * step + 14.0, cy).refocus(canvas)
@@ -1136,7 +1219,9 @@ fun outline_to_header(items :: List.of(String),
                                               ~font: face)
                       outline_layout(ds, ls, ~current: lerp(-1.0, 1.0 * at, clamp01((p - 0.84) / 0.16)),
                                      ~canvas: canvas, ~color: color, ~label_width: lab_w,
-                                     ~shots: shots, ~disc_prog: prog))
+                                     ~shots: shots, ~disc_prog: prog,
+                                     ~lit: (for List (i in 0..n):
+                                              if i == at | clamp01((p - 0.84) / 0.16) | 0.0)))
     | block:
         // The header of the slide just left, exactly as `section_header` drew it,
         // magic-moving back down into the list: the discs fly from their row into
@@ -1153,25 +1238,45 @@ fun outline_to_header(items :: List.of(String),
         def full0 = outline_layout(discs0, labels0, ~current: 1.0 * prev,
                                    ~canvas: canvas, ~color: color, ~label_width: lab_w,
                                    ~shots: shots)
-        def descent = magic_move(head0, full0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
-        // the marker walking down from the section just finished to this one
+        // The discs come down with only the label that travels with them -- the one
+        // the header showed -- and the other labels and the keepsakes fade in the
+        // moment they land: words arriving while the discs are still on their way are
+        // two things at once, and an outline the marker walks down with no words
+        // beside it is an empty one. Then the marker walks on.
+        def unseen_shots:
+          if shots | (for List (q in shots :~ List): if q | (q :~ Pict).ghost() | q) | shots
+        fun only_prev(ls :~ List) :: List:
+          for List (q :~ Pict in ls, i in 0..): if i == prev | q | q.ghost()
+        def bare0 = outline_layout(discs0, only_prev(labels0), ~current: 1.0 * prev,
+                                   ~canvas: canvas, ~color: color, ~label_width: lab_w,
+                                   ~shots: unseen_shots)
+        def descent = magic_move(head0, bare0, ~extent: extent, ~other: #'fade).time_pad(~after: -1)
+        // the list with the marker `p` of the way from the section just finished to
+        // this one, and the words other than the travelling label `shown` of the way in
+        fun walked_to(p :: Real, ~shown: shown :: Real) :: Pict:
+          def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
+          fun seen(q :: Pict) :: Pict:
+            cond
+            | shown >= 1.0: q
+            | shown <= 0.0: q.ghost()
+            | ~else: q.alpha(shown)
+          def ds = for List (i in 0..n):
+                     outline_disc(i, n, clamp01(1.0 - absr(cur - i)), ~font: face)
+          def ls = for List (i in 0..n):
+                     def q = outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
+                     if i == prev | q | seen(q)
+          fun seen_shot(q): if q | seen(q :~ Pict) | q
+          def ss = if shots | (for List (q in shots :~ List): seen_shot(q)) | shots
+          outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
+                         ~label_width: lab_w, ~shots: ss)
+        def reveal:
+          animate(~extent: 0.45, ~bend: fun (x): x,
+                  fun (p): walked_to(0.0, ~shown: smooth(p)))
         def walk:
-          animate(~extent: 1.1,
-                  fun (p):
-                    if p >= 1.0
-                    | full
-                    | block:
-                        def cur = lerp(1.0 * (at - 1), 1.0 * at, smooth(p))
-                        def ds = for List (i in 0..n):
-                                   outline_disc(i, n, clamp01(1.0 - absr(cur - i)), ~font: face)
-                        def ls = for List (i in 0..n):
-                                   outline_label(written[i], written_lit[i], clamp01(1.0 - absr(cur - i)))
-                        outline_layout(ds, ls, ~current: cur, ~canvas: canvas, ~color: color,
-                                       ~label_width: lab_w, ~shots: shots))
-        // `~join: #'splice` merges the descent's epoch with the walk's, so the marker
-        // sets off the moment the list lands and the two are one animation rather
-        // than two -- an epoch is a press, and this is one beat, not two.
-        switch(descent, walk, ~join: #'splice)
+          animate(~extent: 0.9, fun (p): if p >= 1.0 | full | walked_to(p, ~shown: 1.0))
+        // `~join: #'splice` merges the three into one epoch, so the words come up the
+        // moment the list lands and the marker sets off after them: one beat, not three.
+        switch(switch(descent, reveal, ~join: #'splice), walk, ~join: #'splice)
   // `magic_move`'s epoch 0 *is* the move and its epoch 1 is the settled result --
   // measured, not assumed -- so it is the tail that has to go, not the head.
   // `~other: #'fade` -- the picts the two layouts do *not* have in common are the
@@ -1191,14 +1296,16 @@ fun outline_to_header(items :: List.of(String),
         def head_t = header_layout(discs, labels, ~at: at, ~canvas: clear, ~color: color)
         def move = magic_move(full_t, head_t, ~extent: extent, ~other: #'fade)
                      .time_pad(~after: -1)
+        // The title waits for the discs to have reached the header: written while
+        // they were still on their way, it was there before the move was over.
         def title_w = writer(next :~ Pict)
-        def whole = extent + 0.6
+        def whole = extent + 0.7
         def rise = extent / whole
         animate(~extent: whole, ~bend: fun (x): x,
                 fun (t):
                   overlay(~horiz: #'left, ~vert: #'top,
                           canvas,
-                          title_w.frame(clamp01((t - 0.15) / 0.85)),
+                          title_w.frame(clamp01((t - rise) / (1.0 - rise))),
                           move.snapshot(0, clamp01(t / rise))))
   // Two presses: the list arrives -- written out the first time, flown down out of
   // the header after that, with the marker walking on -- and rests, which is the

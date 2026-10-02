@@ -14,6 +14,8 @@ import:
   "apply.rhm" open
   "steps.rhm" open
   "write.rhm".already
+  "write.rhm".manim_smooth
+  "write.rhm".clamp01
   "write.rhm".popped
   "write.rhm".written_shape
   pict as pc
@@ -607,36 +609,36 @@ fun slide_12():
   // camera on the slide before left them; they go up into the corner, the first of
   // them lit, and then the term is written over the place the graph is about to take.
   def term_stage = { #'term: [input_line, & stage_at(input_line), band_nodes] }
-  def opening:
-    [// the three steps in the corner, where the slide before this carried them
-     corner_frame,
-     Frame(~picts: steps_at(~lit: #'program), ~edges: step_edges(3)),
-     Frame(~picts: steps_at(~lit: #'program) ++ term_stage, ~edges: step_edges(3))]
-  // Putting the term in, one thing at a time: the nodes it is made of appear under
-  // it, each under the word it stands for and at that word's size, with the arrows
-  // between them -- the operands in a row, and the operators in a row below them, so
-  // that every arrow runs up to what it reads and none runs through a node; the
-  // nodes go down into the graph, growing to full size on the way; the data-flow
-  // arrow is drawn beside where they landed; and the term slides left to the column.
+  // The term's own characters, one per node it becomes, keyed by that node: a copy
+  // of each laid exactly over the glyph it copies, in a box the node's size with the
+  // glyph in its middle, so that the press that sends it into the graph keeps the
+  // character and the node it turns into centred on one another. Each is marked as
+  // already there -- it lies over ink the room can see, and writing it would trace a
+  // letter twice -- and comes on at the end of the press that writes the term.
   def term_glyph_of = { #'a: 1, #'plus: 3, #'one: 5, #'minus: 8 }
-  def term_row_of = { #'a: 0, #'one: 0, #'plus: 1, #'minus: 1 }
-  def term_node_drop = 16.0
-  def term_node_gap = 20.0
-  fun term_nodes() :: Map:
+  fun term_chars() :: Map:
     def [sx, sy] = stage_at(input_line)
     for values(m :~ Map = {}) (k in keys_term):
       def i = term_glyph_of[k]
       def glyph :~ pc.Pict = term_glyphs[i]
-      def node :~ pc.Pict = as_pict(plain[k])
-      def shrunk = node.scale(glyph.height / node.height)
-      def row = term_row_of[k]
-      m ++ { k: [shrunk,
-                 sx + term_offs[i] + (glyph.width - shrunk.width) / 2,
-                 sy + input_line.height + term_node_drop + row * (shrunk.height + term_node_gap),
+      def holder = pc.overlay(pc.blank(~width: nd, ~height: nd), glyph)
+      m ++ { k: [already(holder),
+                 sx + term_offs[i] + glyph.width / 2 - nd / 2,
+                 sy + glyph.height / 2 - nd / 2,
                  band_flight] }
+  def opening:
+    [// the three steps in the corner, where the slide before this carried them
+     corner_frame,
+     Frame(~picts: steps_at(~lit: #'program), ~edges: step_edges(3)),
+     Frame(~picts: steps_at(~lit: #'program) ++ term_stage ++ term_chars(), ~edges: step_edges(3))]
+  // Putting the term in, one thing at a time: its characters fly down out of it into
+  // the graph, each becoming the node it stands for, and the arrows between them are
+  // drawn as they land -- the operands in a row, and the operators in a row below
+  // them, so that every arrow runs up to what it reads and none runs through a node;
+  // the data-flow arrow is drawn beside where they landed; and the term slides left
+  // to the column.
   def inserting:
-    [Frame(~picts: term_stage ++ term_nodes(), ~edges: es_term),
-     Frame(~picts: term_stage ++ spots_of(keys_term, []), ~edges: es_term),
+    [Frame(~picts: term_stage ++ spots_of(keys_term, []), ~edges: es_term),
      Frame(~picts: term_stage ++ flow_over ++ spots_of(keys_term, []), ~edges: es_term),
      Frame(~picts: term_home ++ flow_over ++ spots_of(keys_term, []), ~edges: es_term)]
 
@@ -727,10 +729,54 @@ fun slide_12():
                 ~under_wire: under_wire, ~under_band: band_point,
                 // the class the third rule makes, drawn as far grown as the press has got
                 ~stage: merged_stage, ~stage_band: band_below)
+  // The press that flies the term's characters into the graph, drawn by hand: a
+  // press cross-fades a key that changes as it moves at one rate the whole way, and
+  // the four boxes faded in while they were still bunched under the term, on top of
+  // one another. Here each character flies on its own, the box it becomes comes up
+  // round it only once the four have drawn apart, and the arrows between them are
+  // drawn last, as they land.
+  fun fly_press(a :: Frame, b :: Frame, ~extent: extent :: Real) :: pc.Pict:
+    pc.animate(~extent: extent, ~bend: fun (x): x,
+               fun (t):
+                 def u = manim_smooth(t)
+                 def become = smooth(clamp01((t - 0.5) / 0.3))
+                 def picts:
+                   for values(m :~ Map = b.picts) (k in keys_term):
+                     def ea :~ List = a.picts[k]
+                     def eb :~ List = b.picts[k]
+                     def [ha, xa, ya] = ea.take(3)
+                     def [nb, xb, yb] = eb.take(3)
+                     // the band it lands in, which is the one a node of the graph has
+                     def band = if eb.length() > 3 | eb[3] | band_nodes
+                     def held = as_pict(ha)
+                     def node = as_pict(nb)
+                     def p:
+                       cond
+                       | become <= 0.0: held
+                       | become >= 1.0: nb
+                       | ~else: pc.overlay(held.alpha(1.0 - become), node.alpha(become))
+                     m ++ { k: [p, lerp(xa, xb, u), lerp(ya, yb, u), band] }
+                 // the arrows are new to the frame they are drawn into, so a press
+                 // draws them out from their tails; how far, is how far this one has
+                 // got past the boxes coming up
+                 def drawn = clamp01((t - 0.7) / 0.3)
+                 // the edges both frames have -- the steps' arrows in the corner --
+                 // are there throughout; only the term's own are drawn out
+                 def kept = for List (e in b.edges): keep_when a.edges.contains(e); e
+                 magic_between(page, Frame(~picts: picts, ~edges: kept),
+                               Frame(~picts: picts, ~edges: b.edges),
+                               0.3 + 0.7 * drawn,
+                               ~wire: wire, ~edge_band: band_wires,
+                               ~under_wire: under_wire, ~under_band: band_point,
+                               ~stage: merged_stage, ~stage_band: band_below))
+  def fly_at = opening.length()
   // a press to each frame in turn, from the frame before the first
   fun presses(frames :~ List, ~from: from :: Frame, ~extent_of: extent_of) :: List:
     for List (i in 0..frames.length()):
-      press(if i == 0 | from | frames[i - 1], frames[i], ~extent: extent_of(i))
+      def before = if i == 0 | from | frames[i - 1]
+      if i + 1 == fly_at
+      | fly_press(before, frames[i], ~extent: 1.3)
+      | press(before, frames[i], ~extent: extent_of(i))
 
   // Then the classes are drawn -- how the graph stands once the rules have run, the
   // class the third rule made growing out over the `a` -- still under Run Rules;

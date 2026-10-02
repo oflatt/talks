@@ -129,7 +129,8 @@ def photo_pitch = 216.0
 // with the photo of each and how it is cropped. The summary slide lays the same
 // faces out its own way. The files came out of Keynote numbered, not named: the
 // speaker's, Yihong's and Zach's are matched against the group's own headshots,
-// Chandrakana's and Eli's were checked by eye, and the rest are by elimination.
+// Chandrakana's, Eli's and Haobin's were checked by eye, and the rest are by
+// elimination.
 def team:
   [["Oliver Flatt", "image7.png", [0.0, 0.123, 0.0, 0.123]],
    ["Anjali Pal", "image11.png", #false],
@@ -139,7 +140,7 @@ def team:
    ["Chandrakana Nandi", "image4.png", [0.0, 0.02, 0.0, 0.02]],
    ["Eli Rosenthal", "image12.png", #false],
    ["Zachary Tatlock", "image5.png", [0.0, 0.052, 0.0, 0.198]],
-   ["Alex Fischman", "image9.png", #false]]
+   ["Haobin Ni", "image9.png", #false]]
 // and everyone's name, as the two lines they are written on
 def author_lines:
   ["Oliver Flatt, Anjali Pal, Yihong Zhang, Ryan Tjoa, Kirsten Graham, Alex Fischman,",
@@ -151,7 +152,7 @@ def affiliation:
   { "Oliver Flatt": [#'plse], "Anjali Pal": [#'plse], "Yihong Zhang": [#'plse],
     "Ryan Tjoa": [#'plse], "Kirsten Graham": [#'plse], "Alex Fischman": [#'plse],
     "Chandrakana Nandi": [#'plse, #'certora], "Eli Rosenthal": [#'google],
-    "Zachary Tatlock": [#'plse] }
+    "Zachary Tatlock": [#'plse], "Haobin Ni": [#'plse] }
 // a mark `w` wide, at its logo's own proportions: `[file, height]`. One width for
 // all of them, since the wordmarks differ in how tall they are for their width, and
 // matched by height the wide one reads as the big one.
@@ -291,10 +292,13 @@ fun slide_20():
     // Cranelift target is the lower part of its logo: the body sits close over that
     // logo's top, and a spike aimed at the near edge of the whole would have no
     // length, which shows as a notch in the outline.
+    // The Cranelift target is the left of that lower part as well: the label over
+    // the logo sits in the middle of it, and a spike aimed down the middle runs
+    // through the word.
     fun marker_of(key, ~lower: lower :: Boolean = #false) :: List:
       def [x, y, w, h] = ink_at(use_logos[key])
       if lower
-      | [pc.blank(~width: w, ~height: h * 0.6), x, y + h * 0.4]
+      | [pc.blank(~width: w * 0.3, ~height: h * 0.6), x, y + h * 0.4]
       | [pc.blank(~width: w, ~height: h), x, y]
     def m_numba = marker_of(#'numba)
     def m_luminal = marker_of(#'luminal)
@@ -305,6 +309,8 @@ fun slide_20():
     multi_callout(~on: placed, ~place: slot,
                   ~at: [m_numba[0], m_luminal[0], m_cranelift[0], m_mlir[0]],
                   ~color: talk_red, ~padding: 14.0,
+                  // short and broad: they point at the tools rather than reach into them
+                  ~base: 24.0, ~reach: 0.8,
                   // two lines, the face as tall as the two of them
                   robot_says(#'teeth,
                              pc.stack(~sep: 2.0, ~horiz: #'center,

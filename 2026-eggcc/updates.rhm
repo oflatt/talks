@@ -188,7 +188,10 @@ fun update_opening() :: Map:
     def uses = if forked | copy_uses_forked | copy_uses_written
     { #'copy: [copy_code, code_x, code_y + copy_dy, band_nodes] }
       ++ (for values(m :~ Map = {}) (u :~ List in uses, i in 0..):
-            m ++ { [#'c_use, i]: [u[0], u[1], u[2], band_flight] })
+            // in the code's own band: they stand in blank holes in it, so nothing
+            // there is over or under them, and the yarn's trace passes over them as
+            // it passes over every other letter of the line
+            m ++ { [#'c_use, i]: [u[0], u[1], u[2], band_nodes] })
 
   // ------------------------------------------------------------------ the yarn
   // Where a thread goes into a letter and comes out of one: just over it and just
@@ -346,8 +349,9 @@ fun update_opening() :: Map:
   def first_write_y = code_y + code_inset + code_row + code_row / 2
   def second_write_y = code_y + code_inset + code_row * 2 + code_row / 2
   def explained = { #'explain: [explain_states, 0.0, 0.0, band_callout] }
-  // clear of the bottom of the bubble about ω, which the one about linearity sat on
-  def linear_y = 500.0
+  // clear of the bottom of the bubble about ω, which the one about linearity sat on,
+  // and -- on the copy -- of the top of the long one under it, which it touched
+  def linear_y = 488.0
   def with_omega = explained ++ { #'omega: [omega_bubble, 0.0, 0.0, band_callout] }
   def linear_over:
     // a band above the other bubbles: its spike runs up past the one about ω, and
@@ -757,6 +761,7 @@ fun fork_frames(parts :~ Map) :: List:
   // audience has seen the walk, and what is new is where it goes instead.
   def safe = chain_safe(~root: chain_root)
   def safe_edges = edges_among(safe)
+  def ret_bow = -0.5
   // Its own body rather than the one in `chain_bubbles`: the face makes it wider
   // than the bubble that asked the question the first time, and where that one sat
   // this one would lie across the `return` it points at.
@@ -785,9 +790,16 @@ fun fork_frames(parts :~ Map) :: List:
 
   // and what it comes back with, which is the program we wanted: one write, no
   // memory read twice, and cheaper than the program we started from
+  // Left where the graph had them, the `return` and the value it reads have the
+  // memory between them, on the straight line from the one to the other: so that
+  // arrow bows down under it. The press after this one straightens it as the nodes
+  // move into the term's own shape, where the line is clear.
+  fun bowed(es :~ List, bend :: Real) :: List:
+    for List (e :~ List in es):
+      if e[0] == #'v && e[1] == #'ret && e[2] == #'v3 | [#'vbend, #'ret, #'v3, bend] | e
   def safe_term:
     Frame(~picts: chain_node_picts(spots_of(safe), safe) ++ rule_over ++ safe_ask_over(),
-          ~edges: safe_edges)
+          ~edges: bowed(safe_edges, ret_bow))
 
   // Then the answer settles into the shape of the term it is. The places the graph
   // gave these nodes were solved for the whole graph, and with two thirds of it
@@ -811,7 +823,7 @@ fun fork_frames(parts :~ Map) :: List:
   def answer:
     Frame(~picts: chain_node_picts(answer_spots, safe) ++ rule_over
                     ++ safe_ask_over(~at: answer_spots[#'ret]),
-          ~edges: safe_edges)
+          ~edges: bowed(safe_edges, 0.0))
 
   chain_walk_frames(~graph: graph, ~rule: rule_over, ~kept: kept)
     ++ [term, reddened, blamed] ++ rewalk ++ [safe_term, answer]

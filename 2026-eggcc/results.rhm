@@ -44,28 +44,25 @@ fun slide_cdf():
   // What the curve means, read off it once ours is up: a grey band sweeps out from
   // the left edge to the millisecond mark with the share of regions inside it
   // counting up beside its edge, and when it gets there the words for that share
-  // write themselves. The share and the words ride low on the edge, under the
+  // are simply there: they are what the band came to, not a second thing to watch. The share and the words ride low on the edge, under the
   // curve, which is up near the top by then.
   def share_face = draw.Font(~name: prose_font, ~size: 48.0, ~weight: #'bold)
   fun share_text(frac :: Real) :: pc.Pict:
     def pct = math.exact(math.round(frac * 100.0))
     pc.text(to_string(pct) +& "%", ~font: share_face).colorize(cdf_dp_color)
   def said = prose_text("finish within 1ms", ~size: 40.0, ~bold: #true, ~color: cdf_dp_color)
-  def said_w = writer(said)
   def ride = 0.15                   // the height on the plot the words ride at
-  // the sweep takes its time, and then the words take theirs
+  // the sweep takes its time, and the words come with its last frame
   def sweep_t = 1.3
-  def reading_extent = sweep_t + extent_for(said_w.total)
-  def sweep_part = sweep_t / reading_extent
-  fun reading(k :: Real, w :: Real, ~alpha: alpha :: Real = 1.0) :: pc.Pict:
+  fun reading(k :: Real, words :: Boolean, ~alpha: alpha :: Real = 1.0) :: pc.Pict:
     def base = scene([1.0, 0.0, 0.0], ~sweep: k, ~sweep_alpha: alpha)
     def secs = sweep_secs(k)
     def share :~ pc.Pict = share_text(sweep_frac(secs)).alpha(alpha)
     def [ex, ey] = cdf_point(secs, ride)
     def with_share = put(base, share, ex + 18.0, ey - share.height / 2)
-    if w <= 0.0
+    if !words
     | with_share
-    | put(with_share, said_w.frame(w), ex + 18.0 + share.width + 16.0, ey - said.height / 2)
+    | put(with_share, said, ex + 18.0 + share.width + 16.0, ey - said.height / 2)
   fun solvers(t :: Real) :: pc.Pict:
     // the band and the words go as the solvers' curves come, over the first part
     // of the press: they were about ours
@@ -75,7 +72,8 @@ fun slide_cdf():
     def share :~ pc.Pict = share_text(sweep_frac(secs)).alpha(going)
     def base = scene([1.0, t, t], ~sweep: 1.0, ~sweep_alpha: going)
     put(put(base, share, ex + 18.0, ey - share.height / 2),
-        said_w.frame(going), ex + 18.0 + share.width + 16.0, ey - said.height / 2)
+        (if going >= 1.0 | said | said.alpha(going)), ex + 18.0 + share.width + 16.0,
+        ey - said.height / 2)
   // How many regions the better of the two solvers never finished: the gap its
   // curve leaves under the top, at the wall the clock ran out at. Said in red, on a
   // press of its own once the solvers' curves are up, pointing at the shelf where
@@ -95,9 +93,11 @@ fun slide_cdf():
   // long enough to watch a curve being drawn, which is the point of drawing it
   pc.switch(scene([0.0, 0.0, 0.0]),
             pc.animate(~extent: 1.2, fun (t): scene([t, 0.0, 0.0])),
-            pc.animate(~extent: reading_extent, ~bend: fun (x): x,
-                       fun (t): reading(smooth(clamp01(t / sweep_part)),
-                                        clamp01((t - sweep_part) / (1.0 - sweep_part)))),
+            // the band's edge and the share by it come up over the sweep's first
+            // moments rather than being there on the click
+            pc.animate(~extent: sweep_t, ~bend: fun (x): x,
+                       fun (t): reading(smooth(t), t >= 1.0,
+                                        ~alpha: smooth(clamp01(t / 0.15)))),
             pc.animate(~extent: 1.2, fun (t): solvers(t)),
             pc.overlay(~horiz: #'left, ~vert: #'top, full, write(timeouts)).refocus(full))
 

@@ -267,12 +267,15 @@ fun slide_summary():
       put(q, popped(as_pict(face)), x, y)
   def closing = pc.overlay(~horiz: #'left, ~vert: #'top, settled_upto(4), write(team_layer))
   def closed = closing.snapshot(0, 1.0)
-  // and the question, in the corner the one-line title leaves free. The bubble is
-  // written, which traces and fills its shell and pops the word in after it: the
-  // bubble itself is not animated, it carries how each of its pieces arrives.
+  // and the question, in the middle of the four panes, where the gaps between them
+  // cross: in the corner beside the title it lay over the last face in the row. The
+  // bubble is written, which traces and fills its shell and pops the word in after
+  // it: the bubble itself is not animated, it carries how each of its pieces arrives.
   def question:
     def b :~ pc.Pict = make_bubble(~color: talk_green, prose([["Questions?", #'bold]])).scale(1.3)
-    put(blank_slide, b, slide_width - b.width - 60.0, talk_title_y)
+    def cx = (pane_x(0) + pane_w + pane_x(1)) / 2
+    def cy = pane_y(0) + pane_h + row_gap / 2
+    put(blank_slide, b, cx - b.width / 2, cy - b.height / 2)
 
   // the fourth picture's three arrivals: this compiler on the empty page, and then
   // the two that might be next, one at a time

@@ -154,8 +154,33 @@ fun draws_between(a :: Frame, b :: Frame, t :: Real, appear :~ Map) :: List:
             // the same kind of bubble with other words in it: the old words are
             // taken back and the new ones written, the shell staying put
             [[entry_band(eb), appear[key], x, y, 1.0, t]]
+        | restyled_node(as_pict(ea[0]), as_pict(eb[0])):
+            // A node of a graph drawn again in another fill, the same size: the old
+            // one stays as it was underneath and the new one comes up over it. Two
+            // halves cross-fading each other let the label and the border through at
+            // three quarters, and a node drawn at partial opacity goes through a layer
+            // that lands on whole pixels -- so the label went grey and then jumped a
+            // fraction of a pixel as the press ended and the node was drawn straight.
+            // Once the new one is all the way up the old one goes: left under it, its
+            // colour shows through the soft edge of the new one's border, and the
+            // press would end on a picture the still after it does not draw.
+            [[entry_band(ea), ea[0], x, y, (if t >= 1.0 | 0.0 | 1.0), #false],
+             [entry_band(eb), eb[0], x, y, t, #false]]
         | ~else: [[entry_band(ea), ea[0], x, y, 1.0 - t, #false],
                   [entry_band(eb), eb[0], x, y, t, #false]])
+
+// A node of a graph -- one `graph_node` built, which says how round its corners are
+// -- through whatever scaling it has been given since, which wraps it in one child.
+fun node_box(p :: pc.Pict) :: Boolean:
+  def m = p.metadata()
+  cond
+  | m.has_key(#'corner): #true
+  | p.children.length() == 1: node_box(p.children[0])
+  | ~else: #false
+// two drawings of one node, the second the first restyled where it stands
+fun restyled_node(pa :: pc.Pict, pb :: pc.Pict) :: Boolean:
+  math.abs(pa.width - pb.width) < 0.5 && math.abs(pa.height - pb.height) < 0.5
+    && node_box(pa) && node_box(pb)
 
 // The moment `t` of the way from `a` to `b`, over a `base` no press touches.
 fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
@@ -197,16 +222,10 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
     for values(q :~ pc.Pict = blank) (key in at.keys()):
       def [x, y] = spots[key]
       put(q, as_pict(at[key]).ghost(), x, y)
-  def both_es: for List (e in a.edges): keep_when b.edges.contains(e); e
   def paired_gone = for List (pr :~ List in pairs): pr[0]
   def paired_new = for List (pr :~ List in pairs): pr[1]
-  def gone_es:
-    for List (e in a.edges): skip_when b.edges.contains(e) || paired_gone.contains(e); e
-  def new_es:
-    for List (e in b.edges): skip_when a.edges.contains(e) || paired_new.contains(e); e
   // an edge that is another edge's continuation is drawn as the one turning into
   // the other, by the wire, which is handed both specs and how far along it is
-  def morph_es = for List ([gone, new] in pairs): [#'morph, gone, new, t]
   // An edge this press is bringing on is *drawn*, not faded: `current_draw` says
   // how much of it there is yet, and whatever the wire draws lines with reads it.
   // The alpha still ramps, quickly, because a wire may draw more than lines and
@@ -214,12 +233,69 @@ fun magic_between(base :: pc.Pict, a :: Frame, b :: Frame, t :: Real,
   // An edge this press brings on starts once the nodes it joins are most of the
   // way written, and takes the rest of the press to draw.
   def edge_t = math.min(1.0, math.max(0.0, (t - 0.3) / 0.7))
+  // Every edge of the press in one order, so that where two of them cross, the one
+  // on top is the one on top in the frames either side of the press. Drawn as four
+  // layers -- staying, going, coming, changing -- every edge on its way out jumped
+  // above every edge staying put the moment a press began: a black line that had
+  // run under a blue one was suddenly over it, for the press's first frame and on.
+  // The order is the frame before's for what it has, with each edge the frame after
+  // brings on put where that frame has it; an edge that turns into another is drawn
+  // where the first one was.
+  def merged :~ List:
+    def b_list :~ List = b.edges
+    def b_index:
+      for values(m :~ Map = {}) (e in b_list, i in 0..):
+        if m.has_key(e) | m | m ++ { e: i }
+    def morph_of:
+      for values(m :~ Map = {}) ([gone, new] in pairs): m ++ { gone: [#'morph, gone, new, t] }
+    fun coming(e) :: Boolean: !a.edges.contains(e) && !paired_new.contains(e)
+    fun coming_between(i :: Int, j :: Int) :: List:
+      for List (k in i..j): keep_when coming(b_list[k]); [b_list[k], #'new]
+    def (acc, next_b):
+      for values(acc :~ List = [], next_b :~ Int = 0) (e in a.edges):
+        cond
+        | b_index.has_key(e):
+            def k :: Int = b_index[e]
+            def before = if k > next_b | coming_between(next_b, k) | []
+            values(acc ++ before ++ [[e, #'both]], math.max(next_b, k + 1))
+        | morph_of.has_key(e): values(acc ++ [[morph_of[e], #'morph]], next_b)
+        | ~else: values(acc ++ [[e, #'gone]], next_b)
+    acc ++ coming_between(next_b, b_list.length())
+  // Which edges go over which, by what they are: the black value edges lowest, the
+  // blue state edges over them, and the marks laid over a graph's own edges -- a
+  // state edge gone red, a statewalk coloured in -- over those. Two frames can list
+  // the same two edges in either order, and the press then has to begin on one
+  // order and end on the other; the only crossings where that shows are between
+  // edges that look different, and ranking those is what keeps every frame in step.
+  // Within a rank the order is the one above.
+  fun edge_rank(e) :: Int:
+    def k = if e is_a List && (e :~ List).length() > 0 | (e :~ List)[0] | #false
+    match k
+    | #'v || #'vbend || #'op_half || #'op_shift: 0
+    | #'f: 2
+    | #'walk: 3
+    | #'morph:
+        def new = (e :~ List)[2]
+        edge_rank(new)
+    | ~else: 1
+  def ranked :~ List:
+    merged.sort(fun ([e1, _], [e2, _]): edge_rank(e1) < edge_rank(e2))
+  fun role_style(role) :: List:
+    match role
+    | #'both: [1.0, 1.0]
+    | #'gone: [1.0 - t, 1.0]
+    | #'new: [math.min(1.0, 3.0 * edge_t), edge_t]
+    | ~else: [1.0, 1.0]
+  // runs of edges with one role, in that order: one layer a run
+  def runs :~ List:
+    for values(acc :~ List = []) ([e, role] in ranked):
+      if acc != [] && (acc.last :~ List)[0] == role
+      | acc.take(acc.length() - 1) ++ [[role, ((acc.last :~ List)[1] :~ List) ++ [e]]]
+      | acc ++ [[role, [e]]]
   fun layers_of(draw_them :: Function.of_arity(3)) :: List:
-    for List ([specs, al, drawn] in [[both_es, 1.0, 1.0],
-                                     [gone_es, 1.0 - t, 1.0],
-                                     [new_es, math.min(1.0, 3.0 * edge_t), edge_t],
-                                     [morph_es, 1.0, 1.0]]):
-      keep_when specs != [] && al > 0.0
+    for List ([role, specs] in runs):
+      def [al :: Real, drawn :: Real] = role_style(role)
+      keep_when al > 0.0
       parameterize { write.current_draw: drawn }:
         def layer = draw_them(ghosts, specs, at)
         if al >= 1.0 | layer | layer.alpha(al)

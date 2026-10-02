@@ -78,8 +78,18 @@ fun chain_nodes(~picked: picked :: List = [],
                 ~matched: matched :: List = [],
                 // key -> [fill] or [fill, second fill], for the statewalk DP, which
                 // fills a class by the extractable sets it has stored a walk for
-                ~fills: fills :: Map = {}) :: Map:
-  fun node(key, color, lw, label):
+                ~fills: fills :: Map = {},
+                // key -> the border a node takes while a statewalk is drawn through
+                // it: the walk's own colour, so the walk reads as the nodes it runs
+                // through and not only the edges between them
+                ~outlines: outlines :: Map = {},
+                // keys drawn as the box alone, for a slide that draws a node's word
+                // as a thing of its own -- one that changes what a node says without
+                // the box changing with it
+                ~bare: bare :: List = []) :: Map:
+  fun node(key, color_in, lw, label_in):
+    def color = if outlines.has_key(key) | outlines[key] | color_in
+    def label = if bare.contains(key) | #false | label_in
     def w = (chain_box :~ Map)[key] :~ Real
     def two :~ List = if fills.has_key(key) | fills[key] | []
     graph_node(~width: w, ~height: if w > 100 | 64.0 | 63.486,
@@ -499,6 +509,11 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
   for values(q :~ pc.Pict = layer) (e :~ List in es):
     cond
     | e[0] == #'v: chain_wire(q, at, [e.rest], ~line_width: 4)
+    // a value edge bowed `e[3]` radians off the straight, round a node that lies on
+    // the straight line between its ends
+    | e[0] == #'vbend:
+        arrow(~on: q, at[e[1]], at[e[2]], ~color: "black", ~line_width: 4, ~gap: 4,
+              ~bend: e[3])
     // `#'f` is a state edge that should not be there: two of them arriving at one
     // node is memory read twice
     | e[0] == #'f: chain_wire(q, at, [e.rest], ~line_width: 6, ~color: talk_red)
@@ -519,6 +534,12 @@ fun chain_wire_specs(layer :: pc.Pict, es :~ List, at :~ Map) :: pc.Pict:
     // a rule's pointer at the node it matched, becoming the edge of the node the
     // rule added: `e[1]` is the pointer spec, `e[2]` the edge it becomes, `e[3]`
     // how far along the press is
+    // the same bowed edge with its bow changing, as the nodes it joins move
+    | e[0] == #'morph && (e[1] :~ List)[0] == #'vbend:
+        def gone :~ List = e[1]
+        def new :~ List = e[2]
+        arrow(~on: q, at[new[1]], at[new[2]], ~color: "black", ~line_width: 4, ~gap: 4,
+              ~bend: (gone[3] :~ Real) + ((new[3] :~ Real) - gone[3]) * (e[3] :~ Real))
     | e[0] == #'morph:
         def [_, chip, node] = e[1] :~ List
         def new :~ List = e[2]

@@ -26,24 +26,9 @@ export:
   slide_dp
   dp_title
 
-// The two branches out of the argument state, as colours. Two hues and not two
-// strengths of one: they are two different walks, not more and less of the same
-// thing. The lighter is also the shorter, and the gap in lightness is what makes
-// them two colours under any colour vision -- and in a handout printed grey.
-def branch_a_fill = "BFE4E0"                  // through the write the rule added
-def branch_b_fill = "9C82C8"                  // through both of the program's writes
-def branch_seed_fill = "DCDCE4"               // and the walk that is only the state
-// A walk's extractable set is laid in the walk's own colour at half strength, each
-// set one flat layer: where two sets overlap the two colours mix, and where only one
-// reaches, its colour shows alone -- so which set is drawn first does not matter,
-// and a press that grows one under the other lands on the picture the frame after
-// it draws.
-def blob_alpha = 0.5
-// and the walk itself, which is a line laid over its own mass and so has to be the
-// strong end of the same hue rather than the pale one
-def walk_a_line = "17786E"
-def walk_b_line = "553C93"
-def walk_seed_line = "6E6E82"
+// The two branches out of the argument state, and the masses of what each can
+// build, take their colours from the palette in `slidehelpers.rhm`: `branch_*_fill`,
+// `walk_*_line` and `blob_alpha`.
 
 // ---------------------------------------------------------------------------
 // The picture the two slides in this section share: where the graph goes once
@@ -85,20 +70,26 @@ fun middle(spots :~ Map, key) :: List:
 // The classes the rule made, drawn wherever the graph is: `v1 ≡ v3` and `ω2 ≡ ω3`
 // are the reason any of this is hard, and a slide about which class holds which
 // walk cannot be one that has stopped drawing the classes.
+// A class drawn round nodes the graph has grown by `dp_scale`, with as much room
+// round them as a class has at full size and a little more: the tube's own default
+// is for a node at its own size, and round a grown one it sat tight against it.
+def dp_tube = 64.0 * dp_scale + 2 * 14.0
 fun regions_at(spots :~ Map) :: Map:
   fun tube(from, to, dash):
-    def r :~ List = eclass_region(middle(spots, from), middle(spots, to), ~dash: dash)
+    def r :~ List = eclass_region(middle(spots, from), middle(spots, to), ~dash: dash,
+                                  ~thickness: dp_tube)
     [r[0], r[1], r[2], band_below]
   { #'old_class: tube(#'v1, #'v3, value_class),
     #'memory_class: tube(#'s3, #'s2, state_class) }
 
-fun picts_at(spots :~ Map, fills :~ Map, ~scale: k :: Real = dp_scale) :: Map:
-  def nodes :~ Map = chain_nodes(~fills: fills)
+fun picts_at(spots :~ Map, fills :~ Map, ~scale: k :: Real = dp_scale,
+             ~outlines: outlines :: Map = {}, ~bare: bare :: List = []) :: Map:
+  def nodes :~ Map = chain_nodes(~fills: fills, ~outlines: outlines, ~bare: bare)
   for values(m :~ Map = {}) (key in spots.keys()):
     def [x, y] = spots[key] :~ List
     m ++ { key: [as_pict(nodes[key]).scale(k), x, y] }
-fun green_at(spots :~ Map, term :~ List) :: Map:
-  def nodes :~ Map = chain_nodes(~picked: term)
+fun green_at(spots :~ Map, term :~ List, ~outlines: outlines :: Map = {}) :: Map:
+  def nodes :~ Map = chain_nodes(~picked: term, ~outlines: outlines)
   for values(m :~ Map = {}) (key in term):
     def [x, y] = spots[key] :~ List
     m ++ { key: [as_pict(nodes[key]).scale(dp_scale), x, y] }
@@ -150,6 +141,13 @@ fun fills_of(shown :~ List) :: Map:
       if had.contains(col) | m | m ++ { c: had ++ [col] }
   for values(m :~ Map = {}) ([key, c, _] in chain_graph :~ List):
     if by_class.has_key(c) | m ++ { key: by_class[c] } | m
+// the borders of the nodes the walks of these rows run through, each in its walk's
+// colour, a later walk's over an earlier one's where they share a node
+fun walk_outlines(rows :~ List) :: Map:
+  for values(m :~ Map = {}) (row :~ List in rows):
+    def walk :~ List = row[2]
+    def hue = branch_line(branch(walk))
+    for values(m :~ Map = m) (key in walk): m ++ { key: hue }
 // the walk of one row, as edges, in its branch's colour
 fun walk_edges(row :~ List) :: List:
   def walk :~ List = row[2]
@@ -193,9 +191,10 @@ fun blob_links(row :~ List) :: List:
       | acc
 // A mass carries its own colour, so that one press can show two of them: the set
 // the table already had and the set the walk that just arrived reaches. The two
-// are nested, and each is laid at half strength, so where both reach the colours
-// mix and where only the bigger does its own colour shows -- which is the whole
-// difference between the two entries, and the reason both are kept.
+// are nested, and the later is laid over the earlier a little nearer its nodes, so
+// where both reach both colours show and where only the bigger does only its own
+// does -- which is the whole difference between the two entries, and the reason
+// both are kept.
 fun blob_marks(row :~ List) :: List:
   def hue = branch_blob(branch(row[2] :~ List))
   (for List (k in blob_nodes(row)): [#'blob, k, hue])
@@ -223,7 +222,12 @@ fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
   // at once without either one's growth being confused for the other's
   def was :~ List = for List (m :~ List in marks_of(a, #'blob)): [m[1], m[0]]
   def now :~ List = for List (m :~ List in marks_of(b, #'blob)): [m[1], m[0]]
-  def links :~ List = marks_of(a, #'blink) ++ marks_of(b, #'blink)
+  // each neck once: both frames list the ones they share, and a neck drawn twice is
+  // darker at its soft edges than the same neck drawn once, so the still after a
+  // press would not be the picture the press ended on
+  def links :~ List:
+    for values(acc :~ List = []) (l in marks_of(a, #'blink) ++ marks_of(b, #'blink)):
+      if acc.contains(l) | acc | acc ++ [l]
   fun reach_dist(item :~ List) :: Real:
     def [cx, cy] = middle(away, item[1])
     for values(d :~ Real = 1.0e9) (o :~ List in was):
@@ -265,49 +269,84 @@ fun blob_stage(layer :: pc.Pict, a :: Frame, b :: Frame, t :: Real) :: pc.Pict:
       if acc.contains(h) | acc | acc ++ [h]
   // one set, as a flat mass in its own colour: its pieces drawn opaque, so that
   // where they overlap each other is no darker, and the whole faded once
-  fun mass_of(hue) :: pc.Pict:
+  // One set, as a flat mass in its own colour, solid: its pieces drawn opaque, in a
+  // pale tint of the walk's colour mixed once with the page, so that a set has one
+  // colour wherever it lies and nothing under it shows through. Sets drawn later
+  // keep a little nearer their nodes, so a set laid over another leaves a rim of
+  // the one under it showing: where both reach, both colours are seen, and each is
+  // its own colour.
+  fun tint_of(hue) :: draw.Color:
+    def c = hex_color(hue)
+    fun ch(x): math.exact(math.round(x + (255 - x) * (1.0 - blob_alpha)))
+    draw.Color(ch(c.red), ch(c.green), ch(c.blue))
+  fun mass_of(hue, depth :: Int) :: pc.Pict:
+    def pad = blob_pad - 6.0 * depth
+    def neck = blob_neck - 10.0 * depth
+    def color = tint_of(hue)
     pc.dc(fun (target :: draw.DC, dx, dy):
             target.save()
-            target.brush := draw.Brush(~color: hex_color(hue))
-            // the necks first, so a node's own blob is drawn over where they meet
-            target.pen := draw.Pen(~color: hex_color(hue),
-                                   ~width: blob_neck * dp_scale,
+            target.brush := draw.Brush(~color: color)
+            // necks: the edges between covered nodes, and the members of a class
+            def drawn_links:
+              for List ([f, tk, h] in links):
+                keep_when h == hue
+                def u = math.min(at(hue, f), at(hue, tk))
+                keep_when u > 0.02
+                def anchor = if at(hue, f) >= at(hue, tk) | f | tk
+                def other = if anchor == f | tk | f
+                [anchor, other, u]
+            // Two necks that leave one node close together leave a sliver of page
+            // between them, against the node at the far end of one of them: a white
+            // splotch inside the set. The wedge between them is part of the set, so
+            // it is filled.
+            target.pen := draw.Pen.none
+            for ([a1, o1, u1] in drawn_links):
+              for ([a2, o2, u2] in drawn_links):
+                skip_when !(a1 == a2) || o1 == o2 || u1 < 0.98 || u2 < 0.98
+                def [ax, ay] = middle(away, a1)
+                def [p1x, p1y] = middle(away, o1)
+                def [p2x, p2y] = middle(away, o2)
+                def v1x = p1x - ax
+                def v1y = p1y - ay
+                def v2x = p2x - ax
+                def v2y = p2y - ay
+                def cosang = (v1x * v2x + v1y * v2y)
+                               / math.max(1.0e-6, math.sqrt((v1x * v1x + v1y * v1y) * (v2x * v2x + v2y * v2y)))
+                skip_when cosang < 0.3
+                target.polygon([[dx + ax, dy + ay], [dx + p1x, dy + p1y], [dx + p2x, dy + p2y]])
+            target.pen := draw.Pen(~color: color, ~width: neck * dp_scale,
                                    ~cap: #'round, ~join: #'round)
-            for ([f, tk, h] in links):
-              skip_when h != hue
-              def anchor = if at(hue, f) >= at(hue, tk) | f | tk
-              def other = if anchor == f | tk | f
-              def u = math.min(at(hue, f), at(hue, tk))
-              skip_when u <= 0.02
+            for ([anchor, other, u] in drawn_links):
               def [ax, ay] = middle(away, anchor)
               def [ox, oy] = middle(away, other)
               def path = draw.Path()
               path.move_to([dx + ax, dy + ay])
               path.line_to([dx + ax + (ox - ax) * u, dy + ay + (oy - ay) * u])
               target.path(path)
-            target.pen := draw.Pen(~color: hex_color(hue), ~width: 0, ~cap: #'round)
+            target.pen := draw.Pen.none
             for (item :~ List in size.keys()):
               skip_when item[0] != hue
               def f = (size[item] :~ Real)
               skip_when f <= 0.02
               def [cx, cy] = middle(away, item[1])
               def [w, h] = node_size(item[1])
-              def bw = (w + 2 * blob_pad) * dp_scale * f
-              def bh = (h + 2 * blob_pad) * dp_scale * f
+              def bw = (w + 2 * pad) * dp_scale * f
+              def bh = (h + 2 * pad) * dp_scale * f
               def path = draw.Path()
               path.rounded_rectangle([dx + cx - bw / 2, dy + cy - bh / 2, bw, bh],
                                      math.min(bw, bh) * 0.45)
               target.path(path)
             target.restore(),
           ~width: slide_width, ~height: slide_height)
-  for values(q :~ pc.Pict = layer) (hue in order):
+  for values(q :~ pc.Pict = layer) (hue in order, depth in 0..):
     def fade:
       cond
       | leaving.contains(hue): smooth(1.0 - t)
       | taking_over.contains(hue): smooth(math.min(1.0, t / cover_span))
       | ~else: 1.0
     skip_when fade <= 0.0
-    put(q, mass_of(hue).alpha(blob_alpha * fade, ~composite: #true), 0.0, 0.0)
+    def m = mass_of(hue, depth)
+    put(q, (if fade >= 1.0 | m | m.alpha(fade, ~composite: #true)), 0.0, 0.0)
 
 // One press per term the walk grows by, in the order a reader would try them:
 // everything the first write opens up, and then everything the second does, so
@@ -505,16 +544,32 @@ fun slide_dp():
            ~walks: walks :~ List = [], ~sets: sets :~ List = [],
            ~point: point = #false,
            ~idea: idea :: Boolean = #false) :: Frame:
-    Frame(~picts: picts_at(away, fills_of(shown)) ++ regions_at(away) ++ want
+    Frame(~picts: picts_at(away, fills_of(shown), ~outlines: walk_outlines(walks))
+                    ++ regions_at(away) ++ want
                     ++ (if point == #false | {} | pointer_at(point))
                     ++ (if idea | key_idea | {}),
           ~edges: chain_edges(4)
                     ++ List.append(& for List (row :~ List in walks): walk_edges(row))
                     ++ List.append(& for List (row :~ List in sets): blob_marks(row)))
+  // A walk once found stays drawn: each step shows the longest walk so far down
+  // each branch, the one being followed last so that it is the one on top. Drawing
+  // only the walk being followed took the first one away the moment the second set
+  // off, which read as the table having let it go.
+  fun found_walks(i :: Int) :: List:
+    def current :~ List = (order :~ List)[i]
+    def latest :~ Map:
+      for values(m :~ Map = {}) (k in 1..i + 1):
+        def w :~ List = (order :~ List)[k]
+        m ++ { branch(w): w }
+    def others = for List (b in latest.keys()): skip_when b == branch(current); latest[b]
+    for List (w in others ++ [current]): row_for(w)
   fun step(i :: Int) :: Frame:
     def walk :~ List = (order :~ List)[i]
-    beat(stored(i + 1), ~walks: [row_for(walk)], ~idea: #true,
+    beat(stored(i + 1), ~walks: found_walks(i), ~idea: #true,
          ~point: walk[walk.length() - 1])
+  // the walk that reaches the root the other way from the one extraction takes,
+  // which is still in the table when the answer is read off
+  def r_other = if r_best == r_root_a | r_root_b | r_root_a
 
 
   // Where the answer goes once it is on its own. Placed by hand: the graph puts the
@@ -564,12 +619,14 @@ fun slide_dp():
        // in both colours to say so. What the two of them reach, and when one of them
        // can be let go, is the slide after this. The root is reached both ways too, so
        // there are two answers to choose between.
-       beat(all_stored, ~point: #'ret, ~idea: #true),
+       beat(all_stored, ~point: #'ret, ~idea: #true, ~walks: [r_other, r_best]),
        // The cheaper of them, and the term it stands for. The value the `return` takes
        // is the one this walk's write returned -- on this walk there is no other.
-       Frame(~picts: picts_at(away, fills_of(all_stored)) ++ regions_at(away)
-                       ++ green_at(away, answer) ++ said,
-             ~edges: chain_edges(4) ++ walk_edges(r_best)),
+       Frame(~picts: picts_at(away, fills_of(all_stored), ~outlines: walk_outlines([r_other]))
+                       ++ regions_at(away)
+                       ++ green_at(away, answer, ~outlines: walk_outlines([r_other, r_best]))
+                       ++ said,
+             ~edges: chain_edges(4) ++ walk_edges(r_other) ++ walk_edges(r_best)),
        // and then just that term, laid out as the tree it is, the bubble at the return
        // following it there
        Frame(~picts: green_at(term_spots, answer) ++ key_idea,
@@ -605,22 +662,24 @@ def collapse_title = "Collapsing Statewalks"
 fun slide_collapse():
   // the value the program's second write returns, and nobody reads
   def dead = #'v2
-  // that write once it returns nothing: an `update` hands back a value and a memory,
-  // and one that hands back only the memory is a `write`
-  fun write_node(fill :: String) :: pc.Pict:
-    graph_node(~width: (chain_box :~ Map)[#'u2] :~ Real, ~height: 64.0, ~adj: "33349",
-               ~line: stateful_hex, ~line_width: 4.0, ~fill: fill,
-               ~label: node_label("write"))
+  // That write once it returns nothing: an `update` hands back a value and a memory,
+  // and one that hands back only the memory is a `write`. The box is the same box
+  // either way, so it is drawn on its own and its word is a thing of its own over it:
+  // the press that makes it a write rewrites the word and leaves the box standing.
+  fun word_over(box :~ List, s :: String) :: List:
+    def [p :: pc.Pict, x, y] = box
+    def word = node_label(s).scale(dp_scale)
+    [word, x + (p.width - word.width) / 2, y + (p.height - word.height) / 2, band_wires]
   // the graph, with that change made or not
-  fun picts_of(~fills: fills :~ Map, ~written: written :: Boolean) :: Map:
-    def base :~ Map = picts_at(away, fills)
+  fun picts_of(~fills: fills :~ Map, ~written: written :: Boolean,
+               ~outlines: outlines :: Map = {}) :: Map:
+    def base :~ Map = picts_at(away, fills, ~outlines: outlines, ~bare: [#'u2])
     for values(m :~ Map = {}) (key in base.keys()):
       skip_when written && key == dead
       cond
-      | written && key == #'u2:
-          def [_, x, y] = base[key] :~ List
-          def fill :: String = if fills.has_key(#'u2) | (fills[#'u2] :~ List)[0] | node_white
-          m ++ { key: [write_node(fill).scale(dp_scale), x, y] }
+      | key == #'u2:
+          m ++ { key: base[key],
+                 #'u2_word: word_over(base[key], if written | "write" | "update") }
       | ~else: m ++ { key: base[key] }
   fun edges_of(written :: Boolean) :: List:
     if !written
@@ -658,17 +717,28 @@ fun slide_collapse():
     def words:
       prose_stack([[["extractable set", #'bold_italic], [":", #'plain]],
                    [["e-classes we could extract", #'plain]],
-                   [["for a given ", #'plain], ["state walk", #'bold]]])
+                   [["using a given ", #'plain], ["state walk", #'bold]]])
     { #'definition: [make_bubble(~color: talk_blue, ~padding: 24.0, words),
                      1370.0, 240.0, band_callout] }
   // and what the two sets come to, said of the class they are both stored at: the
   // same bubble before the change and after it. Low in the left margin, so that its
   // spike runs in under `v3` to the class rather than across it.
+  // The two verdicts are one bubble saying two things, so both are set in one body
+  // the size of the longer: the press between them rewrites the words and leaves the
+  // shell exactly where it was, rather than shrinking it round the shorter words.
+  fun verdict_words(head :: String, rest :: String) :: pc.Pict:
+    prose_stack([[[head, #'bold]], [[rest, #'plain]]])
+  def verdict_box:
+    def a = verdict_words("different", "extractable sets")
+    def b = verdict_words("same", "extractable set")
+    [math.max(a.width, b.width), math.max(a.height, b.height)]
   fun verdict(head :: String, rest :: String) :: Map:
     def [region, rx, ry, _] = (regions_at(away) :~ Map)[#'memory_class] :~ List
+    def [bw, bh] = verdict_box
+    def words = pc.overlay(~horiz: #'left, ~vert: #'top, pc.blank(~width: bw, ~height: bh),
+                           verdict_words(head, rest))
     { #'verdict: [bubble_at(region, ~spot: [rx, ry], ~body: [150.0, 830.0],
-                            ~color: talk_blue,
-                            ~content: prose_stack([[[head, #'bold]], [[rest, #'plain]]])),
+                            ~color: talk_blue, ~content: words),
                   0.0, 0.0, band_callout] }
   def differ = verdict("different", "extractable sets")
   def same = verdict("same", "extractable set")
@@ -684,7 +754,8 @@ fun slide_collapse():
   fun beat(~fills: fills :~ Map = stored_fills, ~written: written :: Boolean = #false,
            ~walks: walks :~ List = [], ~sets: sets :~ List = [],
            ~over: over :~ Map = {}) :: Frame:
-    Frame(~picts: picts_of(~fills: fills, ~written: written) ++ regions_at(away) ++ over,
+    Frame(~picts: picts_of(~fills: fills, ~written: written, ~outlines: walk_outlines(walks))
+                    ++ regions_at(away) ++ over,
           ~edges: edges_of(written)
                     ++ List.append(& for List (row :~ List in walks): walk_edges(row))
                     ++ List.append(& for List (row :~ List in sets): set_marks(row, ~written: written)))
@@ -768,14 +839,16 @@ fun slide_give_up():
   fun verdict(s :: String, color) :: pc.Pict:
     prose_text(s, ~size: 46.0, ~bold: #true, ~color: color, ~arrive: #'pop)
   def said_left = verdict("Worst Case E-Graph", talk_red)
-  def said_right = verdict("Realistic E-Graph", talk_green)
+  // in the green of the class dashes in the graph over it, so the words and the
+  // graph are one green, and the extraction's green fills a third thing apart
+  def said_right = verdict("Realistic E-Graph", realistic_green)
   // The tangle, as pieces rather than as one finished drawing: every node of it
   // writes on the press that brings it and every arrow draws itself, the way the
   // graph beside it does.
   def [proof_picts :: Map, proof_edges :: List]:
     chaos_parts(~at: [40.0, 200.0], ~width: split_x - 80.0, ~height: 740.0)
   // the term extraction should find, lit on the graph where it stands
-  def right_lit = right_graph ++ green_at(right_spots, dp_answer)
+  def right_lit = right_graph ++ green_at(right_spots, dp_answer, ~outlines: walk_outlines([r_best]))
   def sat = { #'sat: [said_left, (split_x - said_left.width) / 2, said_y, band_above] }
   def real = { #'real: [said_right, right_cx - said_right.width / 2, said_y, band_above] }
   def rule:

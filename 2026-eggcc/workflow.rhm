@@ -117,10 +117,10 @@ fun slide_41():
   def c_rules = standing(#'rules, stage_card(["Run Rules"], ~width: card_w, ~height: rules_h,
                                              ~body: flow_gear),
                          2, rules_h)
-  def c_extract = plain(#'extract, ["Extract"], 3)
+  def c_extract = plain(#'extract, ["Extraction"], 3)
   // the same stage, once it has been taught about effects: the same key, so the press
   // that renames it rewords the card where it stands
-  def c_safe = plain(#'extract, ["Effect-safe", "Extraction"], 3)
+  def c_safe = plain(#'extract, ["Effect-Safe", "Extraction"], 3)
   def c_out = plain(#'out, ["Translate to", "Original IR"], 4)
   fun e(from, to) :: List: [#'step, [#'step, from], [#'step, to]]
   def e_in = e(#'in, #'program)
